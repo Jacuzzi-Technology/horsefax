@@ -148,7 +148,7 @@ class RecordController extends Controller
             'lines.*.linked_horse_id' => 'nullable|uuid',
             'visibility' => ['required', Rule::in(array_keys(Record::VISIBILITY))],
         ]);
-        $lines = array_intersect_key($data['lines'] ?? [], Record::PEDIGREE_POSITIONS);
+        $lines = array_intersect_key($data['lines'] ?? [], Record::pedigreePositions());
         $n = $save($horse, $request->user(), $lines, $data['visibility']);
         $created = app(\App\Actions\Record\CreateAncestorRecords::class)($horse, $request->user());
 

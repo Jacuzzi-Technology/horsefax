@@ -70,11 +70,44 @@ final class Record
         'Other' => 'Other registry',
     ];
 
-    public const PEDIGREE_POSITIONS = [
-        's' => 'Sire', 'd' => 'Dam',
-        'ss' => "Sire's sire", 'sd' => "Sire's dam", 'ds' => "Dam's sire", 'dd' => "Dam's dam",
-        'sss' => 'sss', 'ssd' => 'ssd', 'sds' => 'sds', 'sdd' => 'sdd', 'dss' => 'dss', 'dsd' => 'dsd', 'dds' => 'dds', 'ddd' => 'ddd',
+    /** Pedigrees are recorded to this many generations (allbreedpedigree shows five). */
+    public const PEDIGREE_GENERATIONS = 5;
+
+    public const GENERATION_NAMES = [
+        1 => 'Sire & dam', 2 => 'Grandparents', 3 => 'Great-grandparents', 4 => 'Great-great-grandparents', 5 => '3rd great-grandparents',
     ];
+
+    /**
+     * Every chart position with its label, in chart order: s, d, ss, sd, ds, dd, sss, ... A position's parents are
+     * pos.'s' and pos.'d'.
+     *
+     * @return array<string, string>
+     */
+    public static function pedigreePositions(): array
+    {
+        static $out = null;
+        if ($out !== null) {
+            return $out;
+        }
+        $out = [];
+        $level = ['s', 'd'];
+        for ($g = 1; $g <= self::PEDIGREE_GENERATIONS; $g++) {
+            foreach ($level as $pos) {
+                $out[$pos] = self::pedigreeLabel($pos);
+            }
+            $level = array_merge(...array_map(fn ($p) => [$p.'s', $p.'d'], $level));
+        }
+
+        return $out;
+    }
+
+    /** "sds" becomes "Sire's dam's sire". */
+    public static function pedigreeLabel(string $pos): string
+    {
+        $words = array_map(fn ($c) => $c === 's' ? 'sire' : 'dam', str_split($pos));
+
+        return ucfirst(implode("'s ", $words));
+    }
 
     public const DOCUMENT_KINDS = [
         'registration_papers' => 'Registration papers',

@@ -97,4 +97,22 @@ class PedigreeTest extends TestCase
         $this->savePedigree($owner, $foal, ['s' => ['name' => 'Picked Sire', 'linked_horse_id' => $sire->id]]);
         $this->assertSame($sire->id, $foal->pedigree()->where('position', 's')->value('linked_horse_id'));
     }
+
+    public function test_pedigrees_go_five_generations_with_a_tab_per_generation(): void
+    {
+        $owner = User::factory()->create();
+        $foal = $this->horse($owner, 'Deep Foal');
+        $this->savePedigree($owner, $foal, ['s' => ['name' => 'Gen One'], 'ss' => ['name' => 'Gen Two'], 'sss' => ['name' => 'Gen Three'], 'ssss' => ['name' => 'Gen Four'], 'sssss' => ['name' => 'Gen Five']])->assertRedirect();
+        $this->assertSame('Gen Five', $foal->pedigree()->where('position', 'sssss')->value('name'));
+        // The new record for the sire carries its own four generations behind it.
+        $this->assertSame('Gen Five', Horse::where('registered_name', 'Gen One')->first()->pedigree()->where('position', 'ssss')->value('name'));
+
+        $page = $this->actingAs($owner)->get("/horses/{$foal->horsefax_id}?tab=pedigree")->assertOk();
+        foreach (['Sire &amp; dam', 'Grandparents', 'Great-grandparents', 'Great-great-grandparents', '3rd great-grandparents', 'Gen Five'] as $text) {
+            $page->assertSee($text, false);
+        }
+        $foal->forceFill(['public_summary' => true])->save();
+        auth()->logout();
+        $this->get("/horse/{$foal->horsefax_id}")->assertOk()->assertSee('Gen Five')->assertSee('5 generations');
+    }
 }

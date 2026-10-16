@@ -87,14 +87,39 @@ document.querySelectorAll('[data-pedigree-form]').forEach((form) => {
         field(row, 'color').value = data?.color ?? '';
         field(row, 'linked_horse_id').value = data?.linked_horse_id ?? '';
         row.querySelector('[data-ped-note]').textContent = note ?? '';
+        syncPed(pos);
         if (note) {
             row.classList.add('bg-gold/10');
             setTimeout(() => row.classList.remove('bg-gold/10'), 2500);
         }
     };
 
+    // Tabs, per-tab counts, and the "Parents of …" names under later generations.
+    const tabs = form.querySelectorAll('[data-ped-tab]');
+    const show = (g) => {
+        tabs.forEach((t) => {
+            const on = t.dataset.pedTab === String(g);
+            t.setAttribute('aria-selected', on);
+            t.classList.toggle('bg-paper', on); t.classList.toggle('border-line', on); t.classList.toggle('text-ink', on);
+            t.classList.toggle('border-transparent', !on); t.classList.toggle('text-muted', !on);
+        });
+        form.querySelectorAll('[data-ped-panel]').forEach((p) => (p.hidden = p.dataset.pedPanel !== String(g)));
+    };
+    tabs.forEach((t) => t.addEventListener('click', () => show(t.dataset.pedTab)));
+    form.querySelectorAll('[data-ped-go]').forEach((b) => b.addEventListener('click', () => { show(b.dataset.pedGo); form.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
+    function syncPed(pos) {
+        const g = pos.length;
+        const total = Object.keys(rows).filter((p) => p.length === g);
+        const n = total.filter((p) => field(rows[p], 'name').value.trim()).length;
+        const c = form.querySelector(`[data-ped-count="${g}"]`);
+        if (c) c.textContent = `${n}/${total.length}`;
+        const label = form.querySelector(`[data-ped-child="${pos}"]`);
+        if (label) label.textContent = field(rows[pos], 'name').value.trim() || 'not entered yet';
+    }
+
     Object.entries(rows).forEach(([pos, row]) => {
         const input = field(row, 'name');
+        input.addEventListener('change', () => syncPed(pos));
         const list = row.querySelector('[data-ped-list]');
         let timer, results = [], active = -1;
 
@@ -126,11 +151,12 @@ document.querySelectorAll('[data-pedigree-form]').forEach((form) => {
                 Object.entries(ancestors || {}).forEach(([rel, a]) => {
                     if (rows[pos + rel]) { setRow(pos + rel, a, 'Filled from Horsefax'); n++; }
                 });
-                row.querySelector('[data-ped-note]').textContent = n ? `Picked from Horsefax · ${n} ancestors filled` : 'Picked from Horsefax';
+                row.querySelector('[data-ped-note]').textContent = n ? `Picked from Horsefax · ${n} ancestors filled in the next tabs` : 'Picked from Horsefax';
             } catch (e) { /* the pick itself still stands */ }
         };
 
         input.addEventListener('input', () => {
+            syncPed(pos);
             field(row, 'linked_horse_id').value = '';
             row.querySelector('[data-ped-note]').textContent = '';
             clearTimeout(timer);

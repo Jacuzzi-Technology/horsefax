@@ -23,7 +23,7 @@ class SavePedigree
         return DB::transaction(function () use ($horse, $user, $lines, $visibility) {
             $changed = 0;
             $current = $horse->pedigree()->get()->keyBy('position');
-            foreach (array_keys(Record::PEDIGREE_POSITIONS) as $pos) {
+            foreach (array_keys(Record::pedigreePositions()) as $pos) {
                 $line = $lines[$pos] ?? [];
                 $name = trim((string) ($line['name'] ?? ''));
                 $old = $current->get($pos);

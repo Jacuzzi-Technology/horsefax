@@ -10,7 +10,7 @@ class PedigreeController extends Controller
 {
     public function lookup(Request $request)
     {
-        $data = $request->validate(['q' => 'required|string|max:120', 'pos' => 'required|regex:/^[sd]{1,3}$/']);
+        $data = $request->validate(['q' => 'required|string|max:120', 'pos' => 'required|regex:/^[sd]{1,5}$/']);
 
         return response()->json(['results' => PedigreeLookup::search($data['q'], $request->user(), $data['pos'])]);
     }

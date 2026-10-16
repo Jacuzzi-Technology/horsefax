@@ -16,8 +16,8 @@ use Illuminate\Support\Collection;
  */
 final class PedigreeLookup
 {
-    /** Chart positions are s/d strings; a position's parents are pos.'s' and pos.'d'. Charts go 3 generations deep. */
-    public const MAX_DEPTH = 3;
+    /** Chart positions are s/d strings; a position's parents are pos.'s' and pos.'d'. Charts go up to Record::PEDIGREE_GENERATIONS (5) generations. */
+    public const MAX_DEPTH = Record::PEDIGREE_GENERATIONS;
 
     public static function search(string $q, ?User $user, string $position): array
     {
