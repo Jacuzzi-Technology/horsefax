@@ -1,0 +1,65 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+/* Horsefax brand (locked Oct 2026): forest, ink, muted gold, cream. Spectral for reading, Montserrat for labels. */
+@theme {
+    --color-forest: #203123;
+    --color-forest-2: #2a3e2d;
+    --color-ink: #13201A;
+    --color-gold: #9F7E4F;
+    --color-gold-dark: #8b6d43;
+    --color-gold-soft: #B89B6A;
+    --color-cream: #F7F4EE;
+    --color-paper: #FBFAF6;
+    --color-charcoal: #2E2E2E;
+    --color-muted: #6a675f;
+    --color-line: #e3ddd0;
+    --font-serif: 'Spectral', Georgia, serif;
+    --font-sans: 'Montserrat', ui-sans-serif, system-ui, sans-serif;
+}
+
+@utility btn {
+    @apply inline-flex items-center justify-center gap-2 font-sans text-[12px] font-semibold tracking-[0.18em] uppercase px-6 py-3.5 rounded-[2px] transition-colors no-underline cursor-pointer border border-transparent;
+}
+@utility chip {
+    @apply inline-flex items-center gap-1 font-sans text-[10.5px] font-semibold tracking-[0.08em] uppercase px-2 py-0.5 rounded-full border whitespace-nowrap;
+}
+
+@layer base {
+    body { @apply bg-cream text-charcoal font-serif antialiased; }
+    h1, h2, h3 { @apply text-ink font-normal; }
+    a { @apply underline-offset-4; }
+}
+
+@layer components {
+    .wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+    .label { @apply font-sans text-[11px] font-semibold tracking-[0.3em] uppercase; }
+    .btn-gold { @apply btn bg-gold text-cream hover:bg-gold-dark; }
+    .btn-forest { @apply btn bg-forest text-cream hover:bg-ink; }
+    .btn-ghost { @apply btn border-gold/60 text-ink hover:bg-gold/10; }
+    .btn-ghost-light { @apply btn border-cream/40 text-cream hover:bg-cream/10; }
+    .btn-small { @apply px-3.5 py-2 text-[10.5px] tracking-[0.14em]; }
+    .card { @apply bg-paper border border-line rounded-[3px]; }
+    .field { @apply block w-full font-serif text-[17px] px-3.5 py-2.5 border border-charcoal/20 rounded-[2px] bg-white text-charcoal focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20; }
+    .field-label { @apply block font-sans text-[11px] font-semibold tracking-[0.14em] uppercase text-ink/80 mb-1.5; }
+    .hint { @apply font-serif italic text-[15px] text-muted mt-1; }
+    .error { @apply font-sans text-[13px] text-red-800 mt-1; }
+    .prose-hf { @apply text-[18px] leading-[1.7]; }
+    .prose-hf h2 { @apply text-[28px] mt-12 mb-3; }
+    .prose-hf h3 { @apply text-[21px] mt-8 mb-2 font-medium; }
+    .prose-hf p, .prose-hf ul, .prose-hf ol { @apply mb-4; }
+    .prose-hf ul { @apply list-disc pl-6; }
+    .prose-hf ol { @apply list-decimal pl-6; }
+    .prose-hf a { @apply text-gold-dark underline; }
+    .chip-self { @apply chip border-charcoal/20 text-muted bg-white; }
+    .chip-doc { @apply chip border-gold/50 text-gold-dark bg-gold/5; }
+    .chip-verified { @apply chip border-forest/40 text-forest bg-forest/5; }
+    .chip-disputed { @apply chip border-red-800/40 text-red-800 bg-red-50; }
+    .chip-superseded { @apply chip border-charcoal/20 text-muted line-through bg-white; }
+    .chip-vis { @apply chip border-charcoal/15 text-charcoal/70 bg-cream; }
+    .table-hf { @apply w-full text-left text-[16px]; }
+    .table-hf th { @apply font-sans text-[10.5px] font-semibold tracking-[0.14em] uppercase text-muted py-2 pr-4 border-b border-line; }
+    .table-hf td { @apply py-2.5 pr-4 border-b border-line align-top; }
+}
