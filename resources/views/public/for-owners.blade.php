@@ -3,7 +3,7 @@
     <div class="wrap py-16 grid md:grid-cols-2 gap-x-14 gap-y-10">
         @foreach ([
             ['Stop digging for paperwork', 'Keep registration papers, Coggins tests and health certificates with the horse\'s record, with expiry dates in view.'],
-            ['Show what you can prove', 'Every entry is labeled self-reported, document supplied or independently verified, so buyers can see exactly what stands behind it.'],
+            ['Show what you can prove', 'Every entry shows where it came from and whether Horsefax has checked it: owner reported, professional attested, official source, Horsefax Verified, so buyers can see exactly what stands behind it.'],
             ['Share without oversharing', 'Health records start private. Send a buyer a report link with only the sections you choose, and revoke it whenever you like.'],
             ['Keep your privacy', 'Report readers never see your name, contact details or address. Ownership history shows dates of changes, not owners\' names.'],
             ['Pedigree, offspring and show record', 'Record the pedigree and show results. When a sire or dam is also on Horsefax, offspring are linked automatically.'],

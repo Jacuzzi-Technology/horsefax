@@ -15,7 +15,7 @@
 
         <h2>3. Records, verification and corrections</h2>
         <ul>
-            <li>Each fact on Horsefax is labeled to show how it is known (self-reported, document supplied, independently verified, disputed or superseded). A label applies only to that fact.</li>
+            <li>Each fact on Horsefax shows its source (owner reported, professional attested, official source, or historical/third-party) and its verification status (Horsefax Verified, not verified, disputed or superseded). A label applies only to that fact, and a verification covers only what its detail says it covers.</li>
             <li><strong>Horsefax does not certify any horse as sound, healthy, safe or suitable</strong>, and a missing record is not evidence that something did not happen. Records are not a substitute for a pre-purchase examination, a veterinarian's advice, or checking registration with the registry.</li>
             <li>To keep records trustworthy, entries are corrected by adding to the history rather than deleting it. Staff may label entries as disputed, review ownership claims and identifier conflicts, and make decisions that are logged with reasons.</li>
         </ul>

@@ -40,6 +40,8 @@ class StoreDocument
             'path' => $path,
             'visibility' => $data['visibility'] ?? 'private',
             'contributor_role' => $data['contributor_role'] ?? null,
+            'source_type' => $data['source_type'] ?? \App\Support\Record::sourceForRole($data['contributor_role'] ?? null),
+            'status' => 'unverified',
         ]);
         Audit::record('document.uploaded', $document, null, $document->only(['kind', 'title', 'issued_on', 'expires_on', 'visibility', 'sha256', 'original_name', 'contributor_role']));
 

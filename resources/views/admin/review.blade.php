@@ -10,8 +10,8 @@
             <p class="text-[18px] whitespace-pre-line">{{ $item->statement }}</p>
             @if ($subject)
                 <div class="border-t border-line pt-3"><p class="label text-muted text-[10px]">About</p>
-                    @if ($subject instanceof \App\Models\HorseEvent)<p>{{ $subject->dateLabel() }} · {{ $subject->categoryLabel() }} · {{ $subject->title }} <x-status :status="$subject->status" /></p>
-                    @else<p>{{ $subject->label() }}: {{ $subject->value }} <x-status :status="$subject->status" /></p>@endif
+                    @if ($subject instanceof \App\Models\HorseEvent)<p>{{ $subject->dateLabel() }} · {{ $subject->categoryLabel() }} · {{ $subject->title }} <x-claim :item="$subject" /></p>
+                    @else<p>{{ $subject->label() }}: {{ $subject->value }} <x-claim :item="$subject" /></p>@endif
                 </div>
             @endif
             @if ($documents->isNotEmpty())

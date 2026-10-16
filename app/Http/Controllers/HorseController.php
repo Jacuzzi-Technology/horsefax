@@ -186,6 +186,8 @@ class HorseController extends Controller
             'pedigree' => Views::pedigree($horse, 'steward'),
             'offspring' => Views::offspring($horse, 'steward'),
             'media' => Views::media($horse, 'steward'),
+            'facts' => Views::facts($horse),
+            'factHistory' => $horse->facts()->where(fn ($q) => $q->where('is_current', false)->orWhereNotNull('superseded_by'))->orderByDesc('created_at')->get()->groupBy('field'),
             'contributors' => $horse->contributors()->with('user')->orderByRaw("case status when 'active' then 0 when 'pending' then 1 else 2 end")->orderByDesc('created_at')->get(),
         ]);
     }
@@ -205,10 +207,26 @@ class HorseController extends Controller
         if (empty($data['registered_name']) && empty($data['barn_name'])) {
             return back()->withInput()->withErrors(['barn_name' => 'Give the horse a barn name or registered name.']);
         }
-        $horse->fill(self::facts($data))->save();
+        $facts = self::facts($data);
+        $role = \App\Actions\Record\RecordEvent::roleOf($horse, $request->user());
+        $held = app(\App\Actions\Record\RecordFacts::class)($horse, $request->user(), \App\Actions\Record\RecordFacts::fromColumns($facts), \App\Support\Record::sourceForRole($role), $role);
+        // Values held for review don't change the horse yet.
+        $columnsFor = ['birth' => ['birth_precision', 'birth_date', 'birth_year'], 'height' => ['height_hands', 'height_measured_on']];
+        foreach ($held as $field) {
+            foreach ($columnsFor[$field] ?? [$field] as $col) {
+                unset($facts[$col]);
+            }
+        }
+        $horse->fill($facts)->save();
         Audit::changes('horse.identity_updated', $horse);
 
-        return redirect()->route('horses.show', $horse)->with('status', 'Identity details saved. The change is recorded in the record history.');
+        $msg = 'Identity details saved. Each change is kept in the record history.';
+        if ($held) {
+            $labels = collect($held)->map(fn ($f) => strtolower(\App\Models\HorseFact::FIELDS[$f] ?? $f))->join(', ');
+            $msg .= ' Your change to '.$labels.' differs from a verified or professionally supplied value, so it has gone to Horsefax staff for review.';
+        }
+
+        return redirect()->route('horses.show', $horse)->with('status', $msg);
     }
 
     public function audit(Request $request, Horse $horse)

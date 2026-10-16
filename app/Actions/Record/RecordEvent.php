@@ -43,8 +43,9 @@ class RecordEvent
                 'details' => $data['details'] ?? null,
                 'provider' => $data['provider'] ?? null,
                 'contributor_id' => $user->id,
-                'contributor_role' => self::roleOf($horse, $user),
-                'status' => ! empty($data['document_id']) ? 'document_supplied' : 'self_reported',
+                'contributor_role' => $role = self::roleOf($horse, $user),
+                'source_type' => $data['source_type'] ?? \App\Support\Record::sourceForRole($role),
+                'status' => 'unverified',
                 'visibility' => $data['visibility'],
                 'document_id' => $data['document_id'] ?? null,
                 'supersedes' => $corrects?->id,
@@ -54,7 +55,7 @@ class RecordEvent
                 $corrects->forceFill(['superseded_by' => $event->id])->save();
                 Audit::record('event.corrected', $event, $corrects->only(['category', 'title', 'occurred_on', 'details', 'provider', 'visibility']), $event->only(['category', 'title', 'occurred_on', 'details', 'provider', 'visibility']));
             } else {
-                Audit::record('event.added', $event, null, $event->only(['category', 'type', 'title', 'occurred_on', 'details', 'provider', 'visibility', 'status', 'result', 'placing', 'organization', 'event_name', 'class_name']));
+                Audit::record('event.added', $event, null, $event->only(['category', 'type', 'title', 'occurred_on', 'details', 'provider', 'visibility', 'source_type', 'status', 'result', 'placing', 'organization', 'event_name', 'class_name']));
             }
 
             return $event;

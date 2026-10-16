@@ -189,7 +189,7 @@ class RecordTest extends TestCase
 
         $this->post("/horse/{$horse->horsefax_id}/corrections", ['name' => 'A Judge', 'email' => 'judge@example.com', 'subject' => 'event:'.$event->id, 'statement' => 'She placed 3rd, not 1st; see the official results.'])->assertRedirect();
         $item = ReviewItem::where('kind', 'dispute')->first();
-        $this->assertSame('self_reported', $event->fresh()->status);
+        $this->assertSame('unverified', $event->fresh()->status);
 
         $this->actingAs($this->staff())->post("/admin/reviews/{$item->id}/approve", ['note' => 'Checked association results'])->assertRedirect();
         $this->assertSame('disputed', $event->fresh()->status);
@@ -269,7 +269,7 @@ class RecordTest extends TestCase
         $this->actingAs($staff)->get('/admin/horses?q=lark')->assertOk()->assertSee($h);
         $this->actingAs($staff)->get("/admin/horses/$h")->assertOk();
         $this->actingAs($staff)->get('/admin/messages')->assertOk();
-        $this->actingAs($staff)->post("/admin/horses/$h/identity", ['identity_status' => 'verified', 'note' => 'Papers and chip scan checked'])->assertRedirect();
+        $this->actingAs($staff)->post("/admin/verify/horse/{$horse->id}", ['method' => 'microchip_scan', 'scope' => 'Identity confirmed from papers and a chip scan.', 'note' => 'Papers and chip scan checked'])->assertRedirect();
         $this->assertSame('verified', $horse->fresh()->identity_status);
         $this->post('/contact', ['name' => 'A', 'email' => 'a@example.com', 'topic' => 'general', 'message' => 'Hello'])->assertRedirect();
     }

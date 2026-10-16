@@ -133,6 +133,12 @@ final class Views
         };
     }
 
+    /** Current identity facts keyed by field. Basic identity is shown to every audience that can see the record. */
+    public static function facts(Horse $horse): Collection
+    {
+        return $horse->currentFacts()->with('verification')->get()->keyBy('field');
+    }
+
     /** The profile photo, if this audience may see it. */
     public static function photo(Horse $horse, string $audience): ?\App\Models\Document
     {

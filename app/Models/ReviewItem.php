@@ -14,6 +14,7 @@ class ReviewItem extends Model
         'ownership_claim' => 'Ownership claim',
         'identifier_conflict' => 'Identifier conflict',
         'dispute' => 'Correction / dispute',
+        'fact_conflict' => 'Conflicting identity value',
     ];
 
     protected $guarded = ['id'];

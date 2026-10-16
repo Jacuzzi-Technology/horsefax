@@ -9,14 +9,8 @@
     $shows = $byCat->get('competition', collect());
     $sales = $byCat->get('ownership', collect());
     $timeline = $events->reject(fn ($e) => in_array($e->category, ['competition', 'ownership'], true));
-    $facts = array_filter([
-        'Breed' => $horse->breed,
-        'Sex' => $horse->sex ? ucfirst($horse->sex) : null,
-        'Foaled' => $horse->birthLabel(),
-        'Color' => $horse->color,
-        'Height' => $horse->heightLabel() ? $horse->heightLabel().($horse->height_measured_on ? ' (measured '.$horse->height_measured_on->format('M Y').')' : '') : null,
-        'Markings' => $horse->markings,
-    ]);
+    $identityFacts = collect(['breed', 'sex', 'birth', 'color', 'height', 'markings'])->map(fn ($f) => $facts->get($f))->filter();
+    $summary = \App\Support\Summary::parts($horse, $facts, $identifiers, $events, $pedigree, $documents);
 @endphp
 <x-layouts.site :title="$horse->displayName()" :robots="($isReport && ! $sample) || $preview ? 'noindex, nofollow' : null" :canonical="$sample ? route('sample') : ($isReport ? null : route('horse.public', $horse))"
     :description="'Horsefax record '.$horse->horsefax_id.' for '.$horse->displayName().'. '.collect([$horse->breed, $horse->birth_year ? 'foaled '.$horse->birth_year : null])->filter()->join(', ')">
@@ -41,7 +35,7 @@
                     <p class="text-[20px] italic text-cream/75 mt-1">Barn name "{{ $horse->barn_name }}"</p>
                 @endif
                 <p class="font-sans text-[14px] text-cream/75 mt-4">{{ collect([$horse->breed, $horse->sex ? ucfirst($horse->sex) : null, $horse->birthLabel(), $horse->color, $horse->heightLabel()])->filter()->join(' · ') }}</p>
-                <p class="mt-4"><span class="{{ $horse->identity_status === 'verified' ? 'chip-verified' : ($horse->identity_status === 'under_review' ? 'chip-disputed' : 'chip-self') }}">{{ $horse->identityLabel() }}</span></p>
+                <x-record-summary :parts="$summary" dark class="mt-4" />
                 @if ($isReport && ! $sample)
                     <p class="font-sans text-[12px] text-cream/60 mt-5">Shared by the owner{{ $link->label ? ' for "'.$link->label.'"' : '' }}. Viewed {{ now()->format('M j, Y') }}.{{ $link->expires_at ? ' This link expires '.$link->expires_at->format('M j, Y').'.' : '' }} The owner can revoke it at any time.</p>
                 @endif
@@ -55,13 +49,16 @@
             {{-- Identity --}}
             <section aria-labelledby="h-identity">
                 <h2 id="h-identity" class="text-[28px] border-b border-line pb-2">Identity</h2>
-                <dl class="mt-4 grid sm:grid-cols-2 gap-x-8">
-                    @forelse ($facts as $k => $v)
-                        <div class="py-2.5 border-b border-line"><dt class="label text-muted text-[10px]">{{ $k }}</dt><dd class="text-[18px] mt-0.5">{{ $v }}</dd></div>
+                <table class="table-hf mt-3">
+                    <tbody>
+                    @if ($horse->registered_name)<tr><td class="w-[34%] label text-muted text-[10px] align-middle">Registered name</td><td class="text-[18px]">{{ $horse->registered_name }}</td><td class="text-right">@if ($facts->get('registered_name'))<x-claim :item="$facts->get('registered_name')" compact class="justify-end" />@endif</td></tr>@endif
+                    @forelse ($identityFacts as $f)
+                        <tr><td class="w-[34%] label text-muted text-[10px] align-middle">{{ $f->label() }}</td><td class="text-[18px]">{{ $f->display() }}</td><td class="text-right"><x-claim :item="$f" compact class="justify-end" /></td></tr>
                     @empty
-                        <p class="hint">No identity details have been shared.</p>
+                        <tr><td colspan="3" class="hint">No identity details have been shared.</td></tr>
                     @endforelse
-                </dl>
+                    </tbody>
+                </table>
                 @if ($names->isNotEmpty())
                     <p class="mt-4 text-[16px]"><span class="label text-muted text-[10px]">Also known as</span><br>{{ $names->map(fn ($n) => $n->name.($n->kind === 'previous' ? ' (previous name)' : ''))->join(', ') }}</p>
                 @endif
@@ -70,7 +67,7 @@
                         <thead><tr><th>Identifier</th><th>Number</th><th>How it is known</th></tr></thead>
                         <tbody>
                         @foreach ($identifiers as $i)
-                            <tr><td>{{ $i->label() }}</td><td class="font-sans text-[15px] tracking-wide">{{ $i->displayValue() }}</td><td><x-status :status="$i->in_conflict ? 'disputed' : $i->status" /></td></tr>
+                            <tr><td>{{ $i->label() }}</td><td class="font-sans text-[15px] tracking-wide">{{ $i->displayValue() }}</td><td><x-claim :item="$i" :conflict="$i->in_conflict" /></td></tr>
                         @endforeach
                         </tbody>
                     </table>
@@ -129,7 +126,7 @@
                                         <td>{{ collect([$e->score, $e->points !== null ? rtrim(rtrim((string) $e->points, '0'), '.').' pts' : null])->filter()->join(' · ') }}</td>
                                         <td>{{ $e->placing }}</td>
                                         <td class="text-right whitespace-nowrap">{{ HorseEvent::money($e->earnings_cents) }}</td>
-                                        <td><x-status :status="$e->status" /></td>
+                                        <td><x-claim :item="$e" compact /></td>
                                     </tr>
                                 @endforeach
                                 <tr><td colspan="7" class="font-sans text-[12px] font-semibold tracking-[0.08em] uppercase text-muted">Total for {{ $year }}</td><td class="text-right font-medium">{{ HorseEvent::money($rows->sum('earnings_cents')) ?? '$0' }}</td><td></td></tr>
@@ -144,7 +141,7 @@
                             <tbody>@foreach ($byRider as $name => $r)<tr><td>{{ $name }}</td><td>{{ $r['n'] }}</td><td>{{ $r['types'] }}</td><td class="text-right">{{ HorseEvent::money($r['money']) ?? '$0' }}</td></tr>@endforeach</tbody>
                         </table>
                     @endif
-                    <p class="hint mt-3">Results entered by an owner are labeled self-reported until checked against the association's official records. Owners at the time of each show are not listed.</p>
+                    <p class="hint mt-3">Results entered by an owner are labeled owner reported until Horsefax checks them against the association's official records. Owners at the time of each show are not listed.</p>
                 </section>
             @endif
 
@@ -162,7 +159,8 @@
                                     @if ($e->provider)<p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->provider }}</p>@endif
                                     @if ($e->expires_on)<p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->expires_on->isPast() ? 'Expired' : 'Valid until' }} {{ $e->expires_on->format('M j, Y') }}</p>@endif
                                     @if ($e->details)<p class="text-[16px] mt-2 whitespace-pre-line">{{ $e->details }}</p>@endif
-                                    <div class="mt-2"><x-status :status="$e->status" /></div>
+                                    <div class="mt-2"><x-claim :item="$e" /></div>
+                                    @include('partials.claim-dates', ['c' => $e])
                                 </div>
                             </li>
                         @endforeach
@@ -180,12 +178,12 @@
                             <li class="py-3 flex flex-wrap justify-between gap-3">
                                 <div><p class="text-[18px]">{{ $e->typeLabel() ?? $e->title }}@if ($e->sale_venue) <span class="text-muted">· {{ $e->sale_venue }}</span>@endif</p>
                                     @if (Views::showAmount($e, $audience, $link))<p class="font-sans text-[14px] mt-0.5">{{ HorseEvent::money($e->amount_cents) }}</p>@endif</div>
-                                <div class="text-right"><p class="font-sans text-[13px] text-muted">{{ $e->dateLabel() }}</p><x-status :status="$e->status" class="mt-1" /></div>
+                                <div class="text-right"><p class="font-sans text-[13px] text-muted">{{ $e->dateLabel() }}</p><x-claim :item="$e" class="mt-1 justify-end" /></div>
                             </li>
                         @endforeach
                         @foreach ($ownership as $s)
                             <li class="py-3 flex justify-between gap-3">
-                                <p class="text-[17px]">{{ ucfirst($s->role) }} on Horsefax{{ $s->status === 'verified' ? ' (ownership verified by Horsefax)' : '' }}</p>
+                                <p class="text-[17px]">{{ \App\Support\Roles::stewardLabel($s) }}</p>
                                 <p class="font-sans text-[13px] text-muted">{{ $s->started_on?->format('M Y') ?? $s->created_at->format('M Y') }} – {{ $s->ended_at?->format('M Y') ?? 'present' }}</p>
                             </li>
                         @endforeach
@@ -223,7 +221,7 @@
                         <thead><tr><th>Document</th><th>Dated</th><th>How it is known</th></tr></thead>
                         <tbody>
                         @foreach ($documents as $d)
-                            <tr><td>{{ $d->title }}<br><span class="font-sans text-[12px] text-muted">{{ $d->kindLabel() }}{{ $d->issuer ? ' · '.$d->issuer : '' }}</span></td><td class="whitespace-nowrap">{{ $d->issued_on?->format('M j, Y') ?? '—' }}</td><td><x-status :status="$d->status" /></td></tr>
+                            <tr><td>{{ $d->title }}<br><span class="font-sans text-[12px] text-muted">{{ $d->kindLabel() }}{{ $d->issuer ? ' · '.$d->issuer : '' }}</span></td><td class="whitespace-nowrap">{{ $d->issued_on?->format('M j, Y') ?? '—' }}</td><td><x-claim :item="$d" /></td></tr>
                         @endforeach
                         </tbody>
                     </table>
@@ -247,7 +245,8 @@
             </div>
             <div class="card p-5">
                 <p class="label text-muted text-[10px] mb-3">Labels used</p>
-                <div class="flex flex-wrap gap-2"><span class="chip-self">Self-reported</span><span class="chip-doc">Document supplied</span><span class="chip-verified">Independently verified</span><span class="chip-disputed">Disputed</span></div>
+                <div class="flex flex-wrap gap-2"><span class="chip-self">Owner reported</span><span class="chip border-[#3b5b7a]/40 text-[#2c4a66] bg-[#3b5b7a]/[0.06]">Professional attested</span><span class="chip border-ink/40 text-ink bg-ink/[0.05]">Official source</span><span class="chip-verified">Horsefax Verified</span><span class="chip-disputed">Disputed</span></div>
+                <p class="hint text-[13px] mt-2">Source and verification are separate: click a Horsefax Verified badge to see how and what it covers.</p>
                 <a href="{{ route('how-it-works') }}#verification" class="block font-sans text-[12px] mt-3 text-gold-dark">What the labels mean</a>
             </div>
             @unless ($sample)

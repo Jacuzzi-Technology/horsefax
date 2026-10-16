@@ -28,6 +28,7 @@ class CreateHorse
                 'started_on' => now()->toDateString(),
             ]);
             Audit::record('horse.created', $horse, null, $horse->only(array_keys($facts)) + ['horsefax_id' => $horse->horsefax_id]);
+            app(RecordFacts::class)($horse, $user, RecordFacts::fromColumns($facts), 'owner_reported', 'owner');
 
             foreach ($identifiers as $identifier) {
                 if (trim($identifier['value'] ?? '') !== '') {

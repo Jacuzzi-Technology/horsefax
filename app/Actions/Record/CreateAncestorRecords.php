@@ -61,6 +61,7 @@ class CreateAncestorRecords
                     'horse_id' => $ancestor->id, 'position' => $rel, 'name' => $behind->name, 'registry' => $behind->registry,
                     'registration_number' => $behind->registration_number, 'foal_year' => $behind->foal_year, 'color' => $behind->color,
                     'linked_horse_id' => $behind->linked_horse_id, 'visibility' => $listed ? 'public' : 'private', 'added_by' => $user->id,
+                    'source_type' => 'historical',
                 ]);
                 Audit::record('pedigree.saved', $line, null, $line->only(['position', 'name', 'linked_horse_id']) + ['from_chart_of' => $horse->id], $ancestor->id);
             }
@@ -107,12 +108,13 @@ class CreateAncestorRecords
         $ancestor->horsefax_id = CreateHorse::newId();
         $ancestor->created_by = $user->id;
         $ancestor->forceFill(['source' => 'pedigree', 'source_horse_id' => $horse->id, 'listed' => $listed, 'identity_status' => 'unverified'])->save();
+        app(RecordFacts::class)($ancestor, $user, RecordFacts::fromColumns($ancestor->only(['registered_name', 'sex', 'birth_precision', 'birth_year', 'birth_date', 'color'])), 'historical');
         Audit::record('horse.created_from_pedigree', $ancestor, null, $ancestor->only(['horsefax_id', 'registered_name', 'sex', 'birth_year']) + ['from_chart_of' => $horse->id]);
 
         if ($entry->registration_number) {
             app(AddIdentifier::class)($ancestor, $user, [
                 'kind' => 'registration', 'registry' => $entry->registry, 'value' => $entry->registration_number,
-                'visibility' => $listed ? 'public' : 'private',
+                'visibility' => $listed ? 'public' : 'private', 'source_type' => 'historical',
             ]);
         }
 

@@ -49,6 +49,7 @@ class SavePedigree
                 if ($name !== '') {
                     $entry = PedigreeEntry::create($new + [
                         'horse_id' => $horse->id, 'position' => $pos, 'visibility' => $visibility, 'added_by' => $user->id,
+                        'source_type' => \App\Support\Record::sourceForRole(RecordEvent::roleOf($horse, $user)),
                         'linked_horse_id' => $this->chosenHorse($horse, $line['linked_horse_id'] ?? null) ?? $this->findHorse($horse, $new),
                     ]);
                 }

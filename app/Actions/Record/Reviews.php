@@ -22,7 +22,8 @@ class Reviews
             match ($item->kind) {
                 'ownership_claim' => $this->approveClaim($item, $options),
                 'identifier_conflict' => $this->clearConflict($item, $options),
-                'dispute' => $this->upholdDispute($item),
+                'dispute' => $this->upholdDispute($item, $staff),
+                'fact_conflict' => ($fact = \App\Models\HorseFact::find($item->subject_id)) ? RecordFacts::accept($fact) : null,
                 default => null,
             };
             $this->close($item, $staff, 'approved', $note);
@@ -71,17 +72,19 @@ class Reviews
         Audit::record('identifier.conflict_resolved', $identifier, null, ['outcome' => $options['outcome'] ?? 'both_stand']);
     }
 
-    private function upholdDispute(ReviewItem $item): void
+    private function upholdDispute(ReviewItem $item, User $staff): void
     {
         $subject = match ($item->subject_type) {
             'HorseEvent' => HorseEvent::find($item->subject_id),
             'HorseIdentifier' => HorseIdentifier::find($item->subject_id),
+            'Document' => \App\Models\Document::find($item->subject_id),
+            'PedigreeEntry' => \App\Models\PedigreeEntry::find($item->subject_id),
+            'HorseFact' => \App\Models\HorseFact::find($item->subject_id),
             default => null,
         };
         if ($subject) {
-            $before = $subject->status;
-            $subject->forceFill(['status' => 'disputed'])->save();
-            Audit::record('fact.disputed', $subject, ['status' => $before], ['status' => 'disputed']);
+            // An upheld dispute also withdraws any Horsefax verification standing behind the item.
+            app(Verify::class)->withdraw($subject, $staff, 'Dispute upheld: '.\Illuminate\Support\Str::limit((string) $item->statement, 200), 'disputed');
         }
     }
 

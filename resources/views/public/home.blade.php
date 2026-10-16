@@ -64,10 +64,10 @@
                     <p class="font-sans text-[13px] text-muted mt-1">Quarter Horse · Mare · Foaled 2016 · Bay · 15.1 hh</p>
                     <div class="mt-5 space-y-3">
                         @foreach ([
-                            ['Registration · Sample Breed Registry #0000000', 'chip-doc', 'Document supplied'],
-                            ['Coggins test negative · Mar 2026', 'chip-verified', 'Independently verified'],
-                            ['Ranch riding, 2nd place · Sample Fall Classic', 'chip-self', 'Self-reported'],
-                            ['Hoof trim and reset · Feb 2026', 'chip-self', 'Self-reported'],
+                            ['Registration · Sample Breed Registry #0000000', 'chip-verified', 'Horsefax Verified'],
+                            ['Coggins test negative · Mar 2026', 'chip border-[#3b5b7a]/40 text-[#2c4a66] bg-[#3b5b7a]/[0.06]', 'Professional attested'],
+                            ['Ranch riding, 2nd place · Sample Fall Classic', 'chip-self', 'Owner reported'],
+                            ['Hoof trim and reset · Feb 2026', 'chip-self', 'Owner reported'],
                         ] as [$t, $c, $l])
                             <div class="flex items-start justify-between gap-4 border-b border-line pb-3">
                                 <p class="text-[16px]">{{ $t }}</p>
@@ -87,14 +87,28 @@
             <div class="max-w-[46em]">
                 <p class="label text-gold-soft">What "verified" means here</p>
                 <h2 class="text-cream text-[36px] sm:text-[48px] leading-[1.1] mt-4">Verification applies to a fact, never to a whole horse.</h2>
-                <p class="mt-5 text-[19px] text-cream/80 leading-relaxed">Horsefax never stamps a horse "verified," "sound" or "safe." Each entry carries its own label, so you can see exactly what stands behind it. A missing record is not proof that nothing happened.</p>
+                <p class="mt-5 text-[19px] text-cream/80 leading-relaxed">Horsefax never stamps a horse "verified," "sound" or "safe." Every fact shows where it came from and whether Horsefax has checked it, so you can see exactly what stands behind it. A missing record is not proof that nothing happened.</p>
             </div>
-            <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <p class="label text-gold-soft mt-12">Where it came from</p>
+            <div class="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 @foreach ([
-                    ['chip-self', 'Self-reported', 'Entered by the owner or a contributor, without a supporting document.'],
-                    ['chip-doc', 'Document supplied', 'A supporting document is on file with Horsefax. It has not been independently checked.'],
-                    ['chip-verified', 'Independently verified', 'Checked by Horsefax against the source, such as the issuing registry or vet.'],
-                    ['chip-disputed', 'Disputed', 'Someone has challenged this entry with evidence. It stays visible, labeled, while it is reviewed.'],
+                    ['chip-self', 'Owner reported', 'Entered by the owner or their representative, without independent confirmation.'],
+                    ['chip border-[#9db3c9]/50 text-[#c9d8e6] bg-transparent', 'Professional attested', 'Submitted by a veterinarian, farrier or trainer in their own name. It authenticates who said it, not the horse\'s overall soundness.'],
+                    ['chip border-cream/50 text-cream bg-transparent', 'Official source', 'Supplied or confirmed by a breed registry, association or other authoritative organization.'],
+                    ['chip border-cream/25 text-cream/70 bg-transparent italic', 'Historical / third-party', 'From legacy records, other people\'s pedigrees or submissions whose reliability hasn\'t been established.'],
+                ] as [$c, $h, $p])
+                    <div class="border border-cream/15 rounded-[3px] p-5 bg-cream/[0.03]">
+                        <span class="{{ $c }}">{{ $h }}</span>
+                        <p class="mt-3 text-[16px] text-cream/75 leading-relaxed">{{ $p }}</p>
+                    </div>
+                @endforeach
+            </div>
+            <p class="label text-gold-soft mt-10">Whether it has been checked</p>
+            <div class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                @foreach ([
+                    ['chip-verified', 'Horsefax Verified', 'Checked by the Horsefax Verification Team. Click the badge on any fact to see how, when, and exactly what the check covers.'],
+                    ['chip-doc', 'Document on file', 'A supporting document is held by Horsefax as evidence.'],
+                    ['chip-disputed', 'Disputed', 'Challenged with evidence. It stays visible, labeled, while it is reviewed.'],
                 ] as [$c, $h, $p])
                     <div class="border border-cream/15 rounded-[3px] p-5 bg-cream/[0.03]">
                         <span class="{{ $c }}">{{ $h }}</span>

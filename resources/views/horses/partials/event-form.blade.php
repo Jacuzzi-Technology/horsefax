@@ -75,7 +75,7 @@
             <div><label class="field-label" for="e-dockind">Document kind</label><select id="e-dockind" name="document_kind" class="field">@foreach (Record::DOCUMENT_KINDS as $k => $l)@continue($k === 'photo')<option value="{{ $k }}">{{ $l }}</option>@endforeach</select></div>
             @unless ($pro)<x-visibility-select :value="$val('visibility', Record::DEFAULT_EVENT_VISIBILITY[$cat])" id-suffix="event" />@endunless
         </div>
-        <p class="hint">@if ($pro)Your entry is added in your name and starts private; the owner decides who else sees it.@else Health entries start private.@endif With a document attached, the entry is labeled "Document supplied."</p>
+        <p class="hint">@if ($pro)Your entry is added in your name and starts private; the owner decides who else sees it.@else Health entries start private.@endif With a document attached, the entry shows "Document on file."</p>
         <button class="btn-forest">{{ $button }}</button>
     </form>
 </details>

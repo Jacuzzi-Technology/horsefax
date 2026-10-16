@@ -81,7 +81,8 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::post('/reviews/{item}/reject', [AdminController::class, 'reject'])->name('review.reject');
     Route::get('/horses', [AdminController::class, 'horses'])->name('horses');
     Route::get('/horses/{horse}', [AdminController::class, 'horse'])->name('horse');
-    Route::post('/horses/{horse}/identity', [AdminController::class, 'setIdentity'])->name('horse.identity');
-    Route::post('/facts/{type}/{id}/status', [AdminController::class, 'setStatus'])->name('facts.status');
+    Route::post('/verify/{type}/{id}', [AdminController::class, 'verify'])->name('verify');
+    Route::post('/withdraw/{type}/{id}', [AdminController::class, 'withdraw'])->name('withdraw');
+    Route::post('/users/{user}/credentials', [AdminController::class, 'credentials'])->name('credentials');
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');
 });

@@ -3,19 +3,20 @@
 namespace App\Models;
 
 use App\Support\Record;
+use App\Models\Concerns\IsClaim;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Document extends Model
 {
-    use HasUuids;
+    use HasUuids, IsClaim;
 
     protected $guarded = ['id'];
 
     protected function casts(): array
     {
-        return ['issued_on' => 'date', 'expires_on' => 'date'];
+        return ['verified_at' => 'datetime', 'issued_on' => 'date', 'expires_on' => 'date'];
     }
 
     public function horse(): BelongsTo { return $this->belongsTo(Horse::class); }

@@ -15,15 +15,23 @@
             <p>Every record gets a permanent <strong>Horsefax ID</strong> (for example HF-7K3M-Q9P2). It stays with the horse for life and is never reused.</p>
 
             <h2 id="verification">2. Add evidence, and see how each fact is known</h2>
-            <p>Upload registration papers, Coggins tests, health certificates, vet and farrier records, show results and bills of sale. Originals are stored as evidence and never edited. Every fact carries one of these labels:</p>
+            <p>Upload registration papers, Coggins tests, health certificates, vet and farrier records, show results and bills of sale. Originals are stored as evidence and never edited. Every fact on a record shows two separate things.</p>
+            <h3>Where it came from</h3>
             <ul>
-                <li><strong>Self-reported</strong>: entered without a supporting document.</li>
-                <li><strong>Document supplied</strong>: a supporting document is on file with Horsefax but has not been checked independently.</li>
-                <li><strong>Independently verified</strong>: Horsefax staff have checked it against the source.</li>
-                <li><strong>Disputed</strong>: someone has challenged it with evidence, and it is under review.</li>
+                <li><strong>Owner reported</strong>: entered by the owner or their authorized representative.</li>
+                <li><strong>Professional attested</strong>: submitted by a veterinarian, farrier, trainer or breeder in their own name. A ✓ means Horsefax has checked their credentials. It authenticates who said it, not the horse's overall soundness.</li>
+                <li><strong>Official source</strong>: supplied or confirmed by a breed registry, competition association or other authoritative organization.</li>
+                <li><strong>Historical / third-party</strong>: from legacy records, other people's pedigrees or submissions whose reliability hasn't been established.</li>
+            </ul>
+            <h3>Whether it has been checked</h3>
+            <ul>
+                <li><strong>Horsefax Verified</strong>: checked by the Horsefax Verification Team. Click the badge to see how it was checked, when, any recheck date, and exactly what the verification covers and doesn't.</li>
+                <li><strong>Not verified</strong>: not yet checked. That says nothing bad about it; most information starts here.</li>
+                <li><strong>Disputed</strong>: challenged with evidence and under review.</li>
                 <li><strong>Superseded</strong>: replaced by a later correction. The original stays in the record history.</li>
             </ul>
-            <p>Horsefax never marks a whole horse as "verified," and never treats missing records as proof that a horse is healthy or sound.</p>
+            <p>A source can be verified: an owner might upload a registration certificate (owner reported), and once Horsefax confirms it with the registry it becomes Horsefax Verified. Each entry also shows when it happened, when it was reported, and when it was verified.</p>
+            <p>Horsefax never marks a whole horse as "verified" and never gives a horse a score. Instead a record says plainly what has been established, for example "Identity verified · Pedigree confirmed · 3 professional records · 4 owner-reported entries." A horse's identity can be verified without implying that everything else on its record has been.</p>
 
             <h2 id="contribute">3. Build the history</h2>
             <p>Add dated entries for health and care, training, competition, ownership and sales, and transport. Entries stay attributed to the person who added them. To change one of your own entries you add a correction, which supersedes it; the original remains in the history. Invitations for veterinarians, farriers and trainers to add their own attributed entries are coming next.</p>

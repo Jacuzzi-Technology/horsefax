@@ -36,7 +36,7 @@
                                 <p class="font-sans text-[12px] text-muted mt-2">Added {{ $e->created_at->format('M j, Y') }}@if ($e->superseded_by) · superseded @endif</p>
                             </div>
                             <div class="flex sm:flex-col items-start sm:items-end gap-2">
-                                <x-status :status="$e->superseded_by ? 'superseded' : $e->status" />
+                                <x-claim :item="$e" />
                                 <x-visibility :value="$e->visibility" />
                             </div>
                         </div>

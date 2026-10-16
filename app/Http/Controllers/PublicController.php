@@ -76,6 +76,7 @@ class PublicController extends Controller
             'pedigree' => Views::pedigree($horse, 'public'),
             'offspring' => Views::offspring($horse, 'public'),
             'media' => Views::media($horse, 'public'),
+            'facts' => Views::facts($horse),
         ]);
     }
 
@@ -102,6 +103,7 @@ class PublicController extends Controller
             'pedigree' => Views::pedigree($horse, 'report', $link),
             'offspring' => Views::offspring($horse, 'report', $link),
             'media' => Views::media($horse, 'report', $link),
+            'facts' => Views::facts($horse),
         ]);
     }
 

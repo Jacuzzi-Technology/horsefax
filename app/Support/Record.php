@@ -13,13 +13,74 @@ final class Record
         'public' => 'Public (on the public summary, if turned on)',
     ];
 
+    /**
+     * Kate's evidence model: where a claim came from (source) is separate from whether it has been checked (status).
+     * "Horsefax Verified" is the top verification tier; it covers one fact, never a whole horse.
+     */
+    public const SOURCES = [
+        'owner_reported' => 'Owner reported',
+        'professional_attested' => 'Professional attested',
+        'official_source' => 'Official source',
+        'historical' => 'Historical / third-party',
+    ];
+
+    public const SOURCE_DESCRIPTIONS = [
+        'owner_reported' => 'Entered by the owner or their authorized representative.',
+        'professional_attested' => 'Submitted by a veterinarian, farrier, trainer or breeder in their own name. It authenticates who said it, not the horse\'s overall soundness.',
+        'official_source' => 'Supplied or confirmed by a breed registry, competition association or other authoritative organization.',
+        'historical' => 'From legacy records, other people\'s pedigrees or third-party submissions whose reliability hasn\'t been established.',
+    ];
+
     public const STATUS = [
-        'self_reported' => 'Self-reported',
-        'document_supplied' => 'Document supplied',
-        'independently_verified' => 'Independently verified',
+        'unverified' => 'Not verified',
+        'verified' => 'Horsefax Verified',
         'disputed' => 'Disputed',
         'superseded' => 'Superseded',
     ];
+
+    public const VERIFICATION_METHODS = [
+        'registry_record' => 'Matched against the registry\'s record',
+        'document_review' => 'Original document reviewed and authenticated',
+        'microchip_scan' => 'Microchip scanned and matched',
+        'physical_inspection' => 'Physical inspection of the horse',
+        'professional_confirmation' => 'Confirmed with the professional who supplied it',
+        'association_results' => 'Matched against the association\'s official results',
+        'transaction_record' => 'Matched against a transaction record',
+        'other' => 'Other documented check',
+    ];
+
+    /** Suggested wording for what a verification covers (staff can edit it). Always says what it does NOT cover. */
+    public static function defaultScope(\Illuminate\Database\Eloquent\Model $s): string
+    {
+        return match (class_basename($s)) {
+            'Horse' => "This horse's identity (registration, microchip and markings) confirmed by Horsefax. Does not establish ownership, soundness or suitability.",
+            'HorseIdentifier' => match ($s->kind) {
+                'registration' => 'Registered name and registration number matched against the '.($s->registry ?: 'registry').' record. Does not establish current ownership or physical identity.',
+                'microchip' => 'Microchip scanned and matched to this horse. Does not establish ownership.',
+                default => 'This identifier matched against its issuing source. Covers this identifier only.',
+            },
+            'HorseEvent' => match ($s->category) {
+                'health', 'care' => 'This entry matched against the issuing veterinarian\'s or laboratory\'s record. Covers this entry only, not the horse\'s current health.',
+                'competition' => 'This result matched against the association\'s official results. Covers this result only.',
+                'ownership' => 'This transaction matched against a transaction record. Private terms are not shown.',
+                default => 'This entry checked against supporting evidence. Covers this entry only.',
+            },
+            'Document' => 'This document authenticated with its issuer. Covers the document only, not anything it does not state.',
+            'PedigreeEntry' => 'This pedigree line matched against the registry\'s record.',
+            'HorseFact' => 'This '.strtolower(\App\Models\HorseFact::FIELDS[$s->field] ?? 'value').' confirmed by Horsefax. Covers this value only.',
+            default => 'Covers this item only.',
+        };
+    }
+
+    /** Who supplied a claim, from the role of the person adding it. */
+    public static function sourceForRole(?string $role): string
+    {
+        return match ($role) {
+            'veterinarian', 'farrier', 'trainer', 'breeder' => 'professional_attested',
+            'staff' => 'historical',
+            default => 'owner_reported',
+        };
+    }
 
     public const EVENT_CATEGORIES = [
         'health' => 'Health & veterinary',

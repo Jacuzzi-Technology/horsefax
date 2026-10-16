@@ -35,7 +35,6 @@ class RecordController extends Controller
         if ($request->hasFile('proof')) {
             $doc = $store($horse, $request->user(), $request->file('proof'), ['kind' => $data['kind'] === 'registration' ? 'registration_papers' : 'other', 'title' => 'Proof of '.strtolower(Record::IDENTIFIER_KINDS[$data['kind']]), 'visibility' => 'private']);
             $data['document_id'] = $doc->id;
-            $data['status'] = 'document_supplied';
         }
         $identifier = $add($horse, $request->user(), $data);
 

@@ -14,10 +14,10 @@
                 <p class="label text-gold-soft">Horsefax record · {{ $horse->horsefax_id }}</p>
                 <h1 class="text-cream text-[34px] sm:text-[44px] leading-tight mt-2">{{ $horse->displayName() }}</h1>
                 <p class="mt-3 flex flex-wrap gap-2 items-center">
-                    <span class="{{ $horse->identity_status === 'verified' ? 'chip-verified' : ($horse->identity_status === 'under_review' ? 'chip-disputed' : 'chip-self') }}">{{ $horse->identityLabel() }}</span>
                     <span class="chip-vis">{{ $horse->public_summary ? 'Public summary on' : 'Public summary off' }}</span>
                     <span class="chip-vis">{{ $horse->listed ? 'Listed in search' : 'Not listed in search' }}</span>
                 </p>
+                <x-record-summary :parts="\App\Support\Summary::parts($horse, $facts, $identifiers, $events, $pedigree, $documents)" dark class="mt-3" />
             </div>
             <div class="flex flex-wrap gap-2">
                 @if ($canEdit)<a href="{{ route('sharing', $horse) }}" class="btn-gold btn-small">Share</a>@endif
@@ -46,12 +46,30 @@
                 <div class="space-y-10">
                     <section>
                         <div class="flex items-center justify-between border-b border-line pb-2"><h2 class="text-[26px]">Identity</h2>@if ($canEdit)<a href="{{ route('horses.edit', $horse) }}" class="btn-ghost btn-small">Edit</a>@endif</div>
-                        <dl class="grid sm:grid-cols-2 gap-x-8">
-                            @foreach (['Registered name' => $horse->registered_name, 'Barn name' => $horse->barn_name, 'Breed' => $horse->breed, 'Sex' => $horse->sex ? ucfirst($horse->sex) : null, 'Foaled' => $horse->birthLabel(), 'Color' => $horse->color, 'Height' => $horse->heightLabel(), 'Markings' => $horse->markings] as $k => $val)
-                                <div class="py-2.5 border-b border-line"><dt class="label text-muted text-[10px]">{{ $k }}</dt><dd class="text-[18px] mt-0.5">{{ $val ?? '—' }}</dd></div>
+                        <table class="table-hf mt-2">
+                            <tbody>
+                            @foreach (\App\Models\HorseFact::FIELDS as $field => $label)
+                                @php $f = $facts->get($field); $past = $factHistory->get($field, collect()); @endphp
+                                <tr>
+                                    <td class="w-[28%] label text-muted text-[10px] align-top pt-3.5">{{ $label }}</td>
+                                    <td class="text-[18px]">{{ $f?->display() ?? '—' }}
+                                        @if ($f)@include('partials.claim-dates', ['c' => $f])@endif
+                                        @if ($past->isNotEmpty())
+                                            <details class="mt-1"><summary class="cursor-pointer font-sans text-[12px] text-gold-dark">History ({{ $past->count() }} earlier or held {{ Str::plural('value', $past->count()) }})</summary>
+                                                <ul class="mt-1 font-sans text-[12.5px] space-y-1">
+                                                    @foreach ($past as $old)
+                                                        <li>{{ $old->display() }} · {{ $old->sourceLabel() }} · {{ $old->created_at->format('M j, Y') }}{{ $old->superseded_by ? ' · replaced' : ' · held for staff review' }}</li>
+                                                    @endforeach
+                                                </ul>
+                                            </details>
+                                        @endif
+                                    </td>
+                                    <td class="text-right align-top pt-3">@if ($f)<x-claim :item="$f" compact class="justify-end" />@endif</td>
+                                </tr>
                             @endforeach
-                        </dl>
-                        <p class="hint">Basic identity (names, breed, sex, foaling year, color) appears in Horsefax search while the horse is listed.</p>
+                            </tbody>
+                        </table>
+                        <p class="hint">Each value keeps its source and history. Basic identity (names, breed, sex, foaling year, color) appears in Horsefax search while the horse is listed. A change to a Horsefax Verified or professionally supplied value goes to staff review instead of replacing it.</p>
                     </section>
 
                     <section>
@@ -64,7 +82,7 @@
                                 <tr>
                                     <td>{{ $i->label() }}</td>
                                     <td class="font-sans text-[15px]">{{ $i->displayValue(true) }}@if ($i->kind === 'microchip')<br><span class="hint text-[13px]">Shown to others as {{ $i->displayValue() }}</span>@endif</td>
-                                    <td><x-status :status="$i->in_conflict ? 'disputed' : $i->status" />@if ($i->in_conflict)<br><span class="hint text-[13px]">Also on another record; under review</span>@endif</td>
+                                    <td><x-claim :item="$i" :conflict="$i->in_conflict" />@if ($i->in_conflict)<br><span class="hint text-[13px]">Also on another record; under review</span>@endif</td>
                                     <td>@include('horses.partials.visibility', ['type' => 'identifier', 'item' => $i])</td>
                                 </tr>
                             @endforeach
@@ -165,10 +183,11 @@
                             @if ($e->expires_on)<p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->expires_on->isPast() ? 'Expired' : 'Valid until' }} {{ $e->expires_on->format('M j, Y') }}</p>@endif
                             @if ($e->details)<p class="text-[16px] mt-2 whitespace-pre-line">{{ $e->details }}</p>@endif
                             @if ($e->document)<p class="mt-2"><a href="{{ route('files.show', $e->document) }}" class="font-sans text-[13px] text-gold-dark" target="_blank">View attached document</a></p>@endif
-                            <p class="font-sans text-[12px] text-muted mt-2">Added by {{ $e->contributor_id === auth()->id() ? 'you' : ($e->contributor?->name ?? 'a contributor') }} ({{ Record::CONTRIBUTOR_ROLES[$e->contributor_role] ?? $e->contributor_role }}) · {{ $e->created_at->format('M j, Y') }}@if ($e->supersedes) · correction of an earlier entry @endif</p>
+                            <p class="font-sans text-[12px] text-muted mt-2">Added by {{ $e->contributor_id === auth()->id() ? 'you' : ($e->contributor?->name ?? 'a contributor') }} ({{ Record::CONTRIBUTOR_ROLES[$e->contributor_role] ?? $e->contributor_role }})@if ($e->supersedes) · correction of an earlier entry @endif</p>
+                            @include('partials.claim-dates', ['c' => $e])
                         </div>
                         <div class="flex sm:flex-col items-start sm:items-end gap-2">
-                            <x-status :status="$e->status" />
+                            <x-claim :item="$e" class="sm:justify-end" />
                             @include('horses.partials.visibility', ['type' => 'event', 'item' => $e])
                             @if ($canEdit && ($e->contributor_id === auth()->id() || auth()->user()->isStaff()))<a href="{{ route('record.events.correct', [$horse, $e]) }}" class="font-sans text-[12px] text-gold-dark">Correct</a>
                             @elseif ($e->contributor_id !== auth()->id())
@@ -215,7 +234,7 @@
                     <tr>
                         <td><a href="{{ route('files.show', $d) }}" target="_blank" class="text-ink">{{ $d->title }}</a><br><span class="font-sans text-[12px] text-muted">{{ $d->kindLabel() }}{{ $d->issuer ? ' · '.$d->issuer : '' }} · {{ number_format($d->size / 1024) }} KB · uploaded {{ $d->created_at->format('M j, Y') }}@if ($d->contributor_role) by {{ $d->uploader?->name }} ({{ strtolower(Record::CONTRIBUTOR_ROLES[$d->contributor_role] ?? $d->contributor_role) }})@endif</span></td>
                         <td class="whitespace-nowrap">{{ $d->issued_on?->format('M j, Y') ?? '—' }}@if ($d->expires_on)<br><span class="hint text-[13px]">{{ $d->expires_on->isPast() ? 'expired' : 'expires' }} {{ $d->expires_on->format('M j, Y') }}</span>@endif</td>
-                        <td><x-status :status="$d->status" /></td>
+                        <td><x-claim :item="$d" /></td>
                         <td>@include('horses.partials.visibility', ['type' => 'document', 'item' => $d])</td>
                     </tr>
                 @empty
@@ -271,9 +290,9 @@
                     <h2 class="text-[26px] border-b border-line pb-2">Stewardship on Horsefax</h2>
                     <table class="table-hf mt-3">
                         <thead><tr><th>Person</th><th>Role</th><th>From</th><th>Until</th></tr></thead>
-                        <tbody>@foreach ($stewardships as $s)<tr><td>{{ $s->user->name }}{{ $s->user_id === auth()->id() ? ' (you)' : '' }}</td><td>{{ ucfirst($s->role) }} · {{ $s->status }}</td><td>{{ $s->started_on?->format('M j, Y') }}</td><td>{{ $s->ended_at?->format('M j, Y') ?? 'present' }}@if ($s->ended_reason)<br><span class="hint text-[13px]">{{ $s->ended_reason }}</span>@endif</td></tr>@endforeach</tbody>
+                        <tbody>@foreach ($stewardships as $s)<tr><td>{{ $s->user->name }}{{ $s->user_id === auth()->id() ? ' (you)' : '' }}</td><td>{{ \App\Support\Roles::stewardLabel($s) }}</td><td>{{ $s->started_on?->format('M j, Y') }}</td><td>{{ $s->ended_at?->format('M j, Y') ?? 'present' }}@if ($s->ended_reason)<br><span class="hint text-[13px]">{{ $s->ended_reason }}</span>@endif</td></tr>@endforeach</tbody>
                     </table>
-                    <p class="hint">Readers of reports see roles and dates only, never names.</p>
+                    <p class="hint">Record created by {{ $horse->creator?->id === auth()->id() ? 'you' : ($horse->creator?->name ?? '—') }}{{ $horse->fromPedigree() ? ' (from a pedigree)' : '' }}. Creating a record doesn't make someone the verified owner: a claimed owner becomes a verified owner after Horsefax staff review proof of ownership. Readers of reports see roles and dates only, never names.</p>
                     <h2 class="text-[26px] border-b border-line pb-2 mt-10">Sale history</h2>
                     <p class="hint mt-2">Add sales, purchases, auctions and leases from the <a href="{{ route('horses.show', ['horse' => $horse, 'tab' => 'history']) }}" class="text-gold-dark">History</a> tab (category "Ownership & custody"). Prices are private unless you share them.</p>
                 </section>
@@ -310,7 +329,7 @@
                         @forelse ($contributors as $c)
                             <tr>
                                 <td>{{ $c->user?->name ?? $c->email }}@if ($c->user)<br><span class="hint text-[13px]">{{ $c->email }}</span>@endif</td>
-                                <td>{{ $c->roleLabel() }}</td>
+                                <td>{{ \App\Support\Roles::contributorLabel($c) }}</td>
                                 <td>{{ $c->statusLabel() }}<br><span class="hint text-[13px]">@if ($c->status === 'active')since {{ $c->accepted_at?->format('M j, Y') }}@elseif ($c->status === 'pending')invited {{ $c->created_at->format('M j, Y') }}@else{{ $c->ended_at?->format('M j, Y') }}@endif</span></td>
                                 <td class="text-right">
                                     @if ($canEdit && in_array($c->status, ['pending', 'active'], true))

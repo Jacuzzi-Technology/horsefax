@@ -63,7 +63,7 @@ class ContributorTest extends TestCase
         $this->assertSame($vet->id, $event->contributor_id);
         $this->assertSame('veterinarian', $event->contributor_role);
         $this->assertSame('private', $event->visibility);
-        $this->assertSame('document_supplied', $event->status);
+        $this->assertSame('unverified', $event->status);
         $this->assertNull($event->amount_cents);
         $doc = $horse->documents()->where('title', 'Hock radiographs')->firstOrFail();
         $this->assertSame([$vet->id, 'veterinarian', 'private'], [$doc->uploaded_by, $doc->contributor_role, $doc->visibility]);
@@ -148,7 +148,7 @@ class ContributorTest extends TestCase
         $this->actingAs($owner)->post("/horse/$h/corrections", ['subject' => 'event:'.$event->id, 'statement' => 'Second opinion found her sound the next week.'])->assertRedirect();
         $item = ReviewItem::where('kind', 'dispute')->firstOrFail();
         $this->assertSame(['HorseEvent', $event->id, $owner->id], [$item->subject_type, $item->subject_id, $item->submitted_by]);
-        $this->assertSame('self_reported', $event->fresh()->status); // nothing changes until staff decide
+        $this->assertSame('unverified', $event->fresh()->status); // nothing changes until staff decide
     }
 
     public function test_invitation_rules(): void

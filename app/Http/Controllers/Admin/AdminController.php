@@ -88,6 +88,10 @@ class AdminController extends Controller
         return view('admin.horse', [
             'horse' => $horse,
             'identifiers' => $horse->identifiers()->orderBy('created_at')->get(),
+            'facts' => $horse->facts()->orderBy('field')->orderByDesc('created_at')->get(),
+            'pedigreeLines' => $horse->pedigree()->orderByRaw('length(position)')->orderBy('position')->get(),
+            'contributors' => \App\Models\Contributor::where('horse_id', $horse->id)->with('user')->get(),
+            'identityVerification' => $horse->identityVerification(),
             'events' => $horse->events()->orderByDesc('created_at')->get(),
             'documents' => $horse->documents()->orderByDesc('created_at')->get(),
             'stewardships' => $horse->stewardships()->with('user')->orderBy('created_at')->get(),
@@ -96,32 +100,64 @@ class AdminController extends Controller
         ]);
     }
 
-    /** Staff set the verification status of one fact or document (e.g. independently verified). */
-    public function setStatus(Request $request, string $type, string $id)
+    private function subject(string $type, string $id): \Illuminate\Database\Eloquent\Model
     {
-        $data = $request->validate(['status' => ['required', Rule::in(array_keys(Record::STATUS))], 'note' => 'required|string|max:1000']);
-        $model = match ($type) {
+        return match ($type) {
             'identifier' => HorseIdentifier::findOrFail($id),
             'event' => HorseEvent::findOrFail($id),
             'document' => Document::findOrFail($id),
+            'pedigree' => \App\Models\PedigreeEntry::findOrFail($id),
+            'fact' => \App\Models\HorseFact::findOrFail($id),
+            'horse' => Horse::findOrFail($id),
             default => abort(404),
         };
-        $before = $model->status;
-        $model->forceFill(['status' => $data['status']])->save();
-        Audit::record($type.'.status_set', $model, ['status' => $before], ['status' => $data['status'], 'note' => $data['note']]);
-
-        return back()->with('status', 'Status updated.');
     }
 
-    /** Staff confirm (or withdraw) a horse's identity after cross-checking papers, registry and microchip. */
-    public function setIdentity(Request $request, Horse $horse)
+    /** Horsefax Verified: record how one item was checked and exactly what the verification covers. */
+    public function verify(Request $request, string $type, string $id, \App\Actions\Record\Verify $verify)
     {
-        $data = $request->validate(['identity_status' => 'required|in:unverified,under_review,verified', 'note' => 'required|string|max:1000']);
-        $before = $horse->identity_status;
-        $horse->forceFill(['identity_status' => $data['identity_status']])->save();
-        Audit::record('horse.identity_status_set', $horse, ['identity_status' => $before], $data);
+        $data = $request->validate([
+            'method' => ['required', Rule::in(array_keys(Record::VERIFICATION_METHODS))],
+            'scope' => 'required|string|min:10|max:1000',
+            'recheck_on' => 'nullable|date|after:today',
+            'note' => 'nullable|string|max:2000',
+            'source_type' => ['nullable', Rule::in(array_keys(Record::SOURCES))],
+        ]);
+        $subject = $this->subject($type, $id);
+        if (! empty($data['source_type']) && $type !== 'horse' && $subject->source_type !== $data['source_type']) {
+            $before = $subject->source_type;
+            $subject->forceFill(['source_type' => $data['source_type']])->save();
+            Audit::record($type.'.source_set', $subject, ['source_type' => $before], ['source_type' => $data['source_type']]);
+        }
+        $verify->verify($subject, $request->user(), $data);
 
-        return back()->with('status', 'Identity status updated.');
+        return back()->with('status', 'Marked Horsefax Verified.');
+    }
+
+    public function withdraw(Request $request, string $type, string $id, \App\Actions\Record\Verify $verify)
+    {
+        $data = $request->validate(['reason' => 'required|string|max:1000', 'status' => 'required|in:unverified,disputed']);
+        $verify->withdraw($this->subject($type, $id), $request->user(), $data['reason'], $data['status']);
+
+        return back()->with('status', 'Verification withdrawn.');
+    }
+
+    /** A professional's credentials, checked by staff (license, membership). Shown as a ✓ on their attested entries. */
+    public function credentials(Request $request, \App\Models\User $user)
+    {
+        $data = $request->validate([
+            'credential_role' => ['required', Rule::in(array_keys(Record::CONTRIBUTOR_ROLES))],
+            'credential_detail' => 'required|string|max:200',
+            'verified' => 'required|boolean',
+        ]);
+        $before = $user->only(['credential_role', 'credential_detail', 'credential_verified_at']);
+        $user->forceFill([
+            'credential_role' => $data['credential_role'], 'credential_detail' => $data['credential_detail'],
+            'credential_verified_at' => $data['verified'] ? now() : null,
+        ])->save();
+        Audit::record('user.credentials_set', $user, $before, $user->only(['credential_role', 'credential_detail', 'credential_verified_at']));
+
+        return back()->with('status', $data['verified'] ? 'Credentials verified.' : 'Credentials saved as not verified.');
     }
 
     public function messages()

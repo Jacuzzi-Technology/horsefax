@@ -3,19 +3,20 @@
 namespace App\Models;
 
 use App\Support\Record;
+use App\Models\Concerns\IsClaim;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class HorseEvent extends Model
 {
-    use HasUuids;
+    use HasUuids, IsClaim;
 
     protected $guarded = ['id'];
 
     protected function casts(): array
     {
-        return ['occurred_on' => 'date', 'expires_on' => 'date', 'points' => 'decimal:2'];
+        return ['verified_at' => 'datetime', 'occurred_on' => 'date', 'expires_on' => 'date', 'points' => 'decimal:2'];
     }
 
     public function horse(): BelongsTo { return $this->belongsTo(Horse::class); }

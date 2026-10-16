@@ -36,6 +36,15 @@ class Horse extends Model
     public function shareLinks(): HasMany { return $this->hasMany(ShareLink::class); }
     public function pedigree(): HasMany { return $this->hasMany(PedigreeEntry::class)->whereNull('superseded_by'); }
     public function media(): HasMany { return $this->hasMany(Media::class); }
+    public function facts(): HasMany { return $this->hasMany(HorseFact::class); }
+    public function currentFacts(): HasMany { return $this->hasMany(HorseFact::class)->where('is_current', true)->whereNull('superseded_by'); }
+    public function verifications(): HasMany { return $this->hasMany(Verification::class); }
+
+    /** The standing verification of this horse's identity, if any. */
+    public function identityVerification(): ?Verification
+    {
+        return $this->verifications()->where('subject_type', 'Horse')->whereNull('revoked_at')->latest('verified_at')->first();
+    }
     public function contributors(): HasMany { return $this->hasMany(Contributor::class); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function profilePhoto(): BelongsTo { return $this->belongsTo(Document::class, 'profile_photo_id'); }
