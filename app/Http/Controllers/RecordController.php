@@ -145,12 +145,15 @@ class RecordController extends Controller
             'lines.*.registration_number' => 'nullable|string|max:60',
             'lines.*.foal_year' => 'nullable|integer|min:1900|max:'.now()->year,
             'lines.*.color' => 'nullable|string|max:60',
+            'lines.*.linked_horse_id' => 'nullable|uuid',
             'visibility' => ['required', Rule::in(array_keys(Record::VISIBILITY))],
         ]);
         $lines = array_intersect_key($data['lines'] ?? [], Record::PEDIGREE_POSITIONS);
         $n = $save($horse, $request->user(), $lines, $data['visibility']);
+        $created = app(\App\Actions\Record\CreateAncestorRecords::class)($horse, $request->user());
 
-        return redirect()->route('horses.show', ['horse' => $horse, 'tab' => 'pedigree'])->with('status', $n ? 'Pedigree saved.' : 'No pedigree changes.');
+        return redirect()->route('horses.show', ['horse' => $horse, 'tab' => 'pedigree'])->with('status', ($n ? 'Pedigree saved.' : 'No pedigree changes.')
+            .($created ? ' '.$created.' '.\Illuminate\Support\Str::plural('horse', $created).' in the pedigree '.($created === 1 ? 'was' : 'were').' new to Horsefax and now '.($created === 1 ? 'has its' : 'have their').' own record, marked identity unverified.' : ''));
     }
 
     public function addMedia(Request $request, Horse $horse, \App\Actions\Record\AddMedia $add)

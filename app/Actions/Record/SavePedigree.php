@@ -49,7 +49,7 @@ class SavePedigree
                 if ($name !== '') {
                     $entry = PedigreeEntry::create($new + [
                         'horse_id' => $horse->id, 'position' => $pos, 'visibility' => $visibility, 'added_by' => $user->id,
-                        'linked_horse_id' => $this->findHorse($horse, $new),
+                        'linked_horse_id' => $this->chosenHorse($horse, $line['linked_horse_id'] ?? null) ?? $this->findHorse($horse, $new),
                     ]);
                 }
                 if ($old) {
@@ -61,6 +61,16 @@ class SavePedigree
 
             return $changed;
         });
+    }
+
+    /** A record picked in the autofill, if it exists, isn't this horse, and is listed or public. */
+    private function chosenHorse(Horse $horse, ?string $id): ?string
+    {
+        if (! $id || $id === $horse->id) {
+            return null;
+        }
+
+        return Horse::whereKey($id)->where(fn ($w) => $w->where('listed', true)->orWhere('public_summary', true))->value('id');
     }
 
     private function findHorse(Horse $horse, array $line): ?string

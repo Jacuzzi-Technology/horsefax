@@ -48,6 +48,8 @@ Route::middleware(['auth', 'standing'])->group(function () {
     Route::post('/horses/{horse}/events/{event}/correct', [RecordController::class, 'correct'])->name('record.events.correct.store');
     Route::post('/horses/{horse}/documents', [RecordController::class, 'addDocument'])->middleware('throttle:uploads')->name('record.documents');
     Route::post('/horses/{horse}/photo', [RecordController::class, 'setPhoto'])->middleware('throttle:uploads')->name('record.photo');
+    Route::get('/pedigree/lookup', [\App\Http\Controllers\PedigreeController::class, 'lookup'])->middleware('throttle:search')->name('pedigree.lookup');
+    Route::get('/pedigree/ancestry', [\App\Http\Controllers\PedigreeController::class, 'ancestry'])->middleware('throttle:search')->name('pedigree.ancestry');
     Route::post('/horses/{horse}/pedigree', [RecordController::class, 'savePedigree'])->name('record.pedigree');
     Route::post('/horses/{horse}/media', [RecordController::class, 'addMedia'])->middleware('throttle:uploads')->name('record.media');
     Route::post('/horses/{horse}/visibility', [RecordController::class, 'setVisibility'])->name('record.visibility');

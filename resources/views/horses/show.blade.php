@@ -135,17 +135,22 @@
             @if ($canEdit)
                 <details class="card p-6 mt-8" @if ($pedigree->isEmpty()) open @endif>
                     <summary class="cursor-pointer text-[20px] text-ink">{{ $pedigree->isEmpty() ? 'Add the pedigree' : 'Edit the pedigree' }}</summary>
-                    <form method="POST" action="{{ route('record.pedigree', $horse) }}" class="mt-5 space-y-4">
+                    <form method="POST" action="{{ route('record.pedigree', $horse) }}" class="mt-5 space-y-4" data-pedigree-form data-lookup="{{ route('pedigree.lookup') }}" data-ancestry="{{ route('pedigree.ancestry') }}">
                         @csrf
-                        <p class="hint">Enter names as they appear on the papers. When a sire or dam is also on Horsefax (matched by registration number or exact registered name), the records are linked and this horse appears in its offspring.</p>
+                        <p class="hint">Start typing a sire or dam's name. If Horsefax already knows the horse, pick it from the list and its own pedigree fills in behind it. You can do the same at every generation, and change anything before saving.</p>
                         @foreach (['s' => 'Sire', 'd' => 'Dam', 'ss' => "Sire's sire", 'sd' => "Sire's dam", 'ds' => "Dam's sire", 'dd' => "Dam's dam", 'sss' => "Sire's sire's sire", 'ssd' => "Sire's sire's dam", 'sds' => "Sire's dam's sire", 'sdd' => "Sire's dam's dam", 'dss' => "Dam's sire's sire", 'dsd' => "Dam's sire's dam", 'dds' => "Dam's dam's sire", 'ddd' => "Dam's dam's dam"] as $pos => $label)
                             @php $e = $pedigree->get($pos); @endphp
-                            <div class="grid sm:grid-cols-[170px_1fr_150px_150px_90px] gap-2 items-end {{ strlen($pos) === 1 ? 'pt-2' : '' }}">
-                                <p class="font-sans text-[12px] font-semibold tracking-[0.08em] uppercase {{ strlen($pos) === 1 ? 'text-ink' : 'text-muted' }} pb-3">{{ $label }}</p>
-                                <input name="lines[{{ $pos }}][name]" value="{{ old("lines.$pos.name", $e?->name) }}" class="field" placeholder="Name" aria-label="{{ $label }} name">
-                                <select name="lines[{{ $pos }}][registry]" class="field" aria-label="{{ $label }} registry"><option value="">Registry</option>@foreach (Record::REGISTRIES as $k => $l)<option value="{{ $k }}" @selected(old("lines.$pos.registry", $e?->registry) === $k)>{{ $k }}</option>@endforeach</select>
-                                <input name="lines[{{ $pos }}][registration_number]" value="{{ old("lines.$pos.registration_number", $e?->registration_number) }}" class="field" placeholder="Reg. #" aria-label="{{ $label }} registration number">
-                                <input name="lines[{{ $pos }}][foal_year]" value="{{ old("lines.$pos.foal_year", $e?->foal_year) }}" class="field" placeholder="Year" inputmode="numeric" maxlength="4" aria-label="{{ $label }} foaling year">
+                            <div class="grid sm:grid-cols-[170px_1fr_150px_150px_90px] gap-2 items-end {{ strlen($pos) === 1 ? 'pt-2' : '' }} rounded-[3px] transition-colors" data-ped-row="{{ $pos }}" style="padding-left: {{ (strlen($pos) - 1) * 18 }}px">
+                                <p class="font-sans text-[12px] font-semibold tracking-[0.08em] uppercase {{ strlen($pos) === 1 ? 'text-ink' : 'text-muted' }} pb-3">{{ $label }}<span class="block normal-case tracking-normal font-normal text-gold-dark text-[11px]" data-ped-note></span></p>
+                                <div class="relative">
+                                    <input name="lines[{{ $pos }}][name]" value="{{ old("lines.$pos.name", $e?->name) }}" class="field" placeholder="Name" aria-label="{{ $label }} name" autocomplete="off" data-field="name" role="combobox" aria-autocomplete="list" aria-expanded="false">
+                                    <ul class="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-line rounded-[3px] shadow-xl max-h-80 overflow-auto" role="listbox" hidden data-ped-list></ul>
+                                </div>
+                                <select name="lines[{{ $pos }}][registry]" class="field" aria-label="{{ $label }} registry" data-field="registry"><option value="">Registry</option>@foreach (Record::REGISTRIES as $k => $l)<option value="{{ $k }}" @selected(old("lines.$pos.registry", $e?->registry) === $k)>{{ $k }}</option>@endforeach</select>
+                                <input name="lines[{{ $pos }}][registration_number]" value="{{ old("lines.$pos.registration_number", $e?->registration_number) }}" class="field" placeholder="Reg. #" aria-label="{{ $label }} registration number" data-field="registration_number">
+                                <input name="lines[{{ $pos }}][foal_year]" value="{{ old("lines.$pos.foal_year", $e?->foal_year) }}" class="field" placeholder="Year" inputmode="numeric" maxlength="4" aria-label="{{ $label }} foaling year" data-field="foal_year">
+                                <input type="hidden" name="lines[{{ $pos }}][color]" value="{{ old("lines.$pos.color", $e?->color) }}" data-field="color">
+                                <input type="hidden" name="lines[{{ $pos }}][linked_horse_id]" value="{{ old("lines.$pos.linked_horse_id", $e?->linked_horse_id) }}" data-field="linked_horse_id">
                             </div>
                         @endforeach
                         <div class="max-w-[360px] pt-2"><x-visibility-select value="{{ $pedigree->first()?->visibility ?? 'public' }}" id-suffix="ped" label="Who can see the pedigree" /></div>

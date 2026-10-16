@@ -13,7 +13,7 @@
             <div role="cell" style="grid-row: {{ $row }} / span {{ $span }}; grid-column: {{ $col }}"
                  class="flex flex-col justify-center px-3 py-2 rounded-[2px] border {{ $male ? 'bg-forest/[0.04] border-forest/15' : 'bg-gold/[0.06] border-gold/20' }}">
                 @if ($e)
-                    @if ($e->linkedHorse && $e->linkedHorse->public_summary)
+                    @if ($e->linkedHorse && ($e->linkedHorse->public_summary || $e->linkedHorse->listed))
                         <a href="{{ route('horse.public', $e->linkedHorse) }}" class="text-ink {{ $col === 1 ? 'text-[18px]' : '' }}">{{ $e->name }}</a>
                     @else
                         <span class="text-ink {{ $col === 1 ? 'text-[18px]' : '' }}">{{ $e->name }}</span>

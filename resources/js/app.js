@@ -68,3 +68,95 @@ document.querySelectorAll('[data-choice]').forEach((wrap) => {
         if (!other.hidden) other.focus();
     });
 });
+
+// Pedigree autofill (allbreedpedigree-style): type a name, pick a horse Horsefax knows, and its ancestors fill in behind it.
+document.querySelectorAll('[data-pedigree-form]').forEach((form) => {
+    const rows = {};
+    form.querySelectorAll('[data-ped-row]').forEach((r) => (rows[r.dataset.pedRow] = r));
+    const field = (row, f) => row.querySelector(`[data-field="${f}"]`);
+    const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+    const setRow = (pos, data, note) => {
+        const row = rows[pos];
+        if (!row) return;
+        field(row, 'name').value = data?.name ?? '';
+        const reg = field(row, 'registry');
+        reg.value = data?.registry && [...reg.options].some((o) => o.value === data.registry) ? data.registry : '';
+        field(row, 'registration_number').value = data?.registration_number ?? '';
+        field(row, 'foal_year').value = data?.foal_year ?? '';
+        field(row, 'color').value = data?.color ?? '';
+        field(row, 'linked_horse_id').value = data?.linked_horse_id ?? '';
+        row.querySelector('[data-ped-note]').textContent = note ?? '';
+        if (note) {
+            row.classList.add('bg-gold/10');
+            setTimeout(() => row.classList.remove('bg-gold/10'), 2500);
+        }
+    };
+
+    Object.entries(rows).forEach(([pos, row]) => {
+        const input = field(row, 'name');
+        const list = row.querySelector('[data-ped-list]');
+        let timer, results = [], active = -1;
+
+        const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; };
+        const render = () => {
+            if (!results.length) {
+                list.innerHTML = `<li class="px-3 py-2 font-sans text-[13px] text-muted">Not on Horsefax yet. Keep typing and enter the details yourself.</li>`;
+            } else {
+                list.innerHTML = results.map((r, i) => `
+                    <li role="option" data-i="${i}" class="px-3 py-2 cursor-pointer border-b border-line last:border-0 ${i === active ? 'bg-gold/15' : 'hover:bg-cream'}">
+                        <span class="text-[16px] text-ink">${esc(r.name)}</span>
+                        <span class="block font-sans text-[12px] text-muted">${esc([r.registry && r.registration_number ? r.registry + ' ' + r.registration_number : null, r.foal_year, r.color].filter(Boolean).join(' · '))}</span>
+                        <span class="block font-sans text-[11px] text-gold-dark">${r.kind === 'record' ? 'Horsefax record ' + esc(r.horsefax_id) : 'From pedigrees on Horsefax'}${r.ancestors ? ' · ' + r.ancestors + ' ancestors on file' : ''}</span>
+                    </li>`).join('');
+            }
+            list.hidden = false;
+            input.setAttribute('aria-expanded', 'true');
+        };
+
+        const choose = async (r) => {
+            close();
+            // A new horse in this slot replaces everything behind it.
+            Object.keys(rows).filter((p) => p.startsWith(pos) && p !== pos).forEach((p) => setRow(p, null));
+            setRow(pos, { ...r, linked_horse_id: r.kind === 'record' ? r.id : '' }, 'Picked from Horsefax');
+            try {
+                const res = await fetch(`${form.dataset.ancestry}?kind=${r.kind}&id=${r.id}`, { headers: { Accept: 'application/json' } });
+                const { ancestors } = await res.json();
+                let n = 0;
+                Object.entries(ancestors || {}).forEach(([rel, a]) => {
+                    if (rows[pos + rel]) { setRow(pos + rel, a, 'Filled from Horsefax'); n++; }
+                });
+                row.querySelector('[data-ped-note]').textContent = n ? `Picked from Horsefax · ${n} ancestors filled` : 'Picked from Horsefax';
+            } catch (e) { /* the pick itself still stands */ }
+        };
+
+        input.addEventListener('input', () => {
+            field(row, 'linked_horse_id').value = '';
+            row.querySelector('[data-ped-note]').textContent = '';
+            clearTimeout(timer);
+            const q = input.value.trim();
+            if (q.length < 2) return close();
+            timer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${form.dataset.lookup}?pos=${pos}&q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+                    if (!res.ok) return close();
+                    results = (await res.json()).results || [];
+                    active = -1;
+                    if (input.value.trim() === q) render();
+                } catch (e) { close(); }
+            }, 250);
+        });
+        input.addEventListener('keydown', (e) => {
+            if (list.hidden || !results.length) return;
+            if (e.key === 'ArrowDown') { active = Math.min(active + 1, results.length - 1); render(); e.preventDefault(); }
+            else if (e.key === 'ArrowUp') { active = Math.max(active - 1, 0); render(); e.preventDefault(); }
+            else if (e.key === 'Enter' && active >= 0) { choose(results[active]); e.preventDefault(); }
+            else if (e.key === 'Escape') close();
+        });
+        list.addEventListener('mousedown', (e) => {
+            const li = e.target.closest('[data-i]');
+            if (li) { e.preventDefault(); choose(results[+li.dataset.i]); }
+        });
+        input.addEventListener('blur', () => setTimeout(close, 150));
+    });
+});

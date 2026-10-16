@@ -11,7 +11,12 @@ class Horse extends Model
 {
     use HasUuids;
 
-    protected $guarded = ['id', 'horsefax_id', 'created_by', 'identity_status'];
+    protected $guarded = ['id', 'horsefax_id', 'created_by', 'identity_status', 'source', 'source_horse_id'];
+
+    public function fromPedigree(): bool
+    {
+        return $this->source === 'pedigree';
+    }
 
     protected function casts(): array
     {
