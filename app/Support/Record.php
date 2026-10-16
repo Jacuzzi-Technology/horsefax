@@ -101,6 +101,52 @@ final class Record
         'breeder' => 'Breeder',
     ];
 
+    /** Breed and color lists from Richard's Search Terms.xlsx (same as Trusted Horse's TermSeeder). "Other" lets people type their own. */
+    public const BREEDS = [
+        'Akhal Teke', 'American Cream', 'Andalusian', 'Anglo-Arabian', 'Appaloosa', 'Appendix',
+        'AraAppaloosa', 'Arabian', 'Araloosa', 'Australian Stock', 'Azteca', 'Barb',
+        'Barock Pinto', 'Bashkir Curly', 'Belgian', 'Belgian Warmblood', 'Budyonny', 'Canadian',
+        'Chincoteague', 'Cleveland Bay', 'Clydesdale', 'Connemara Pony', 'Crossbred Pony', 'Curly',
+        'Dales Pony', 'Dartmoor Pony', 'Donkey', 'Draft', 'Drum', 'Dutch Warmblood',
+        'Exmoor Pony', 'Fell Pony', 'Fjord', 'Florida Cracker', 'Friesian', 'Galiceno',
+        'Gotland Pony', 'Gypsy Vanner', 'Hackney', 'Haflinger', 'Half Arabian', 'Hanoverian',
+        'Harlequin', 'Highland Pony', 'Holsteiner', 'Hungarian', 'Iberian', 'Icelandic',
+        'Irish Draught', 'Kentucky Mountain', 'Knabstrupper', 'Lipizzan', 'Lusitano', 'Marchador',
+        'Miniature', 'Missouri Fox Trotter', 'Morab', 'Morgan', 'Mountain Pleasure', 'Mule',
+        'Mustang', 'National Show', 'National Sport Performance Pony', 'New Forest Pony', 'Newfoundland Pony', 'Nokota',
+        'Oldenburg', 'Paint', 'Paint Pony', 'Paso Fino', 'Percheron', 'Peruvian Paso',
+        'Pintabian', 'Pony', 'POA', 'Quarab', 'Quarter Horse', 'Quarter Pony',
+        'Racking', 'Rocky Mountain', 'Saddlebred', 'Selle Français', 'Shagya', 'Shetland Pony',
+        'Shire', 'Spanish Mustang', 'Spotted Saddle', 'Standardbred', 'Tennessee Walking', 'Thoroughbred',
+        'Tiger', 'Trakehner', 'Walkaloosa', 'Warlander', 'Warmblood', 'Welsh Cob',
+        'Welsh Pony', 'Westphalian',
+    ];
+
+    public const COLORS = [
+        'Bay', 'Bay Overo', 'Bay Roan', 'Black', 'Black Overo', 'Blue Roan',
+        'Brown', 'Buckskin', 'Buckskin Overo', 'Champagne', 'Chestnut', 'Chestnut Overo',
+        'Chocolate', 'Cremello', 'Dun', 'Dun with Black Points', 'Dunalino', 'Grey',
+        'Grulla', 'Blue Grulla', 'Isabelo', 'Liver Chestnut', 'Palomino', 'Perlino',
+        'Red Dun', 'Red Roan', 'Seal Brown', 'Silver Bay', 'Silver Dapple', 'Smoky Black',
+        'Sorrel', 'Sorrel Overo', 'White',
+    ];
+
+    /** Heights in hands, 7.0 to 19.0 (x.0 to x.3). */
+    public static function heights(): array
+    {
+        $out = [];
+        for ($h = 7; $h <= 19; $h++) {
+            foreach ([0, 1, 2, 3] as $i) {
+                if ($h === 19 && $i > 0) {
+                    break;
+                }
+                $out[] = $h.'.'.$i;
+            }
+        }
+
+        return $out;
+    }
+
     public const SEXES = ['mare' => 'Mare', 'stallion' => 'Stallion', 'gelding' => 'Gelding', 'filly' => 'Filly', 'colt' => 'Colt'];
 
     /** Sections a share link can include. Identity basics are always in a report. */

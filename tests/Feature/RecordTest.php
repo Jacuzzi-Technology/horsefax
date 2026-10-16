@@ -290,4 +290,19 @@ class RecordTest extends TestCase
         $this->assertEqualsCanonicalizing(['AQHA', 'APHA', 'ARHA'], $horse->identifiers()->where('kind', 'registration')->pluck('registry')->all());
         $this->actingAs($owner)->get('/horses/new')->assertOk()->assertSee('Add another registration');
     }
+
+    public function test_breed_color_and_height_come_from_lists_with_an_other_option(): void
+    {
+        $owner = User::factory()->create();
+        $this->actingAs($owner)->get('/horses/new')->assertOk()->assertSee('Quarter Horse')->assertSee('Buckskin')->assertSee('15.3 hh');
+        $this->actingAs($owner)->post('/horses', [
+            'registered_name' => 'Vinnie', 'birth_precision' => 'unknown', 'attest' => '1',
+            'breed_choice' => 'Quarter Horse', 'color_choice' => '__other', 'color_other' => 'Bay Roan Tobiano', 'height_hands' => '15.1',
+        ])->assertRedirect();
+        $horse = Horse::first();
+        $this->assertSame(['Quarter Horse', 'Bay Roan Tobiano', '15.1'], [$horse->breed, $horse->color, (string) $horse->height_hands]);
+        $this->actingAs($owner)->get("/horses/{$horse->horsefax_id}/edit")->assertOk()->assertSee('Bay Roan Tobiano');
+        $this->actingAs($owner)->put("/horses/{$horse->horsefax_id}", ['registered_name' => 'Vinnie', 'birth_precision' => 'unknown', 'breed_choice' => 'Paint', 'color_choice' => 'Bay', 'height_hands' => '15.2'])->assertRedirect();
+        $this->assertSame(['Paint', 'Bay'], [$horse->fresh()->breed, $horse->fresh()->color]);
+    }
 }

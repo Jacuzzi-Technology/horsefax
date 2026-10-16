@@ -35,6 +35,18 @@ class HorseController extends Controller
         ];
     }
 
+    /** Breed and color come from a list or an "Other" text box. */
+    private static function mergeChoices(Request $request): void
+    {
+        foreach (['breed', 'color'] as $f) {
+            if (! $request->has($f.'_choice')) {
+                continue;
+            }
+            $choice = (string) $request->input($f.'_choice');
+            $request->merge([$f => $choice === '__other' ? trim((string) $request->input($f.'_other')) : $choice]);
+        }
+    }
+
     private static function facts(array $data): array
     {
         $facts = collect($data)->only(array_keys(self::factRules()))->all();
@@ -71,6 +83,7 @@ class HorseController extends Controller
      */
     public function store(Request $request, CreateHorse $create)
     {
+        self::mergeChoices($request);
         $data = $request->validate(self::factRules() + [
             'registrations' => 'nullable|array|max:10',
             'registrations.*.registry' => 'nullable|string|max:80',
@@ -187,6 +200,7 @@ class HorseController extends Controller
     public function update(Request $request, Horse $horse)
     {
         abort_unless($horse->canBeEditedBy($request->user()), 403);
+        self::mergeChoices($request);
         $data = $request->validate(self::factRules());
         if (empty($data['registered_name']) && empty($data['barn_name'])) {
             return back()->withInput()->withErrors(['barn_name' => 'Give the horse a barn name or registered name.']);

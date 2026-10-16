@@ -62,12 +62,12 @@
             <section class="card p-6 space-y-5">
                 <h2 class="text-[24px]">Description</h2>
                 <div class="grid sm:grid-cols-3 gap-5">
-                    <x-input name="breed" label="Breed" :value="$v('breed')" />
+                    <x-choice-select name="breed" label="Breed" :options="Record::BREEDS" :value="$v('breed')" />
                     <div>
                         <label class="field-label" for="f-sex">Sex</label>
                         <select id="f-sex" name="sex" class="field"><option value="">Unknown</option>@foreach (Record::SEXES as $k => $l)<option value="{{ $k }}" @selected($v('sex') === $k)>{{ $l }}</option>@endforeach</select>
                     </div>
-                    <x-input name="color" label="Color" :value="$v('color')" />
+                    <x-choice-select name="color" label="Color" :options="Record::COLORS" :value="$v('color')" />
                 </div>
                 <div class="grid sm:grid-cols-3 gap-5">
                     <div>
@@ -82,7 +82,7 @@
                     <x-input name="birth_date" type="date" label="Foal date" :value="$v('birth_date')" />
                 </div>
                 <div class="grid sm:grid-cols-2 gap-5">
-                    <x-input name="height_hands" label="Height (hands)" :value="$v('height_hands')" inputmode="decimal" placeholder="15.1" />
+                    <x-height-select :value="$v('height_hands')" />
                     <x-input name="height_measured_on" type="date" label="Measured on" :value="$v('height_measured_on')" />
                 </div>
                 <div>

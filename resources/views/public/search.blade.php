@@ -39,8 +39,8 @@
                             <label class="field-label" for="s-sex">Sex</label>
                             <select id="s-sex" name="sex" class="field"><option value="">Any</option>@foreach (Record::SEXES as $k => $v)<option value="{{ $k }}" @selected(($c['sex'] ?? '') === $k)>{{ $v }}</option>@endforeach</select>
                         </div>
-                        <div><label class="field-label" for="s-color">Color</label><input id="s-color" name="color" value="{{ $c['color'] ?? '' }}" class="field" placeholder="e.g. Bay"></div>
-                        <div><label class="field-label" for="s-breed">Breed</label><input id="s-breed" name="breed" value="{{ $c['breed'] ?? '' }}" class="field"></div>
+                        <div><label class="field-label" for="s-color">Color</label><select id="s-color" name="color" class="field"><option value="">Any</option>@foreach (Record::COLORS as $o)<option value="{{ $o }}" @selected(($c['color'] ?? '') === $o)>{{ $o }}</option>@endforeach</select></div>
+                        <div><label class="field-label" for="s-breed">Breed</label><select id="s-breed" name="breed" class="field"><option value="">Any</option>@foreach (Record::BREEDS as $o)<option value="{{ $o }}" @selected(($c['breed'] ?? '') === $o)>{{ $o }}</option>@endforeach</select></div>
                         <div><label class="field-label" for="s-sire">Sire</label><input id="s-sire" name="sire" value="{{ $c['sire'] ?? '' }}" class="field"></div>
                         <div><label class="field-label" for="s-dam">Dam</label><input id="s-dam" name="dam" value="{{ $c['dam'] ?? '' }}" class="field"></div>
                     </div>

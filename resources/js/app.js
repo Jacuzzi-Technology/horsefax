@@ -58,3 +58,13 @@ document.querySelectorAll('[data-registrations]').forEach((list) => {
     });
     renumber();
 });
+
+// Breed / color lists: "Other" shows a text box.
+document.querySelectorAll('[data-choice]').forEach((wrap) => {
+    const select = wrap.querySelector('[data-choice-select]');
+    const other = wrap.querySelector('[data-choice-other]');
+    select.addEventListener('change', () => {
+        other.hidden = select.value !== '__other';
+        if (!other.hidden) other.focus();
+    });
+});
