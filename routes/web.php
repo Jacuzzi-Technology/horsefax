@@ -25,6 +25,7 @@ Route::post('/contact', [PublicController::class, 'sendContact'])->middleware('t
 Route::post('/horse/{horse}/corrections', [PublicController::class, 'reportCorrection'])->middleware('throttle:forms')->name('corrections.store');
 Route::get('/robots.txt', [PublicController::class, 'robots']);
 Route::get('/sitemap.xml', [PublicController::class, 'sitemap']);
+Route::get('/show-records/{record}', [\App\Http\Controllers\ShowRecordController::class, 'show'])->name('show-records.show');
 Route::get('/files/{document}', [FileController::class, 'show'])->middleware('throttle:files')->name('files.show');
 
 // Signed in
@@ -54,6 +55,7 @@ Route::middleware(['auth', 'standing'])->group(function () {
     Route::post('/horses/{horse}/media', [RecordController::class, 'addMedia'])->middleware('throttle:uploads')->name('record.media');
     Route::post('/horses/{horse}/visibility', [RecordController::class, 'setVisibility'])->name('record.visibility');
 
+    Route::post('/horses/{horse}/results/{record}', [\App\Http\Controllers\ShowRecordController::class, 'claim'])->middleware('throttle:forms')->name('show-records.claim');
     Route::get('/horses/{horse}/sharing', [SharingController::class, 'index'])->name('sharing');
     Route::post('/horses/{horse}/sharing/public', [SharingController::class, 'togglePublic'])->name('sharing.public');
     Route::post('/horses/{horse}/sharing/links', [SharingController::class, 'store'])->name('sharing.store');
@@ -85,4 +87,6 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::post('/withdraw/{type}/{id}', [AdminController::class, 'withdraw'])->name('withdraw');
     Route::post('/users/{user}/credentials', [AdminController::class, 'credentials'])->name('credentials');
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');
+    Route::get('/show-records', [AdminController::class, 'showRecords'])->name('show-records');
+    Route::post('/show-records/{record}/attach', [AdminController::class, 'attachResults'])->name('show-records.attach');
 });

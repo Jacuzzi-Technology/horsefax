@@ -37,6 +37,8 @@ class AdminController extends Controller
         $subject = match ($item->subject_type) {
             'HorseEvent' => HorseEvent::find($item->subject_id),
             'HorseIdentifier' => HorseIdentifier::find($item->subject_id),
+            'HorseFact' => \App\Models\HorseFact::find($item->subject_id),
+            'ShowRecord' => \App\Models\ShowRecord::find($item->subject_id),
             default => null,
         };
         $others = HorseIdentifier::whereIn('id', $item->details['other_identifier_ids'] ?? [])->with('horse')->get();
@@ -158,6 +160,34 @@ class AdminController extends Controller
         Audit::record('user.credentials_set', $user, $before, $user->only(['credential_role', 'credential_detail', 'credential_verified_at']));
 
         return back()->with('status', $data['verified'] ? 'Credentials verified.' : 'Credentials saved as not verified.');
+    }
+
+    /** The registered-name index: search, see what's harvested, attach a name's results to a horse. */
+    public function showRecords(Request $request)
+    {
+        $q = trim((string) $request->query('q'));
+        $records = \App\Models\ShowRecord::query()
+            ->when($q !== '', fn ($w) => $w->where('name_key', 'like', '%'.\App\Models\ShowRecord::key($q).'%'))
+            ->orderByDesc('appearances')->paginate(50)->withQueryString();
+
+        return view('admin.show-records', [
+            'records' => $records, 'q' => $q,
+            'stats' => ['names' => \App\Models\ShowRecord::count(), 'results' => \App\Models\ShowAppearance::count(),
+                'matched' => \App\Models\ShowRecord::whereNotNull('horse_id')->count(),
+                'pages' => \App\Models\HarvestPage::where('status', 'parsed')->count(), 'failed' => \App\Models\HarvestPage::where('status', 'failed')->count()],
+            'sources' => \App\Models\DataSource::all(),
+        ]);
+    }
+
+    public function attachResults(Request $request, \App\Models\ShowRecord $record, \App\Actions\Record\AttachShowResults $attach)
+    {
+        $data = $request->validate(['horsefax_id' => 'required|string', 'note' => 'required|string|max:1000']);
+        $horse = Horse::where('horsefax_id', strtoupper(trim($data['horsefax_id'])))->firstOrFail();
+        abort_if($record->horse_id && $record->horse_id !== $horse->id, 409, 'These results are already attached to another horse.');
+        $n = $attach($record, $horse, $request->user());
+        Audit::record('show_results.attach_note', $horse, null, ['note' => $data['note']], $horse->id);
+
+        return back()->with('status', $n.' results attached to '.$horse->displayName().'.');
     }
 
     public function messages()

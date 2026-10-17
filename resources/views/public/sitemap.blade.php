@@ -6,4 +6,7 @@
 @foreach ($horses as $h)
     <url><loc>{{ route('horse.public', $h) }}</loc><lastmod>{{ $h->updated_at->toAtomString() }}</lastmod></url>
 @endforeach
+@foreach ($showRecords as $r)
+    <url><loc>{{ route('show-records.show', $r) }}</loc><lastmod>{{ $r->updated_at->toAtomString() }}</lastmod></url>
+@endforeach
 </urlset>

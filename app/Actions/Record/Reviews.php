@@ -23,6 +23,7 @@ class Reviews
                 'ownership_claim' => $this->approveClaim($item, $options),
                 'identifier_conflict' => $this->clearConflict($item, $options),
                 'dispute' => $this->upholdDispute($item, $staff),
+                'results_match' => ($rec = \App\Models\ShowRecord::find($item->subject_id)) && ! $rec->horse_id ? app(AttachShowResults::class)($rec, $item->horse, $staff) : null,
                 'fact_conflict' => ($fact = \App\Models\HorseFact::find($item->subject_id)) ? RecordFacts::accept($fact) : null,
                 default => null,
             };

@@ -40,6 +40,14 @@
             <div class="card p-4 mb-6 border-red-800/40 font-sans text-[14px] text-red-800">{{ $errors->first() }}</div>
         @endif
 
+        @if ($canEdit && ($resultSuggestions ?? collect())->isNotEmpty())
+            @foreach ($resultSuggestions as $sr)
+                <div class="card p-5 mb-6 border-gold/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <p class="text-[17px]">We found <a href="{{ route('show-records.show', $sr) }}" class="text-gold-dark">{{ $sr->appearances }} published show {{ Str::plural('result', $sr->appearances) }}</a> under "{{ $sr->display_name }}" ({{ $sr->yearsLabel() }}). Are they this horse's?</p>
+                    <form method="POST" action="{{ route('show-records.claim', [$horse, $sr]) }}">@csrf<button class="btn-gold btn-small">Yes, ask Horsefax to attach them</button></form>
+                </div>
+            @endforeach
+        @endif
         @switch($tab)
         @case('overview')
             <div class="grid lg:grid-cols-[1fr_340px] gap-10">

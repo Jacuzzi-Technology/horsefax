@@ -94,5 +94,19 @@
                 <a href="{{ route('horses.create', $createQuery) }}" class="btn-forest">Add a new record</a>
             </div>
         @endif
+        @if (($showRecords ?? collect())->isNotEmpty())
+            <section class="mt-12">
+                <h2 class="text-[26px]">Also found in published show results</h2>
+                <p class="hint">Registered names from public show results that aren't matched to a Horsefax record yet. Names can repeat across horses.</p>
+                <ul class="mt-4 divide-y divide-line border-y border-line max-w-[860px]">
+                    @foreach ($showRecords as $r)
+                        <li class="py-3 flex flex-wrap justify-between gap-3">
+                            <a href="{{ route('show-records.show', $r) }}" class="text-[18px] text-ink">{{ $r->display_name }}</a>
+                            <span class="font-sans text-[13px] text-muted">{{ $r->appearances }} {{ Str::plural('result', $r->appearances) }} · {{ $r->yearsLabel() }}{{ $r->registry_inferred ? ' · '.$r->registry_inferred.' classes' : '' }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            </section>
+        @endif
     </div>
 </x-layouts.site>

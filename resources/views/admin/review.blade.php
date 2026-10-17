@@ -10,7 +10,9 @@
             <p class="text-[18px] whitespace-pre-line">{{ $item->statement }}</p>
             @if ($subject)
                 <div class="border-t border-line pt-3"><p class="label text-muted text-[10px]">About</p>
-                    @if ($subject instanceof \App\Models\HorseEvent)<p>{{ $subject->dateLabel() }} · {{ $subject->categoryLabel() }} · {{ $subject->title }} <x-claim :item="$subject" /></p>
+                    @if ($subject instanceof \App\Models\ShowRecord)<p><a href="{{ route('show-records.show', $subject) }}" class="text-gold-dark" target="_blank">{{ $subject->display_name }}</a>: {{ $subject->appearances }} published results, {{ $subject->yearsLabel() }}. Approving attaches them all to this horse.</p>
+                    @elseif ($subject instanceof \App\Models\HorseFact)<p>{{ $subject->label() }}: {{ $subject->display() }} <x-claim :item="$subject" /></p>
+                    @elseif ($subject instanceof \App\Models\HorseEvent)<p>{{ $subject->dateLabel() }} · {{ $subject->categoryLabel() }} · {{ $subject->title }} <x-claim :item="$subject" /></p>
                     @else<p>{{ $subject->label() }}: {{ $subject->value }} <x-claim :item="$subject" /></p>@endif
                 </div>
             @endif

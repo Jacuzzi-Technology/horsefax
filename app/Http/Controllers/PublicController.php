@@ -49,7 +49,16 @@ class PublicController extends Controller
             }
         }
 
-        return view('public.search', ['c' => $c, 'count' => $count, 'results' => $results, 'started' => \App\Support\HorseSearch::hasStart($c)]);
+        // Names found in published show results, not yet matched to a horse record.
+        $showRecords = collect();
+        if (isset($c['name']) && mb_strlen($c['name']) >= 3) {
+            $showRecords = \App\Models\ShowRecord::whereNull('horse_id')
+                ->where('name_key', 'like', '%'.\App\Models\ShowRecord::key($c['name']).'%')
+                ->orderByRaw('CASE WHEN name_key = ? THEN 0 ELSE 1 END', [\App\Models\ShowRecord::key($c['name'])])
+                ->orderByDesc('appearances')->limit(10)->get();
+        }
+
+        return view('public.search', ['c' => $c, 'count' => $count, 'results' => $results, 'started' => \App\Support\HorseSearch::hasStart($c), 'showRecords' => $showRecords]);
     }
 
     public function horse(Request $request, Horse $horse)
@@ -180,7 +189,8 @@ class PublicController extends Controller
     {
         $pages = ['/', '/how-it-works', '/for-owners', '/for-professionals', '/sample-report', '/about', '/contact', '/record-corrections', '/privacy', '/terms'];
         $horses = Horse::where('public_summary', true)->orderBy('updated_at', 'desc')->limit(5000)->get(['horsefax_id', 'updated_at']);
+        $showRecords = \App\Models\ShowRecord::whereNull('horse_id')->orderByDesc('appearances')->limit(40000)->get(['id', 'updated_at']);
 
-        return response()->view('public.sitemap', compact('pages', 'horses'), 200, ['Content-Type' => 'application/xml']);
+        return response()->view('public.sitemap', compact('pages', 'horses', 'showRecords'), 200, ['Content-Type' => 'application/xml']);
     }
 }

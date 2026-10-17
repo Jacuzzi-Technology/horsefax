@@ -15,6 +15,7 @@ class ReviewItem extends Model
         'identifier_conflict' => 'Identifier conflict',
         'dispute' => 'Correction / dispute',
         'fact_conflict' => 'Conflicting identity value',
+        'results_match' => 'Show results to attach',
     ];
 
     protected $guarded = ['id'];

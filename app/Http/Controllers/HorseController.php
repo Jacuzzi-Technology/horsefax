@@ -187,6 +187,7 @@ class HorseController extends Controller
             'offspring' => Views::offspring($horse, 'steward'),
             'media' => Views::media($horse, 'steward'),
             'facts' => Views::facts($horse),
+            'resultSuggestions' => $horse->registered_name ? \App\Models\ShowRecord::whereNull('horse_id')->where('name_key', \App\Models\ShowRecord::key($horse->registered_name))->get() : collect(),
             'factHistory' => $horse->facts()->where(fn ($q) => $q->where('is_current', false)->orWhereNotNull('superseded_by'))->orderByDesc('created_at')->get()->groupBy('field'),
             'contributors' => $horse->contributors()->with('user')->orderByRaw("case status when 'active' then 0 when 'pending' then 1 else 2 end")->orderByDesc('created_at')->get(),
         ]);
