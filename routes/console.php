@@ -50,3 +50,16 @@ Artisan::command('hf:harvest-nrha {--years=} {--from=} {--to=1974} {--delay=3} {
     }
     $this->info('Index now holds '.\App\Models\ShowRecord::count().' registered names, '.\App\Models\ShowAppearance::count().' results.');
 })->purpose('Harvest NRHA show results into the registered-name index');
+
+// Polite, resumable harvest of NRCHA's public results data files, newest year first (skips the current year).
+// php artisan hf:harvest-nrcha [--years=2025] --delay=3 [--max-shows=5]
+Artisan::command('hf:harvest-nrcha {--years=} {--delay=3} {--max-shows=}', function () {
+    $h = new \App\Harvest\NrchaHarvester((float) $this->option('delay'), fn ($l) => $this->line($l));
+    $years = $this->option('years') ? array_map('intval', explode(',', $this->option('years')))
+        : array_values(array_filter($h->years(), fn ($y) => $y < (int) now()->format('Y')));
+    foreach ($years as $year) {
+        [$shows, $rows] = $h->year($year, $this->option('max-shows') ? (int) $this->option('max-shows') : null);
+        $this->info("NRCHA $year: $shows shows, $rows results stored");
+    }
+    $this->info('Index now holds '.\App\Models\ShowRecord::count().' registered names, '.\App\Models\ShowAppearance::count().' results.');
+})->purpose('Harvest NRCHA show results (with sire, dam and dam\'s sire) into the registered-name index');

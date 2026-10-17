@@ -35,6 +35,19 @@ class AttachShowResults
                 $n++;
             }
             $record->forceFill(['horse_id' => $horse->id, 'matched_at' => now()])->save();
+
+            // Published parentage (NRCHA) seeds an empty pedigree: historical, unverified, never over existing lines.
+            $par = $record->parentage();
+            if (($par['sire'] || $par['dam']) && ! $horse->pedigree()->exists()) {
+                foreach (['s' => $par['sire'], 'd' => $par['dam'], 'ds' => $par['dam_sire']] as $pos => $name) {
+                    if ($name) {
+                        \App\Models\PedigreeEntry::create(['horse_id' => $horse->id, 'position' => $pos, 'name' => $name, 'visibility' => 'public',
+                            'added_by' => $staff->id, 'source_type' => 'historical', 'status' => 'unverified']);
+                    }
+                }
+                Audit::record('pedigree.seeded_from_results', $horse, null, $par, $horse->id, $staff->id);
+                app(CreateAncestorRecords::class)($horse, $staff);
+            }
             Audit::record('show_results.attached', $horse, null, ['show_record' => $record->display_name, 'results' => $n], $horse->id, $staff->id);
 
             return $n;

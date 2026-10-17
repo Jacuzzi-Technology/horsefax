@@ -153,4 +153,30 @@ class ShowResultsTest extends TestCase
         $this->assertSame([0, 0], (new \App\Harvest\NrhaHarvester(0))->year(2024));
         $this->get('/show-records/'.$a->show_record_id)->assertOk()->assertSee('Sample Summer Slide')->assertDontSee('Sample Rider');
     }
+
+    public function test_nrcha_results_bring_parentage_scores_and_seed_an_empty_pedigree(): void
+    {
+        Storage::fake('local');
+        $base = \App\Harvest\NrchaHarvester::BASE;
+        $row = fn ($cls, $place, $horse, $earn) => ['class' => $cls, 'placing' => $place, 'horse' => $horse, 'sire' => 'SAMPLE SIRE', 'dam' => 'SAMPLE DAM', 'damSire' => 'SAMPLE GRANDSIRE',
+            'owner' => 'Sample Owner', 'rider' => 'Sample Rider', 'composite' => 440, 'earnings' => $earn];
+        Http::fake([
+            $base.'/index/2024.json' => Http::response(['year' => 2024, 'shows' => [['id' => '111', 'name' => 'Sample Cow Horse Classic']]]),
+            $base.'/shows/111.json' => Http::response(['event' => ['name' => 'Sample Cow Horse Classic', 'date' => '2024-05-01', 'endDate' => '2024-05-03'],
+                'earnings' => [$row('Open Bridle', 1, 'SAMPLE COW PONY', '1500.00'), $row('Open Box Drive', 1, 'SAMPLE COW PONY', '800.00'), $row('Open Bridle', 2, 'SAMPLE OTHER', '900.00')]]),
+        ]);
+        [$shows, $rows] = (new \App\Harvest\NrchaHarvester(0))->year(2024);
+        $this->assertSame([1, 3], [$shows, $rows]);
+        $record = ShowRecord::where('name_key', 'SAMPLECOWPONY')->first();
+        $this->assertSame(['Sample Cow Pony', 2, 230000], [$record->display_name, $record->appearances, (int) $record->earnings_cents]);
+        $this->assertDatabaseMissing('show_appearances', ['horse_name' => 'Sample Rider']);
+        $this->get('/show-records/'.$record->id)->assertOk()->assertSee('By Sample Sire out of Sample Dam (by Sample Grandsire)')->assertSee('440')->assertDontSee('Sample Owner');
+
+        $owner = User::factory()->create();
+        $horse = app(CreateHorse::class)($owner, ['registered_name' => 'Sample Cow Pony', 'birth_precision' => 'unknown']);
+        $staff = User::factory()->create(['is_staff' => true, 'two_factor_confirmed_at' => now()]);
+        $this->actingAs($staff)->post('/admin/show-records/'.$record->id.'/attach', ['horsefax_id' => $horse->horsefax_id, 'note' => 'Matched'])->assertRedirect();
+        $ped = $horse->pedigree()->get()->keyBy('position');
+        $this->assertSame(['Sample Sire', 'Sample Dam', 'Sample Grandsire', 'historical'], [$ped['s']->name, $ped['d']->name, $ped['ds']->name, $ped['s']->source_type]);
+    }
 }

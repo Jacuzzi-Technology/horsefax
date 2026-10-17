@@ -28,6 +28,16 @@ class ShowRecord extends Model
         return preg_replace('/[^A-Z0-9]/', '', strtoupper($name));
     }
 
+    /** The sire, dam and dam's sire most often published with this name (NRCHA lists them), or nulls. */
+    public function parentage(): array
+    {
+        $row = $this->appearances()->whereNotNull('sire_name')
+            ->selectRaw('sire_name, dam_name, dam_sire_name, count(*) n')->groupBy('sire_name', 'dam_name', 'dam_sire_name')
+            ->orderByDesc('n')->first();
+
+        return ['sire' => $row?->sire_name, 'dam' => $row?->dam_name, 'dam_sire' => $row?->dam_sire_name];
+    }
+
     public function yearsLabel(): string
     {
         return $this->first_year === $this->last_year ? (string) $this->first_year : $this->first_year.'–'.$this->last_year;

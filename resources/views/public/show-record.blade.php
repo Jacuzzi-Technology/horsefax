@@ -5,6 +5,10 @@
         <div class="wrap py-12">
             <p class="label text-gold-soft">Published show results</p>
             <h1 class="text-cream text-[38px] sm:text-[50px] mt-3">{{ $record->display_name }}</h1>
+            @php $par = $record->parentage(); @endphp
+            @if ($par['sire'] || $par['dam'])
+                <p class="text-[18px] italic text-cream/85 mt-2">{{ collect([$par['sire'] ? 'By '.$par['sire'] : null, $par['dam'] ? 'out of '.$par['dam'] : null])->filter()->join(' ') }}{{ $par['dam_sire'] ? ' (by '.$par['dam_sire'].')' : '' }}</p>
+            @endif
             <p class="font-sans text-[14px] text-cream/75 mt-3">{{ $record->appearances }} {{ Str::plural('result', $record->appearances) }} · {{ $record->yearsLabel() }}@if ($record->earnings_cents) · {{ HorseEvent::money($record->earnings_cents) }} reported earnings @endif</p>
             <p class="mt-4 flex flex-wrap gap-2">
                 <span class="chip border-cream/25 text-cream/80 bg-transparent italic">Historical / third-party</span>
@@ -20,13 +24,14 @@
                 <h2 class="text-[24px] mt-8">{{ $year }}</h2>
                 <div class="overflow-x-auto">
                     <table class="table-hf mt-2 min-w-[600px] text-[15px]">
-                        <thead><tr><th>Event</th><th>Class</th><th>Round</th><th>Placing</th><th class="text-right">Earnings</th><th>Sanction</th><th>Source</th></tr></thead>
+                        <thead><tr><th>Event</th><th>Class</th><th>Round</th><th>Score</th><th>Placing</th><th class="text-right">Earnings</th><th>Sanction</th><th>Source</th></tr></thead>
                         <tbody>
                         @foreach ($rows as $a)
                             <tr>
                                 <td class="min-w-[160px]">{{ $a->event_name }}</td>
                                 <td>{{ $a->class_name }}</td>
                                 <td>{{ $a->round }}</td>
+                                <td>{{ $a->score }}</td>
                                 <td>{{ $a->placing }}</td>
                                 <td class="text-right whitespace-nowrap">{{ HorseEvent::money($a->earnings_cents) }}</td>
                                 <td class="font-sans text-[12px]">{{ $a->organization }}</td>
@@ -37,7 +42,7 @@
                     </table>
                 </div>
             @endforeach
-            <p class="hint mt-6">Collected from publicly posted show results ({{ $record->appearances()->with('source')->get()->pluck('source.name')->unique()->join(', ') }}). Owner and rider names are not shown. A registration is "inferred" when the horse placed in AQHA classes; it is not confirmed until checked against the registry.</p>
+            <p class="hint mt-6">Collected from publicly posted show results ({{ $record->appearances()->with('source')->get()->pluck('source.name')->unique()->join(', ') }}). Owner and rider names are not shown. A registration is "inferred" when the horse placed in AQHA classes; it is not confirmed until checked against the registry. Parentage is shown as the association published it.</p>
         </div>
         <aside class="space-y-5">
             <div class="card p-5">
