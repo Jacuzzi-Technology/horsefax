@@ -111,4 +111,19 @@ class ShowResultsTest extends TestCase
         $this->assertSame(['historical', 'unverified'], [$events[0]->source_type, $events[0]->status]);
         $this->actingAs($staff)->get('/admin/show-records')->assertOk()->assertSee('Sample Spark Plug');
     }
+
+    public function test_the_1990s_layout_never_reads_a_rider_as_a_horse(): void
+    {
+        $html = '<HTML><TITLE>All American Quarter Horse Congress Results for Class1053 1st Go</TITLE><BODY><H2>Class: 1053 1996 Fillies 1st Go </H2> <br>Shown: 25<BR>'
+            .'<TABLE><TR><TH>Place</TH><TH>Back No</TH><TH>Earnings</TH><TH>Horse Name</TH><TH>Owner(s)</TH></TR>'
+            .'<TR><TH ColSpan="3"></TH><TH>Exhibitor</TH><TH>Owner Address</TH></TR>'
+            .'<TR><TD> 1</TD><TD>4596</TD><TD> $200.00</TD><TD>Sample Filly</TD><TD>Sample Owners</TD></TR>'
+            .'<TR><TD colspan="3"> </TD><TD>Sample Rider</TD><TD>Town, GA</TD></TR>'
+            .'<TR><TD> 2</TD><TD>5412</TD><TD> $180.00</TD><TD>Sample Mare Two</TD><TD>Sample Owners</TD></TR>'
+            .'<TR><TD colspan="3"> </TD><TD>Another Rider</TD><TD>Town, OH</TD></TR></TABLE>';
+        $this->assertTrue(CongressParser::isClassPage($html));
+        $r = CongressParser::classPage($html);
+        $this->assertSame(['1053', '1', '1996 Fillies'], [$r['class_code'], $r['round'], $r['class_name']]);
+        $this->assertSame(['Sample Filly', 'Sample Mare Two'], array_column($r['rows'], 'horse'));
+    }
 }

@@ -10,9 +10,12 @@ namespace App\Harvest;
  */
 final class CongressParser
 {
+    /** "Results for Class 1341 go 1" (2001 on) or "Results for Class1053 1st Go" (1990s). */
+    private const TITLE = '/Results for Class\s*([A-Za-z0-9]+)\s+(?:go\s+([A-Za-z0-9]+)|([A-Za-z0-9]+)\s+Go\b)/i';
+
     public static function isClassPage(string $html): bool
     {
-        return (bool) preg_match('/Results for Class\s+\S+\s+go\s+\S+/i', $html);
+        return (bool) preg_match(self::TITLE, $html);
     }
 
     /** Links on an index page, absolute. */
@@ -64,8 +67,11 @@ final class CongressParser
     public static function classPage(string $html): array
     {
         $out = ['class_code' => null, 'round' => null, 'class_name' => null, 'dates' => null, 'rows' => []];
-        if (preg_match('/Results for Class\s+([A-Za-z0-9]+)\s+go\s+([A-Za-z0-9]+)/i', $html, $m)) {
-            [$out['class_code'], $out['round']] = [$m[1], $m[2]];
+        if (preg_match(self::TITLE, $html, $m)) {
+            $out['class_code'] = $m[1];
+            $round = ($m[2] ?? '') !== '' ? $m[2] : ($m[3] ?? null);
+            // "1st" / "2nd" -> "1" / "2"; "Final"/"F" stay as they are.
+            $out['round'] = $round !== null ? preg_replace('/^(\d+)(st|nd|rd|th)$/i', '$1', $round) : null;
         }
         if (preg_match('#(\d{2}/\d{2}/\d{4})\s*-\s*(\d{2}/\d{2}/\d{4})#', $html, $m)) {
             $out['dates'] = $m[1].' – '.$m[2];
@@ -75,13 +81,15 @@ final class CongressParser
         @$dom->loadHTML('<?xml encoding="utf-8"?>'.$html, LIBXML_NOWARNING | LIBXML_NOERROR);
         $text = preg_replace('/\s+/', ' ', $dom->textContent ?? '');
         // The class heading is the last "Class <code> <name>" before the results table's header.
-        $end = preg_match('/Place\s*BackNo/i', $text, $mm, PREG_OFFSET_CAPTURE) ? $mm[0][1] : false;
+        $end = preg_match('/Place\s*Back\s*No/i', $text, $mm, PREG_OFFSET_CAPTURE) ? $mm[0][1] : false;
         if ($out['class_code'] && $end !== false) {
             $before = substr($text, 0, $end);
-            $marker = 'Class '.$out['class_code'].' ';
-            $pos = strripos($before, $marker);
-            if ($pos !== false) {
-                $out['class_name'] = trim(substr($before, $pos + strlen($marker)));
+            if (preg_match_all('/Class:?\s*'.preg_quote($out['class_code'], '/').'\s+/i', $before, $all, PREG_OFFSET_CAPTURE)) {
+                $last = end($all[0]);
+                $name = trim(substr($before, $last[1] + strlen($last[0])));
+                // 1990s headings end with "Shown: 25" and repeat the go ("1st Go").
+                $name = trim(preg_replace(['/\s*Shown:\s*\d+.*$/i', '/\s+\d+(st|nd|rd|th)\s+Go$/i'], '', $name));
+                $out['class_name'] = $name !== '' ? $name : null;
             }
         }
 
@@ -105,11 +113,16 @@ final class CongressParser
                 if ($horse === '' || strlen($horse) > 60) {
                     continue;
                 }
-                $placing = isset($cols['place']) ? ($cells[$cols['place']] ?? null) : null;
+                $placing = isset($cols['place']) ? trim((string) ($cells[$cols['place']] ?? ''), " \u{00A0}") : '';
+                // Every result row has a placing. Rows without one are continuation rows (the 1990s layout puts the
+                // rider's name under the horse-name column on a second row): never read them as horses.
+                if ($placing === '' || ! preg_match('/^\d+[A-Za-z]?$/', $placing)) {
+                    continue;
+                }
                 $money = isset($cols['earnings']) ? ($cells[$cols['earnings']] ?? '') : '';
                 $money = preg_replace('/[^0-9.]/', '', $money);
                 $out['rows'][] = [
-                    'placing' => $placing !== '' ? $placing : null,
+                    'placing' => $placing,
                     'horse' => $horse,
                     'earnings_cents' => $money !== '' ? (int) round((float) $money * 100) : null,
                 ];
