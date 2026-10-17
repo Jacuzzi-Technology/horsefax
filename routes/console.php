@@ -36,3 +36,17 @@ Artisan::command('hf:harvest-congress {--years=all} {--delay=3} {--max-pages=}',
     }
     $this->info('Index now holds '.\App\Models\ShowRecord::count().' registered names, '.\App\Models\ShowAppearance::count().' results.');
 })->purpose('Harvest Congress show results into the registered-name index');
+
+// Polite, resumable harvest of NRHA's public show results, newest year first.
+// php artisan hf:harvest-nrha [--years=2025,2024] [--from=2025 --to=1974] --delay=3 [--max-pages=20]
+Artisan::command('hf:harvest-nrha {--years=} {--from=} {--to=1974} {--delay=3} {--max-pages=}', function () {
+    $h = new \App\Harvest\NrhaHarvester((float) $this->option('delay'), fn ($l) => $this->line($l));
+    $years = $this->option('years')
+        ? array_map('intval', explode(',', $this->option('years')))
+        : range((int) ($this->option('from') ?: now()->year - 1), (int) $this->option('to'));
+    foreach ($years as $year) {
+        [$pages, $rows] = $h->year($year, $this->option('max-pages') ? (int) $this->option('max-pages') : null);
+        $this->info("NRHA $year: $pages class pages, $rows results stored");
+    }
+    $this->info('Index now holds '.\App\Models\ShowRecord::count().' registered names, '.\App\Models\ShowAppearance::count().' results.');
+})->purpose('Harvest NRHA show results into the registered-name index');

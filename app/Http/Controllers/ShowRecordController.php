@@ -20,7 +20,7 @@ class ShowRecordController extends Controller
 
         return view('public.show-record', [
             'record' => $record,
-            'byYear' => $record->appearances()->orderByDesc('event_year')->orderBy('class_name')->get()->groupBy('event_year'),
+            'byYear' => $record->appearances()->orderByDesc('event_year')->orderBy('event_name')->orderBy('class_name')->get()->groupBy('event_year'),
         ]);
     }
 

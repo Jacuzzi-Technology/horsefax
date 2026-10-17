@@ -17,13 +17,14 @@
         <div class="min-w-0">
             <p class="text-[17px] max-w-[42em]">These results were published under this registered name. More than one horse can share a name, so Horsefax hasn't attached them to a horse yet. That happens once a registration number confirms which horse they belong to.</p>
             @foreach ($byYear as $year => $rows)
-                <h2 class="text-[24px] mt-8">{{ $year }} · {{ $rows->first()->event_name }}</h2>
+                <h2 class="text-[24px] mt-8">{{ $year }}</h2>
                 <div class="overflow-x-auto">
                     <table class="table-hf mt-2 min-w-[600px] text-[15px]">
-                        <thead><tr><th>Class</th><th>Round</th><th>Placing</th><th class="text-right">Earnings</th><th>Sanction</th><th>Source</th></tr></thead>
+                        <thead><tr><th>Event</th><th>Class</th><th>Round</th><th>Placing</th><th class="text-right">Earnings</th><th>Sanction</th><th>Source</th></tr></thead>
                         <tbody>
                         @foreach ($rows as $a)
                             <tr>
+                                <td class="min-w-[160px]">{{ $a->event_name }}</td>
                                 <td>{{ $a->class_name }}</td>
                                 <td>{{ $a->round }}</td>
                                 <td>{{ $a->placing }}</td>
@@ -36,7 +37,7 @@
                     </table>
                 </div>
             @endforeach
-            <p class="hint mt-6">Collected from the publicly posted results of the {{ $byYear->first()?->first()?->event_name }}. Owner and rider names are not shown. A registration is "inferred" when the horse placed in AQHA classes; it is not confirmed until checked against the registry.</p>
+            <p class="hint mt-6">Collected from publicly posted show results ({{ $record->appearances()->with('source')->get()->pluck('source.name')->unique()->join(', ') }}). Owner and rider names are not shown. A registration is "inferred" when the horse placed in AQHA classes; it is not confirmed until checked against the registry.</p>
         </div>
         <aside class="space-y-5">
             <div class="card p-5">

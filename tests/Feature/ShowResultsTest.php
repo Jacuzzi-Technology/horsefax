@@ -126,4 +126,31 @@ class ShowResultsTest extends TestCase
         $this->assertSame(['1053', '1', '1996 Fillies'], [$r['class_code'], $r['round'], $r['class_name']]);
         $this->assertSame(['Sample Filly', 'Sample Mare Two'], array_column($r['rows'], 'horse'));
     }
+
+    public function test_nrha_harvest_stores_horse_placing_and_earnings_only_and_skips_the_congress(): void
+    {
+        Storage::fake('local');
+        $classPage = fn ($show, $code, $name, $rows) => '<html><body><div id="post-1"><h2>'.$show.'</h2><div>'.$code.' - '.$name.'</div><div class="mb-4">Saturday June 1, 2024</div>'
+            .'<table class="table" id="rh_show_results_detail_table"><thead><tr><th>Horse</th><th>Rider</th><th>Owner</th><th>Earnings</th></tr></thead><tbody>'
+            .collect($rows)->map(fn ($r) => '<tr><td>'.$r[0].'</td><td>Sample Rider</td><td>Sample Owner</td><td>'.$r[1].'</td></tr>')->join('').'</tbody></table></div><footer>nav</footer></body></html>';
+        Http::fake([
+            'nrha.com/wp-admin/admin-ajax.php*' => Http::response('<table><tr><th>Dates</th><th>Show Id</th><th>Show Name</th></tr>'
+                .'<tr><td>06/01</td><td>201200001</td><td>Sample Summer Slide</td><td>Ocala</td><td>FL</td><td>USA</td></tr>'
+                .'<tr><td>10/10</td><td>201200002</td><td>All American Quarter Horse Congress</td><td>Columbus</td><td>OH</td><td>USA</td></tr></table>'),
+            'nrha.com/show-results-detail/?id=201200001' => Http::response('<div id="post-2"><table><tr><td><a href="/show-results-class-detail/?id=201200001&class-code=1100">Open</a></td></tr></table></div>'),
+            'nrha.com/show-results-class-detail/?id=201200001&class-code=1100' => Http::response($classPage('Sample Summer Slide', '1100', 'Open', [['1 Sample Spark Plug', '599.63'], ['2 Sample Slider', '466.38'], ['Sample Unplaced', '0']])),
+        ]);
+        [$pages, $rows] = (new \App\Harvest\NrhaHarvester(0))->year(2024);
+        $this->assertSame([1, 2], [$pages, $rows]);
+        $a = ShowAppearance::where('horse_name', 'Sample Spark Plug')->first();
+        $this->assertSame(['NRHA', 'Open', 'Sample Summer Slide', 59963], [$a->organization, $a->class_name, $a->event_name, (int) $a->earnings_cents]);
+        $this->assertNull($a->registry_inferred);
+        $this->assertDatabaseMissing('show_appearances', ['horse_name' => 'Sample Rider']);
+        $this->assertDatabaseMissing('show_appearances', ['horse_name' => 'Sample Unplaced']);
+        Http::assertNotSent(fn ($r) => str_contains($r->url(), '201200002'));
+        // Resumable: nothing refetched.
+        Http::fake(fn () => throw new \RuntimeException('should not fetch again'));
+        $this->assertSame([0, 0], (new \App\Harvest\NrhaHarvester(0))->year(2024));
+        $this->get('/show-records/'.$a->show_record_id)->assertOk()->assertSee('Sample Summer Slide')->assertDontSee('Sample Rider');
+    }
 }
