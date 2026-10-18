@@ -75,10 +75,13 @@ class AdminController extends Controller
         $q = trim((string) $request->query('q'));
         $horses = Horse::query()
             ->when($q !== '', function ($query) use ($q) {
-                $like = '%'.$q.'%';
-                $norm = Record::normalizeIdentifier($q);
-                $query->where(fn ($w) => $w->where('registered_name', 'ilike', $like)->orWhere('barn_name', 'ilike', $like)->orWhere('horsefax_id', 'ilike', $like)
-                    ->orWhereHas('identifiers', fn ($i) => $i->where('value_normalized', $norm)));
+                // Indexed lookups unioned (an OR across them would read all 4M+ records).
+                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], mb_strtolower($q)).'%';
+                $ids = Horse::query()->select('id')->whereRaw('lower(registered_name) like ?', [$like])
+                    ->union(Horse::query()->select('id')->whereRaw('lower(barn_name) like ?', [$like]))
+                    ->union(Horse::query()->select('id')->where('horsefax_id', strtoupper(trim($q))))
+                    ->union(\App\Models\HorseIdentifier::query()->select('horse_id as id')->where('value_normalized', Record::normalizeIdentifier($q)));
+                $query->whereIn('id', \Illuminate\Support\Facades\DB::query()->fromSub($ids, 'm')->select('id'));
             })
             ->orderByDesc('created_at')->paginate(50)->withQueryString();
 

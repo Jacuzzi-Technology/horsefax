@@ -40,9 +40,33 @@ class NameReviewController extends Controller
             'regs' => DB::table('horse_identifiers')->whereIn('horse_id', $ids)->where('kind', 'registration')->whereNull('superseded_by')->get()->groupBy('horse_id'),
             'owned' => DB::table('stewardships')->whereIn('horse_id', $ids)->where('status', '!=', 'ended')->pluck('horse_id')->flip(),
         ];
+        // Where the two records disagree, say so on the card: the reviewer should check the registry before choosing.
+        $warnings = [];
+        foreach ($reviews as $r) {
+            [$a, $b] = [$r->a, $r->b];
+            $w = [];
+            if ($a->birth_year && $b->birth_year && (int) $a->birth_year !== (int) $b->birth_year) {
+                $w[] = 'Foal years disagree ('.$a->birth_year.' left, '.$b->birth_year.' right).';
+            }
+            if ($a->sex && $b->sex && $a->sex !== $b->sex) {
+                $w[] = 'Sex disagrees ('.$a->sex.' left, '.$b->sex.' right).';
+            }
+            foreach (['s' => 'Sire', 'd' => 'Dam'] as $pos => $label) {
+                $pa = $facts['parents'][$a->id] ?? collect();
+                $pb = $facts['parents'][$b->id] ?? collect();
+                $na = $pa->firstWhere('position', $pos)?->name;
+                $nb = $pb->firstWhere('position', $pos)?->name;
+                if ($na && $nb && ShowRecord::key($na) !== ShowRecord::key($nb)) {
+                    $w[] = $label.'s disagree ('.$na.' left, '.$nb.' right).';
+                }
+            }
+            if ($w) {
+                $warnings[$r->id] = $w;
+            }
+        }
         $counts = NameReview::where('status', 'open')->selectRaw('priority, count(*) n')->groupBy('priority')->pluck('n', 'priority');
 
-        return view('admin.names', compact('reviews', 'facts', 'counts', 'p', 'status'));
+        return view('admin.names', compact('reviews', 'facts', 'counts', 'p', 'status', 'warnings'));
     }
 
     public function decide(Request $request, NameReview $review, MergeHorses $merge, AddIdentifier $addId)

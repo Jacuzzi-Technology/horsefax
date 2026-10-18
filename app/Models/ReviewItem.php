@@ -16,6 +16,7 @@ class ReviewItem extends Model
         'dispute' => 'Correction / dispute',
         'fact_conflict' => 'Conflicting identity value',
         'results_match' => 'Show results to attach',
+        'pedigree_conflict' => 'Conflicting pedigree line (from a merge)',
     ];
 
     protected $guarded = ['id'];

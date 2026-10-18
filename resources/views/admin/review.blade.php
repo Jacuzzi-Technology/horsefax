@@ -37,13 +37,15 @@
             <div class="grid md:grid-cols-2 gap-6 mt-6">
                 <form method="POST" action="{{ route('admin.review.approve', $item) }}" class="card p-6 space-y-3" data-confirm="Approve this item?">
                     @csrf
-                    <h2 class="text-[22px]">{{ ['ownership_claim' => 'Approve claim', 'identifier_conflict' => 'Resolve conflict', 'dispute' => 'Uphold: mark disputed'][$item->kind] ?? 'Approve' }}</h2>
+                    <h2 class="text-[22px]">{{ ['ownership_claim' => 'Approve claim', 'identifier_conflict' => 'Resolve conflict', 'dispute' => 'Uphold: mark disputed', 'fact_conflict' => 'Use the other value', 'pedigree_conflict' => 'Use the other pedigree line'][$item->kind] ?? 'Approve' }}</h2>
                     @if ($item->kind === 'ownership_claim')
                         <p class="text-[15px]">The claimant becomes a verified owner.</p>
                         <label class="flex items-start gap-2 font-sans text-[14px]"><input type="checkbox" name="end_current_owner" value="1" class="accent-gold mt-0.5"> Also end the current owner's stewardship (only when the evidence shows the horse was sold or transferred)</label>
                     @elseif ($item->kind === 'identifier_conflict')
                         <label class="flex items-start gap-2 font-sans text-[14px]"><input type="radio" name="outcome" value="both_stand" checked class="accent-gold mt-0.5"> Both stand (e.g. the same number in different registries)</label>
                         <label class="flex items-start gap-2 font-sans text-[14px]"><input type="radio" name="outcome" value="new_is_wrong" class="accent-gold mt-0.5"> The number on this new record is wrong: mark it disputed</label>
+                    @elseif (in_array($item->kind, ['fact_conflict', 'pedigree_conflict'], true))
+                        <p class="text-[15px]">Use the other value: it becomes the current one, and the current value is kept in the record's history (never deleted). Check the registry first.</p>
                     @else
                         <p class="text-[15px]">The entry is labeled Disputed (never deleted). The owner can then correct it.</p>
                     @endif
@@ -53,7 +55,7 @@
                 <form method="POST" action="{{ route('admin.review.reject', $item) }}" class="card p-6 space-y-3" data-confirm="Reject this item?">
                     @csrf
                     <h2 class="text-[22px]">Reject</h2>
-                    <p class="text-[15px]">Nothing on the record changes.</p>
+                    <p class="text-[15px]">{{ in_array($item->kind, ['fact_conflict', 'pedigree_conflict'], true) ? 'Keep the current value. The other one stays in the history.' : 'Nothing on the record changes.' }}</p>
                     <div><label class="field-label" for="r-note">Reason (required; shown to a claimant)</label><textarea id="r-note" name="note" rows="3" class="field" required></textarea></div>
                     <button class="btn-ghost btn-small">Reject</button>
                 </form>

@@ -25,6 +25,7 @@ class Reviews
                 'dispute' => $this->upholdDispute($item, $staff),
                 'results_match' => ($rec = \App\Models\ShowRecord::find($item->subject_id)) && ! $rec->horse_id ? app(AttachShowResults::class)($rec, $item->horse, $staff) : null,
                 'fact_conflict' => ($fact = \App\Models\HorseFact::find($item->subject_id)) ? RecordFacts::accept($fact) : null,
+                'pedigree_conflict' => $this->usePedigreeLine($item),
                 default => null,
             };
             $this->close($item, $staff, 'approved', $note);
@@ -52,6 +53,19 @@ class Reviews
             $existing = Stewardship::create(['horse_id' => $horse->id, 'user_id' => $item->submitted_by, 'role' => 'owner', 'status' => 'verified', 'started_on' => now()->toDateString()]);
         }
         Audit::record('stewardship.verified', $existing, null, ['user_id' => $item->submitted_by, 'via' => 'ownership_claim']);
+    }
+
+    /** A merge conflict on a pedigree line: staff chose the other line. The current one is kept behind it, never deleted. */
+    private function usePedigreeLine(ReviewItem $item): void
+    {
+        $line = \App\Models\PedigreeEntry::find($item->subject_id);
+        $current = \App\Models\PedigreeEntry::find($item->details['current_entry_id'] ?? null);
+        if (! $line) {
+            return;
+        }
+        $current?->forceFill(['superseded_by' => $line->id, 'status' => 'disputed'])->save();
+        $line->forceFill(['superseded_by' => null, 'status' => 'unverified'])->save();
+        Audit::record('pedigree.conflict_resolved', $line, ['name' => $current?->name], ['name' => $line->name, 'position' => $line->position], $line->horse_id);
     }
 
     private function clearConflict(ReviewItem $item, array $options): void

@@ -45,6 +45,13 @@
                         </div>
                     @endforeach
                 </div>
+                @if ($r->status === 'open' && isset($warnings[$r->id]))
+                    <div class="mt-4 border border-gold bg-gold/10 rounded-[3px] px-4 py-3 font-sans text-[14px]">
+                        <p class="font-semibold">⚠ These records disagree. Check the registry before choosing which one to keep.</p>
+                        <ul class="mt-1 list-disc pl-5">@foreach ($warnings[$r->id] as $w)<li>{{ $w }}</li>@endforeach</ul>
+                        <p class="mt-1 text-muted">If you merge, the record you keep wins and the other value goes to the review queue for a final decision, so nothing is lost.</p>
+                    </div>
+                @endif
                 @if ($r->status === 'open')
                     <div class="flex flex-wrap items-end gap-2 mt-4">
                         <input name="note" class="field flex-1 min-w-[220px]" placeholder="Note (optional), e.g. AQHA name search Oct 18">

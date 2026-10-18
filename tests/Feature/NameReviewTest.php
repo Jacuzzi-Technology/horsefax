@@ -76,6 +76,41 @@ class NameReviewTest extends TestCase
         $this->assertSame(0, Horse::where('registered_name', 'Sample Gotta Lotta Potential')->whereNull('merged_into_id')->count());
     }
 
+    public function test_disagreements_are_shown_kept_and_flagged_not_dropped(): void
+    {
+        $left = $this->unowned('Sample Line Up Behind', 'results');
+        $left->forceFill(['birth_precision' => 'year', 'birth_year' => 2018])->save();
+        $right = $this->unowned('Sample Line Up Behind', 'published');
+        $right->forceFill(['birth_precision' => 'year', 'birth_year' => 2017, 'sex' => 'gelding'])->save();
+        $by = $left->created_by;
+        PedigreeEntry::create(['horse_id' => $left->id, 'position' => 's', 'name' => 'Sample VS Flatline', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $left->id, 'position' => 'd', 'name' => 'Sample Shez Immortal', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $right->id, 'position' => 'd', 'name' => 'Sample Shez Immortal', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $right->id, 'position' => 'ds', 'name' => 'Sample Other Sire', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $right->id, 'position' => 's', 'name' => 'Sample Wrong Sire', 'visibility' => 'public', 'added_by' => $by]);
+        app(FindNameVariants::class)();
+        $r = NameReview::firstOrFail();
+        $staff = User::factory()->create(['is_staff' => true, 'two_factor_confirmed_at' => now()]);
+        $this->actingAs($staff)->get(route('admin.names'))->assertSee('These records disagree')->assertSee('Foal years disagree')->assertSee('Sires disagree');
+
+        $this->actingAs($staff)->post(route('admin.names.decide', $r), ['decision' => $r->horse_a_id === $left->id ? 'keep_a' : 'keep_b'])->assertRedirect();
+        $left->refresh();
+        $this->assertSame([2018, 'gelding'], [(int) $left->birth_year, $left->sex]); // kept record wins; gap filled
+        $this->assertEqualsCanonicalizing(['s' => 'Sample VS Flatline', 'd' => 'Sample Shez Immortal', 'ds' => 'Sample Other Sire'], $left->pedigree()->pluck('name', 'position')->all());
+
+        $items = \App\Models\ReviewItem::where('horse_id', $left->id)->get()->keyBy('kind');
+        $this->assertStringContainsString('Foaled 2017', $items['fact_conflict']->statement);
+        $this->assertStringContainsString('Sample Wrong Sire', $items['pedigree_conflict']->statement);
+
+        // Staff choose the other values: they become current, the replaced ones stay in history.
+        $this->actingAs($staff)->post(route('admin.review.approve', $items['fact_conflict']), ['note' => 'AQHA lookup says 2017'])->assertRedirect();
+        $this->actingAs($staff)->post(route('admin.review.approve', $items['pedigree_conflict']), ['note' => 'AQHA lookup'])->assertRedirect();
+        $left->refresh();
+        $this->assertSame(2017, (int) $left->birth_year);
+        $this->assertSame('Sample Wrong Sire', $left->pedigree()->where('position', 's')->value('name'));
+        $this->assertTrue(PedigreeEntry::where('horse_id', $left->id)->where('name', 'Sample VS Flatline')->whereNotNull('superseded_by')->exists());
+    }
+
     public function test_an_owned_misspelling_is_never_merged(): void
     {
         $owner = User::factory()->create();
