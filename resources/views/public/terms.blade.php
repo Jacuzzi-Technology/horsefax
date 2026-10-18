@@ -1,5 +1,5 @@
 <x-layouts.site title="Terms of Use" description="The terms for using Horsefax.">
-    <x-page-header eyebrow="Legal" title="Terms of Use" lede="Last updated October 16, 2026" />
+    <x-page-header eyebrow="Legal" title="Terms of Use" lede="Last updated October 18, 2026" />
     <div class="wrap py-14 prose-hf max-w-[46em]">
         <p>These terms are an agreement between you and {{ config('horsefax.operator') }} ("Horsefax," "we," "us") for your use of horsefax.com (the "Service"). By creating an account or using the Service, you agree to them and to our <a href="{{ route('privacy') }}">Privacy Policy</a>.</p>
 
@@ -23,8 +23,19 @@
         <h2>4. Sharing and transfers</h2>
         <p>You control what is shared through public summaries and report links. Anyone you give a report link to can see what it includes until it expires or you revoke it, and may have copied what they saw. When a horse changes hands, the record transfers to the new owner, while history stays attributed to whoever contributed it.</p>
 
-        <h2>5. Acceptable use</h2>
-        <p>Do not misuse the Service. In particular, do not: access records or accounts you are not authorized to see; probe, scan or test the Service's security; use bots, scrapers or other automated means to collect content or data without our written permission; get around rate limits or access controls; use Horsefax data to build or train a competing database, directory or AI model; or harvest anyone's personal information.</p>
+        <h2>5. Acceptable use and use of Horsefax information</h2>
+        <p>Do not misuse the Service. In particular, do not access records or accounts you are not authorized to see, probe, scan or test the Service's security, or harvest anyone's personal information.</p>
+        <p>The information on horsefax.com belongs to {{ config('horsefax.operator') }} or its licensors. That includes horse records, identities, pedigrees, results, sale history, photos and documents, and the way they are selected and arranged. You may view it and share links to it for your own personal, non-commercial use. Without our prior written permission, signed by {{ config('horsefax.operator') }}, you may not:</p>
+        <ol>
+            <li>scrape, crawl, data-mine, harvest or extract any information from the Service, whether by robots, spiders, scrapers, scripts, browser automation or any other automated or manual bulk method;</li>
+            <li>copy, compile or store information from the Service in any database, directory, index, dataset, archive or mirror, or use it to build or improve any product or service, including one that competes with ours;</li>
+            <li>use information from the Service to train, fine-tune, test or ground any artificial-intelligence or machine-learning model, except through search and answer services that link back to the page they use;</li>
+            <li>sell, license, publish or redistribute information from the Service, or frame or embed our pages on another site;</li>
+            <li>get around, disable or interfere with any security feature, rate limit, bot check, CAPTCHA, robots.txt instruction, login or other access control, or hide or misstate who you are (for example by faking your user agent or rotating IP addresses to avoid limits); or</li>
+            <li>place an unreasonable load on our systems.</li>
+        </ol>
+        <p>Horsefax data is available to marketplaces, associations and other organizations only under a written data license through our partner API. Reports opened through a shared report link are for the person they were shared with, and may not be copied into another system.</p>
+        <p>General search engines may index the Service in line with our robots.txt file. If you would like to use our information in another way, including through a data license, use our contact form. Any permission we grant is limited to what the written agreement says. We may block access, end accounts and seek every remedy the law allows, including an injunction, for any breach of this section. These restrictions continue to apply after your use of the Service ends.</p>
 
         <h2>6. Fees</h2>
         <p>Creating a record is currently free. If we introduce paid features, we will describe them and their prices before you are charged.</p>

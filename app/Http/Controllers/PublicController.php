@@ -214,7 +214,14 @@ class PublicController extends Controller
     public function robots()
     {
         $body = app()->isProduction()
-            ? "User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\n\nSitemap: ".url('/sitemap.xml')."\n"
+            ? "# Horsefax information may not be scraped, data-mined or compiled into a database without\n"
+                ."# written permission (see ".url('/terms')."). Partners: ask us about the data license API.\n\n"
+                ."# AI training crawlers: not permitted\n"
+                ."User-agent: GPTBot\nUser-agent: ClaudeBot\nUser-agent: CCBot\nUser-agent: Google-Extended\nUser-agent: Applebot-Extended\n"
+                ."User-agent: Bytespider\nUser-agent: meta-externalagent\nUser-agent: Amazonbot\nUser-agent: cohere-training-data-crawler\nDisallow: /\n\n"
+                ."# Bulk SEO/data crawlers\n"
+                ."User-agent: SemrushBot\nUser-agent: AhrefsBot\nUser-agent: MJ12bot\nUser-agent: DotBot\nUser-agent: PetalBot\nDisallow: /\n\n"
+                ."User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\nDisallow: /search\nDisallow: /api/\n\nSitemap: ".url('/sitemap.xml')."\n"
             : "User-agent: *\nDisallow: /\n";
 
         return response($body, 200, ['Content-Type' => 'text/plain']);
