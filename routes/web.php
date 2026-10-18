@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Route;
 // Public
 Route::get('/', [PublicController::class, 'home'])->name('home');
 Route::get('/search', [PublicController::class, 'search'])->middleware('throttle:search')->name('search');
+Route::get('/search/suggest', [PublicController::class, 'suggest'])->middleware('throttle:suggest')->name('search.suggest');
 Route::get('/horse/{horse}', [PublicController::class, 'horse'])->name('horse.public');
 Route::get('/report/{token}', [PublicController::class, 'report'])->middleware('throttle:reports')->name('report.show');
 Route::get('/sample-report', [PublicController::class, 'sample'])->name('sample');
@@ -89,4 +90,9 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');
     Route::get('/show-records', [AdminController::class, 'showRecords'])->name('show-records');
     Route::post('/show-records/{record}/attach', [AdminController::class, 'attachResults'])->name('show-records.attach');
+    Route::get('/sale-lots', [\App\Http\Controllers\Admin\SaleLotController::class, 'index'])->name('sale-lots');
+    Route::get('/names', [\App\Http\Controllers\Admin\NameReviewController::class, 'index'])->name('names');
+    Route::post('/names/{review}', [\App\Http\Controllers\Admin\NameReviewController::class, 'decide'])->name('names.decide');
+    Route::post('/sale-lots/{lot}/attach', [\App\Http\Controllers\Admin\SaleLotController::class, 'attach'])->name('sale-lots.attach');
+    Route::post('/sale-lots/{lot}/dismiss', [\App\Http\Controllers\Admin\SaleLotController::class, 'dismiss'])->name('sale-lots.dismiss');
 });

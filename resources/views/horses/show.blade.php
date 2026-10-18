@@ -182,11 +182,12 @@
                         <p class="font-sans text-[13px] text-muted pt-1">{{ $e->dateLabel() }}</p>
                         <div>
                             <p class="label text-gold-dark text-[10px]">{{ $e->categoryLabel() }}{{ $e->typeLabel() ? ' · '.$e->typeLabel() : '' }}</p>
-                            <p class="text-[19px] text-ink mt-1">{{ $e->title }}@if ($e->result) <span class="text-muted">· {{ $e->result }}</span>@endif</p>
+                            <p class="text-[19px] text-ink mt-1">@if ($e->isPriceEntry()){{ $e->priceLine() }}@else{{ $e->title }}@if ($e->result) <span class="text-muted">· {{ $e->result }}</span>@endif @endif</p>
                             @if ($e->category === 'competition' && ($e->event_name || $e->class_name || $e->placing))
                                 <p class="font-sans text-[13px] mt-1">{{ collect([$e->organization, $e->event_name, $e->class_name, $e->placing ? 'Placed '.$e->placing : null, $e->score ? 'Score '.$e->score : null, $e->points !== null ? $e->points.' pts' : null, HorseEvent::money($e->earnings_cents), $e->rider ? 'Rider: '.$e->rider : null])->filter()->join(' · ') }}</p>
                             @endif
-                            @if ($e->amount_cents !== null)<p class="font-sans text-[13px] mt-1">Price {{ HorseEvent::money($e->amount_cents) }}{{ $e->sale_venue ? ' · '.$e->sale_venue : '' }} · price visible to: @include('horses.partials.visibility', ['type' => 'amount', 'item' => $e, 'field' => 'amount_visibility'])</p>@endif
+                            @if ($e->isPriceEntry())<p class="font-sans text-[13px] mt-1">{{ $e->sale_venue }} · price shown publicly as published by the sale. {{ HorseEvent::PRICE_NOTE }}</p>
+                            @elseif ($e->amount_cents !== null)<p class="font-sans text-[13px] mt-1">Price {{ HorseEvent::money($e->amount_cents) }}{{ $e->sale_venue ? ' · '.$e->sale_venue : '' }} · price visible to: @include('horses.partials.visibility', ['type' => 'amount', 'item' => $e, 'field' => 'amount_visibility'])</p>@endif
                             @if ($e->provider)<p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->provider }}</p>@endif
                             @if ($e->expires_on)<p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->expires_on->isPast() ? 'Expired' : 'Valid until' }} {{ $e->expires_on->format('M j, Y') }}</p>@endif
                             @if ($e->details)<p class="text-[16px] mt-2 whitespace-pre-line">{{ $e->details }}</p>@endif
@@ -300,9 +301,9 @@
                         <thead><tr><th>Person</th><th>Role</th><th>From</th><th>Until</th></tr></thead>
                         <tbody>@foreach ($stewardships as $s)<tr><td>{{ $s->user->name }}{{ $s->user_id === auth()->id() ? ' (you)' : '' }}</td><td>{{ \App\Support\Roles::stewardLabel($s) }}</td><td>{{ $s->started_on?->format('M j, Y') }}</td><td>{{ $s->ended_at?->format('M j, Y') ?? 'present' }}@if ($s->ended_reason)<br><span class="hint text-[13px]">{{ $s->ended_reason }}</span>@endif</td></tr>@endforeach</tbody>
                     </table>
-                    <p class="hint">Record created by {{ $horse->creator?->id === auth()->id() ? 'you' : ($horse->creator?->name ?? '—') }}{{ $horse->fromPedigree() ? ' (from a pedigree)' : '' }}. Creating a record doesn't make someone the verified owner: a claimed owner becomes a verified owner after Horsefax staff review proof of ownership. Readers of reports see roles and dates only, never names.</p>
+                    <p class="hint">Record created by {{ $horse->creator?->id === auth()->id() ? 'you' : ($horse->creator?->name ?? '—') }}{{ $horse->fromPedigree() ? ' (from a pedigree)' : ($horse->fromResults() ? ' (from published show results)' : '') }}. Creating a record doesn't make someone the verified owner: a claimed owner becomes a verified owner after Horsefax staff review proof of ownership. Readers of reports see roles and dates only, never names.</p>
                     <h2 class="text-[26px] border-b border-line pb-2 mt-10">Sale history</h2>
-                    <p class="hint mt-2">Add sales, purchases, auctions and leases from the <a href="{{ route('horses.show', ['horse' => $horse, 'tab' => 'history']) }}" class="text-gold-dark">History</a> tab (category "Ownership & custody"). Prices are private unless you share them.</p>
+                    <p class="hint mt-2">Add sales, purchases, auctions and leases from the <a href="{{ route('horses.show', ['horse' => $horse, 'tab' => 'history']) }}" class="text-gold-dark">History</a> tab (category "Ownership & custody"). Prices you enter are private unless you share them. Auction results Horsefax collects from published sales show the price the sale published, labeled by what the sale reported.</p>
                 </section>
                 <aside>
                     @if ($canEdit && $horse->owner()?->id === auth()->id())

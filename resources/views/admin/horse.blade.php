@@ -3,7 +3,7 @@
     <div class="wrap py-10">
         @include('admin.nav')
         <h1 class="text-[32px]">{{ $horse->displayName() }} <span class="font-sans text-[15px] text-muted">{{ $horse->horsefax_id }}</span></h1>
-        <p class="mt-1 font-sans text-[13px]"><a href="{{ route('horses.show', $horse) }}" class="text-gold-dark">Open as the owner sees it</a> · source: {{ $horse->fromPedigree() ? 'added from a pedigree' : 'created by an owner' }}</p>
+        <p class="mt-1 font-sans text-[13px]"><a href="{{ route('horses.show', $horse) }}" class="text-gold-dark">Open as the owner sees it</a> · source: {{ $horse->fromPedigree() ? 'added from a pedigree' : ($horse->fromResults() ? 'built from published show results' : ($horse->source === 'published' ? 'built from a published stallion or foal listing' : ($horse->source === 'ifce' ? 'French national registry open data (IFCE)' : 'created by an owner'))) }}</p>
 
         <div class="card p-5 mt-6 flex flex-wrap items-start gap-6">
             <div>

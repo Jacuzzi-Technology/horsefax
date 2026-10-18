@@ -158,7 +158,7 @@ class HorseController extends Controller
             }
         }
         if (! empty($data['registered_name'])) {
-            $ids = $ids->merge(Horse::whereRaw('lower(registered_name) = lower(?)', [$data['registered_name']])->pluck('id'));
+            $ids = $ids->merge(Horse::named($data['registered_name'])->pluck('id'));
         }
 
         return Horse::whereIn('id', $ids->unique())->limit(10)->get();

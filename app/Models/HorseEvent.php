@@ -14,6 +14,20 @@ class HorseEvent extends Model
 
     protected $guarded = ['id'];
 
+    /**
+     * How a price is labeled (Kate's rules, adopted Oct 17 2026), kept in `result` on ownership entries. A reported
+     * sale is only ever what an auction reported as sold; a high bid or an asking price never becomes a sale price.
+     */
+    public const PRICE_KINDS = [
+        'reported_sale' => 'Reported auction sale',
+        'high_bid' => 'Recorded high bid',
+        'no_sale' => 'No sale',
+        'asking' => 'Advertised asking price',
+        'documented_private' => 'Documented private sale',
+    ];
+
+    public const PRICE_NOTE = 'Historical prices reflect a horse and the circumstances of a transaction at that time. They are not an estimate of current value.';
+
     protected function casts(): array
     {
         return ['verified_at' => 'datetime', 'occurred_on' => 'date', 'expires_on' => 'date', 'points' => 'decimal:2'];
@@ -36,6 +50,26 @@ class HorseEvent extends Model
     public static function money(?int $cents): ?string
     {
         return $cents === null ? null : '$'.number_format($cents / 100, $cents % 100 ? 2 : 0);
+    }
+
+    public function isPriceEntry(): bool
+    {
+        return $this->category === 'ownership' && isset(self::PRICE_KINDS[$this->result]);
+    }
+
+    /** "Reported auction sale — $35,000", "Recorded high bid — $28,000 · Sale unconfirmed", "No sale". */
+    public function priceLine(bool $withAmount = true): string
+    {
+        $label = self::PRICE_KINDS[$this->result] ?? ($this->typeLabel() ?? $this->title);
+        $amount = $withAmount ? self::money($this->amount_cents) : null;
+
+        return $label.($amount ? ' — '.$amount : '').($this->result === 'high_bid' ? ' · Sale unconfirmed' : '');
+    }
+
+    /** The published page an entry came from, when its details name one. */
+    public function sourceUrl(): ?string
+    {
+        return preg_match('#From the published (?:sale )?results: (https?://\S+)#', (string) $this->details, $m) ? $m[1] : null;
     }
 
     public function dateLabel(): string

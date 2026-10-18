@@ -37,7 +37,8 @@ class HorseFact extends Model
         return match ($this->field) {
             'sex' => ucfirst((string) $this->value),
             'height' => rtrim(rtrim((string) $this->value, '0'), '.').' hh'.(! empty($this->meta['measured_on']) ? ' (measured '.\Illuminate\Support\Carbon::parse($this->meta['measured_on'])->format('M Y').')' : ''),
-            'birth' => ($this->meta['precision'] ?? null) === 'day' ? \Illuminate\Support\Carbon::parse($this->value)->format('M j, Y') : 'Foaled '.$this->value,
+            'birth' => (($this->meta['precision'] ?? null) === 'day' ? \Illuminate\Support\Carbon::parse($this->value)->format('M j, Y') : 'Foaled '.$this->value)
+                .(! empty($this->meta['country']) ? ', '.$this->meta['country'] : ''),
             default => (string) $this->value,
         };
     }

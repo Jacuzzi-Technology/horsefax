@@ -1,7 +1,8 @@
 <x-layouts.site :canonical="url('/')">
     {{-- Hero --}}
-    <section class="relative overflow-hidden bg-forest text-cream">
-        <div class="absolute -right-[8vw] -bottom-[10vh] w-[min(62vw,720px)] aspect-[782/899] bg-[url('/img/x-mark.svg')] bg-contain bg-no-repeat opacity-[0.08] pointer-events-none" aria-hidden="true"></div>
+    <section class="relative z-10 bg-forest text-cream">
+        {{-- The mark is clipped on its own layer so search suggestions can drop below the hero. --}}
+        <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true"><div class="absolute -right-[8vw] -bottom-[10vh] w-[min(62vw,720px)] aspect-[782/899] bg-[url('/img/x-mark.svg')] bg-contain bg-no-repeat opacity-[0.08]"></div></div>
         <div class="wrap relative pt-16 pb-20 sm:pt-24 sm:pb-28">
             <p class="label text-gold-soft mb-6">The lasting record of a horse's life</p>
             <h1 class="text-cream text-[46px] sm:text-[72px] lg:text-[84px] leading-[1.02] tracking-[-0.01em] max-w-[11em]">Every horse has a history&hellip;</h1>
@@ -10,7 +11,7 @@
             <form action="{{ route('search') }}" method="GET" class="mt-10 max-w-[720px]" role="search">
                 <label for="hero-name" class="block font-sans text-[11px] font-semibold tracking-[0.2em] uppercase text-cream/70 mb-2">Find a horse by registered name or barn name</label>
                 <div class="flex flex-col sm:flex-row gap-2 bg-cream/95 p-2 rounded-[3px] shadow-2xl shadow-black/20">
-                    <input id="hero-name" name="name" type="search" required minlength="2" placeholder="e.g. Juniper Creek Lark, or Lark" class="flex-1 bg-white rounded-[2px] px-4 py-3 text-[19px] text-charcoal placeholder:text-muted/80 focus:outline-none">
+                    <div class="relative flex-1"><input id="hero-name" name="name" type="search" required minlength="2" placeholder="e.g. Juniper Creek Lark, or Lark" data-suggest="{{ route('search.suggest') }}" class="w-full bg-white rounded-[2px] px-4 py-3 text-[19px] text-charcoal placeholder:text-muted/80 focus:outline-none"></div>
                     <button class="btn-gold">Search Horses</button>
                 </div>
                 <p class="font-sans text-[12px] text-cream/60 mt-2">Have a registration or microchip number? You can add it on the next step to narrow the results.</p>

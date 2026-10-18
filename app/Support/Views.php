@@ -136,7 +136,21 @@ final class Views
     /** Current identity facts keyed by field. Basic identity is shown to every audience that can see the record. */
     public static function facts(Horse $horse): Collection
     {
-        return $horse->currentFacts()->with('verification')->get()->keyBy('field');
+        $facts = $horse->currentFacts()->with('verification')->get()->keyBy('field');
+
+        // Records loaded in bulk from a published list keep identity on the record itself: show those values as claims too.
+        if (in_array($horse->source, ['ifce'], true)) {
+            $from = ['registered_name' => $horse->registered_name, 'breed' => $horse->breed, 'sex' => $horse->sex, 'color' => $horse->color,
+                'birth' => $horse->birth_precision === 'day' ? $horse->birth_date?->toDateString() : ($horse->birth_year ? (string) $horse->birth_year : null)];
+            foreach ($from as $field => $value) {
+                if ($value !== null && $value !== '' && ! $facts->has($field)) {
+                    $facts[$field] = new \App\Models\HorseFact(['horse_id' => $horse->id, 'field' => $field, 'value' => $value, 'source_type' => 'official_source',
+                        'status' => 'unverified', 'is_current' => true, 'meta' => $field === 'birth' ? ['precision' => $horse->birth_precision, 'country' => $horse->birth_country] : null]);
+                }
+            }
+        }
+
+        return $facts;
     }
 
     /** The profile photo, if this audience may see it. */

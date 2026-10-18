@@ -15,9 +15,9 @@
             <h1 class="text-cream text-[36px] sm:text-[46px] mt-3">Find a horse</h1>
             <form action="{{ route('search') }}" method="GET" class="mt-6 max-w-[900px] bg-cream/95 text-charcoal p-4 sm:p-5 rounded-[3px]" role="search">
                 <div class="flex flex-col sm:flex-row gap-2">
-                    <div class="flex-1">
+                    <div class="flex-1 relative">
                         <label for="s-name" class="field-label">Registered name or barn name</label>
-                        <input id="s-name" name="name" value="{{ $c['name'] ?? '' }}" type="search" class="field" placeholder="e.g. Juniper Creek Lark">
+                        <input id="s-name" name="name" value="{{ $c['name'] ?? '' }}" type="search" class="field" placeholder="e.g. Juniper Creek Lark" data-suggest="{{ route('search.suggest') }}">
                     </div>
                     <button class="btn-gold sm:self-end">Search</button>
                 </div>
@@ -55,7 +55,7 @@
             <p class="text-[18px] text-muted">Start with the horse's registered name or barn name.</p>
         @elseif ($narrowing)
             <div class="card p-7 max-w-[720px]">
-                <p class="label text-gold">{{ number_format($count) }} horses match</p>
+                <p class="label text-gold">{{ $count > 1000 ? 'Over 1,000' : number_format($count) }} horses match</p>
                 <h2 class="text-[26px] mt-2">Add more details to narrow it down</h2>
                 <p class="mt-2 text-[17px]">We show the list once {{ HorseSearch::MAX_LIST }} or fewer horses match. A registration or microchip number usually finds the horse straight away; foaling year, sex, color, sire or dam also help.</p>
             </div>

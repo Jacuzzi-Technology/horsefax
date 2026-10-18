@@ -43,6 +43,13 @@
         </div>
     </section>
 
+    @if (! $isReport && ($horse->fromResults() || $horse->fromPedigree() || in_array($horse->source, ['published', 'ifce'], true)) && ! $horse->activeStewards()->exists())
+        <div class="bg-paper border-b border-line"><div class="wrap py-4 font-sans text-[14px] flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span>{{ match ($horse->source) { 'results' => 'Horsefax built this record from published show results.', 'published' => 'Horsefax built this record from a published stallion or foal listing.', 'ifce' => 'From the French national equine database. Source: '.\App\Harvest\IfceImporter::CREDIT.'.', default => 'This record was created because the horse appears in a pedigree on Horsefax.' } }} It has no owner yet, and nothing on it is verified. More than one horse can share a name.</span>
+            <a href="{{ route('horses.claim', $horse) }}" class="text-gold-dark font-semibold">Is this your horse? Claim the record</a>
+        </div></div>
+    @endif
+
     <div class="wrap py-12 grid lg:grid-cols-[1fr_300px] gap-12">
         <div class="space-y-14 min-w-0">
 
@@ -172,12 +179,17 @@
             @if ($ownership->isNotEmpty() || $sales->isNotEmpty())
                 <section aria-labelledby="h-owners">
                     <h2 id="h-owners" class="text-[28px] border-b border-line pb-2">Ownership & sale history</h2>
-                    <p class="hint mt-2">Horsefax shows when ownership changed, not who the owners were.</p>
+                    <p class="hint mt-2">Horsefax shows when ownership changed, not who the owners were.@if ($sales->contains(fn ($e) => $e->isPriceEntry())) Auction results are shown as the sale published them; a reported sale means the auction reported it, not that Horsefax confirmed payment or transfer. {{ HorseEvent::PRICE_NOTE }}@endif</p>
                     <ul class="mt-4 divide-y divide-line border-y border-line">
-                        @foreach ($sales as $e)
+                        @foreach ($sales->sortBy('occurred_on') as $e)
                             <li class="py-3 flex flex-wrap justify-between gap-3">
+                                @if ($e->isPriceEntry())
+                                    <div><p class="text-[18px]">{{ $e->priceLine(Views::showAmount($e, $audience, $link)) }}</p>
+                                        <p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->sale_venue }}@if ($e->sourceUrl()) · <a href="{{ $e->sourceUrl() }}" class="text-gold-dark" rel="nofollow noopener" target="_blank">Source</a>@endif</p></div>
+                                @else
                                 <div><p class="text-[18px]">{{ $e->typeLabel() ?? $e->title }}@if ($e->sale_venue) <span class="text-muted">· {{ $e->sale_venue }}</span>@endif</p>
                                     @if (Views::showAmount($e, $audience, $link))<p class="font-sans text-[14px] mt-0.5">{{ HorseEvent::money($e->amount_cents) }}</p>@endif</div>
+                                @endif
                                 <div class="text-right"><p class="font-sans text-[13px] text-muted">{{ $e->dateLabel() }}</p><x-claim :item="$e" class="mt-1 justify-end" /></div>
                             </li>
                         @endforeach

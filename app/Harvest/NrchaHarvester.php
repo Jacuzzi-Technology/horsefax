@@ -116,7 +116,12 @@ class NrchaHarvester
             return null;
         }
 
-        return $name === strtoupper($name) ? ucwords(strtolower($name)) : $name;
+        if ($name !== strtoupper($name)) {
+            return $name;
+        }
+
+        // Title case, but keep vowelless initials ("JM", "NM", "VS", "HP") in capitals.
+        return implode(' ', array_map(fn ($w) => preg_match('/^[BCDFGHJKLMNPQRSTVWXZ]{2,3}$/', $w) ? $w : ucfirst(strtolower($w)), explode(' ', $name)));
     }
 
     private function import(HarvestPage $page, array $data, int $year): int

@@ -18,6 +18,25 @@ class Horse extends Model
         return $this->source === 'pedigree';
     }
 
+    /**
+     * Records known by this name: the registered name, or a former spelling kept as an alias after a merge.
+     * Merged-away records are never returned (their name lives on as the alias), nor national registry list records.
+     */
+    public function scopeNamed($query, string $name)
+    {
+        $name = trim($name);
+
+        // National registry lists (IFCE) have no numbers to tell same-named horses apart: never matched by name alone.
+        return $query->whereNull('merged_into_id')->where(fn ($w) => $w->whereNull('source')->orWhere('source', '!=', 'ifce'))->where(fn ($w) => $w->whereRaw('lower(registered_name) = lower(?)', [$name])
+            ->orWhereIn('id', HorseName::where('kind', 'alias')->whereRaw('lower(name) = lower(?)', [$name])->select('horse_id')));
+    }
+
+    /** Created by Horsefax from a registered name in published show results. */
+    public function fromResults(): bool
+    {
+        return $this->source === 'results';
+    }
+
     protected function casts(): array
     {
         return ['birth_date' => 'date', 'height_measured_on' => 'date', 'public_summary' => 'boolean', 'listed' => 'boolean', 'height_hands' => 'decimal:1'];

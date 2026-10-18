@@ -186,3 +186,67 @@ document.querySelectorAll('[data-pedigree-form]').forEach((form) => {
         input.addEventListener('blur', () => setTimeout(close, 150));
     });
 });
+
+// Search suggestions: <input data-suggest="/search/suggest"> inside a relative wrapper shows matching horses as you type.
+document.querySelectorAll('input[data-suggest]').forEach((input, n) => {
+    const list = document.createElement('ul');
+    list.id = `suggest-${n}`;
+    list.setAttribute('role', 'listbox');
+    list.className = 'suggest-list';
+    list.hidden = true;
+    input.after(list);
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-controls', list.id);
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('autocomplete', 'off');
+    let timer, active = -1, items = [], seq = 0;
+
+    const close = () => { list.hidden = true; input.setAttribute('aria-expanded', 'false'); active = -1; input.removeAttribute('aria-activedescendant'); };
+    const highlight = (i) => {
+        const opts = list.querySelectorAll('[role="option"]');
+        opts.forEach((o, k) => o.setAttribute('aria-selected', k === i ? 'true' : 'false'));
+        active = i;
+        if (opts[i]) input.setAttribute('aria-activedescendant', opts[i].id);
+    };
+    const render = (q) => {
+        list.replaceChildren();
+        const add = (id, html, href) => {
+            const li = document.createElement('li');
+            li.id = `${list.id}-${id}`;
+            li.setAttribute('role', 'option');
+            li.innerHTML = html;
+            li.addEventListener('mousedown', (e) => { e.preventDefault(); href ? (location.href = href) : input.form.submit(); });
+            list.append(li);
+        };
+        const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+        items.forEach((h, i) => add(i, `<span class="suggest-name">${esc(h.name)}</span>${h.detail ? `<span class="suggest-detail">${esc(h.detail)}</span>` : ''}`, h.url));
+        add('all', `<span class="suggest-all">${items.length ? 'See all results for' : 'Search for'} “${esc(q)}”</span>`, null);
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        active = -1;
+    };
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const q = input.value.trim();
+        if (q.length < 3) { close(); return; }
+        timer = setTimeout(async () => {
+            const mine = ++seq;
+            try {
+                const res = await fetch(`${input.dataset.suggest}?q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+                if (!res.ok || mine !== seq) return;
+                items = await res.json();
+                if (mine === seq && input.value.trim() === q) render(q);
+            } catch { /* offline: the form still works */ }
+        }, 180);
+    });
+    input.addEventListener('keydown', (e) => {
+        const opts = list.querySelectorAll('[role="option"]');
+        if (list.hidden || !opts.length) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); highlight((active + 1) % opts.length); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); highlight((active - 1 + opts.length) % opts.length); }
+        else if (e.key === 'Escape') close();
+        else if (e.key === 'Enter' && active >= 0 && active < items.length) { e.preventDefault(); location.href = items[active].url; }
+    });
+    input.addEventListener('blur', () => setTimeout(close, 120));
+});

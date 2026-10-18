@@ -16,11 +16,21 @@ use Illuminate\Support\Facades\DB;
  */
 class AttachShowResults
 {
-    public function __invoke(ShowRecord $record, Horse $horse, User $staff): int
+    /** $showNames false leaves out results published under hunter/jumper show names (EquestrianLive), which often aren't the same horse. */
+    public function __invoke(ShowRecord $record, Horse $horse, User $staff, bool $showNames = true): int
     {
-        return DB::transaction(function () use ($record, $horse, $staff) {
+        return DB::transaction(function () use ($record, $horse, $staff, $showNames) {
             $n = 0;
-            foreach ($record->appearances()->whereNull('horse_event_id')->orderBy('event_year')->get() as $a) {
+            $q = $record->appearances()->whereNull('horse_event_id')->orderBy('event_year');
+            // A result printed with a different registration number than the record's belongs to another horse.
+            $regs = $horse->identifiers()->where('kind', 'registration')->whereNull('superseded_by')->pluck('value_normalized')->all();
+            if ($regs) {
+                $q->where(fn ($w) => $w->whereNull('registration_number')->orWhereIn(DB::raw("upper(regexp_replace(registration_number, '[^A-Za-z0-9]', '', 'g'))"), $regs));
+            }
+            if (! $showNames) {
+                $q->whereNotIn('data_source_id', \App\Models\DataSource::whereIn('key', BuildRecordsFromResults::SHOW_NAME_SOURCES)->select('id'));
+            }
+            foreach ($q->get() as $a) {
                 $event = HorseEvent::create([
                     'horse_id' => $horse->id, 'category' => 'competition', 'type' => 'show',
                     'title' => $a->class_name, 'organization' => $a->organization === 'AQHA' ? 'AQHA (at the '.$a->event_name.')' : $a->organization,
@@ -47,6 +57,11 @@ class AttachShowResults
                 }
                 Audit::record('pedigree.seeded_from_results', $horse, null, $par, $horse->id, $staff->id);
                 app(CreateAncestorRecords::class)($horse, $staff);
+            }
+            // A registration number and foal year printed with the results (WSQHA) fill what the record is missing.
+            $published = $record->publishedIdentity();
+            if ($published['registration_number'] || $published['foal_year']) {
+                app(AddPublishedIdentity::class)($horse, BuildRecordsFromResults::system(), $published, 'show results for '.$record->display_name);
             }
             Audit::record('show_results.attached', $horse, null, ['show_record' => $record->display_name, 'results' => $n], $horse->id, $staff->id);
 

@@ -44,13 +44,20 @@ class CreateHorse
     public static function newId(): string
     {
         do {
-            $chars = '';
-            for ($i = 0; $i < 8; $i++) {
-                $chars .= self::ALPHABET[random_int(0, strlen(self::ALPHABET) - 1)];
-            }
-            $id = 'HF-'.substr($chars, 0, 4).'-'.substr($chars, 4);
+            $id = self::randomId();
         } while (Horse::where('horsefax_id', $id)->exists());
 
         return $id;
+    }
+
+    /** A random HF-XXXX-XXXX (not checked against existing records). */
+    public static function randomId(): string
+    {
+        $chars = '';
+        for ($i = 0; $i < 8; $i++) {
+            $chars .= self::ALPHABET[random_int(0, strlen(self::ALPHABET) - 1)];
+        }
+
+        return 'HF-'.substr($chars, 0, 4).'-'.substr($chars, 4);
     }
 }

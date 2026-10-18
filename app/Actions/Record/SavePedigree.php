@@ -83,7 +83,7 @@ class SavePedigree
                 return $id->first();
             }
         }
-        $byName = Horse::whereRaw('lower(registered_name) = lower(?)', [$line['name']])->where('id', '!=', $horse->id)->pluck('id');
+        $byName = Horse::named($line['name'])->where('id', '!=', $horse->id)->pluck('id');
 
         return $byName->count() === 1 ? $byName->first() : null;
     }

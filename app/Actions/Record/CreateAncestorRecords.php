@@ -85,7 +85,7 @@ class CreateAncestorRecords
                 return false;
             }
         }
-        $byName = Horse::whereRaw('lower(registered_name) = lower(?)', [trim($entry->name)])->where('id', '!=', $horse->id)->get();
+        $byName = Horse::named($entry->name)->where('id', '!=', $horse->id)->get();
         if ($byName->count() > 1) {
             // Same name, different horses (it happens): only a matching foaling year settles it.
             $byYear = $entry->foal_year ? $byName->where('birth_year', $entry->foal_year) : collect();

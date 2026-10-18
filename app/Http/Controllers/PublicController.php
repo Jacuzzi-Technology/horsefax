@@ -32,6 +32,37 @@ class PublicController extends Controller
         return view('public.horse', \App\Support\SampleReport::data());
     }
 
+    /**
+     * As-you-type suggestions under the search box: up to 8 searchable horses whose registered or barn name contains
+     * the text, names starting with it first. Only what search already shows (name, foal year, breed, sire, years shown).
+     */
+    public function suggest(Request $request)
+    {
+        $q = mb_strtolower(trim(mb_substr((string) $request->query('q'), 0, 60)));
+        if (mb_strlen($q) < 3) {
+            return response()->json([]); // three letters before suggesting: two match too many of millions of names
+        }
+        $like = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q);
+        $horses = Horse::where(fn ($w) => $w->where('listed', true)->orWhere('public_summary', true))
+            ->where(fn ($w) => $w->whereRaw('lower(registered_name) like ?', ['%'.$like.'%'])->orWhereRaw('lower(barn_name) like ?', ['%'.$like.'%']))
+            ->orderByRaw('(lower(registered_name) like ?) desc, (lower(registered_name) like ?) desc, length(registered_name), registered_name', [$like.'%', '% '.$like.'%'])
+            ->limit(8)->get(['id', 'horsefax_id', 'registered_name', 'barn_name', 'breed', 'birth_year', 'birth_precision', 'birth_date']);
+        $sires = \App\Models\PedigreeEntry::whereIn('horse_id', $horses->pluck('id'))->where('position', 's')->where('visibility', 'public')
+            ->whereNull('superseded_by')->pluck('name', 'horse_id');
+        // Years a horse was shown, from published results attached to it: tells same-named horses apart.
+        $shown = \App\Models\ShowRecord::whereIn('horse_id', $horses->pluck('id'))
+            ->selectRaw('horse_id, min(first_year) a, max(last_year) b')->groupBy('horse_id')->get()->keyBy('horse_id');
+
+        return response()->json($horses->map(fn ($h) => [
+            'name' => $h->displayName(),
+            'detail' => collect([
+                $h->birth_year ? (string) $h->birth_year : null, $h->breed, isset($sires[$h->id]) ? 'by '.$sires[$h->id] : null,
+                ($y = $shown[$h->id] ?? null) && $y->a ? 'shown '.($y->a == $y->b ? $y->a : $y->a.'–'.$y->b) : null,
+            ])->filter()->join(' · '),
+            'url' => route('horse.public', $h),
+        ])->values());
+    }
+
     /** Narrowing search: see App\Support\HorseSearch. */
     public function search(Request $request)
     {
@@ -43,7 +74,8 @@ class PublicController extends Controller
         $results = collect();
         if (\App\Support\HorseSearch::hasStart($c)) {
             $query = \App\Support\HorseSearch::query($c);
-            $count = (clone $query)->count();
+            // Counting stops at 1,001: past that, "over 1,000" is all a person needs to know to add details.
+            $count = DB::query()->fromSub((clone $query)->select('horses.id')->limit(1001), 'c')->count();
             if ($count <= \App\Support\HorseSearch::MAX_LIST) {
                 $results = $query->with('pedigree')->orderBy('registered_name')->orderBy('barn_name')->get();
             }
@@ -63,6 +95,9 @@ class PublicController extends Controller
 
     public function horse(Request $request, Horse $horse)
     {
+        if ($horse->merged_into_id && ($kept = Horse::find($horse->merged_into_id))) {
+            return redirect()->route('horse.public', $kept, 301); // a misspelled duplicate, merged by staff
+        }
         $preview = ! $horse->public_summary;
         if ($preview && ! $horse->canBeViewedPrivatelyBy($request->user())) {
             abort_unless($horse->listed, 404);

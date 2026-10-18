@@ -57,9 +57,13 @@ final class HorseSearch
         $q = Horse::query()->where(fn ($w) => $w->where('listed', true)->orWhere('public_summary', true));
 
         if (isset($c['name'])) {
-            $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $c['name']).'%';
-            $q->where(fn ($w) => $w->where('registered_name', 'ilike', $like)->orWhere('barn_name', 'ilike', $like)
-                ->orWhereHas('names', fn ($n) => $n->where('visibility', '!=', 'private')->where('name', 'ilike', $like)));
+            $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], mb_strtolower($c['name'])).'%';
+            // Each name source is its own indexed lookup (trigram indexes on lower(...)); combining them with OR/EXISTS
+            // would make Postgres read every record, which is too slow with millions of horses.
+            $ids = \App\Models\Horse::query()->select('id')->whereRaw('lower(registered_name) like ?', [$like])
+                ->union(\App\Models\Horse::query()->select('id')->whereRaw('lower(barn_name) like ?', [$like]))
+                ->union(\App\Models\HorseName::query()->select('horse_id as id')->where('visibility', '!=', 'private')->whereRaw('lower(name) like ?', [$like]));
+            $q->whereIn('id', \Illuminate\Support\Facades\DB::query()->fromSub($ids, 'm')->select('id'));
         }
         if (isset($c['registration_number'])) {
             $q->whereHas('identifiers', fn ($i) => $i->where('kind', 'registration')->whereNull('superseded_by')
