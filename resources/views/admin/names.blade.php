@@ -49,8 +49,8 @@
                     <div class="flex flex-wrap items-end gap-2 mt-4">
                         <input name="note" class="field flex-1 min-w-[220px]" placeholder="Note (optional), e.g. AQHA name search Oct 18">
                         <button name="decision" value="different" class="btn-ghost btn-small">Different horses</button>
-                        <button name="decision" value="keep_a" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_b_id]) disabled title="The other record is owned" @endisset>Same horse: keep “{{ \Illuminate\Support\Str::limit($r->a->registered_name, 24) }}”</button>
-                        <button name="decision" value="keep_b" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_a_id]) disabled title="The other record is owned" @endisset>Same horse: keep “{{ \Illuminate\Support\Str::limit($r->b->registered_name, 24) }}”</button>
+                        <button name="decision" value="keep_a" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_b_id]) disabled title="The other record is owned" @endisset>Same horse: keep left{{ strcasecmp($r->a->registered_name, $r->b->registered_name) ? ' “'.\Illuminate\Support\Str::limit($r->a->registered_name, 24).'”' : '' }} ({{ $r->a->horsefax_id }})</button>
+                        <button name="decision" value="keep_b" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_a_id]) disabled title="The other record is owned" @endisset>Same horse: keep right{{ strcasecmp($r->a->registered_name, $r->b->registered_name) ? ' “'.\Illuminate\Support\Str::limit($r->b->registered_name, 24).'”' : '' }} ({{ $r->b->horsefax_id }})</button>
                     </div>
                 @else
                     <p class="font-sans text-[13px] mt-3 text-muted">{{ $r->status === 'merged' ? 'Merged, kept '.optional(App\Models\Horse::find($r->kept_horse_id))->registered_name : 'Different horses' }}{{ $r->registration_number ? ' · reg '.$r->registration_number : '' }}{{ $r->note ? ' · '.$r->note : '' }} · {{ $r->decided_at?->format('M j, Y') }}</p>
