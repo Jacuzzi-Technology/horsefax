@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Deploys this working copy to horsefax.com on trusted-core-01 and migrates. Usage: bin/deploy
+set -euo pipefail
+
+HOST="root@146.190.128.6"
+APP="/var/www/horsefax"
+
+cd "$(dirname "$0")/.."
+
+echo "Building assets…"
+npm run build >/dev/null
+
+echo "Uploading…"
+rsync -az --delete \
+  --exclude .git --exclude node_modules --exclude vendor --exclude .env --exclude .env.testing --exclude tests \
+  --exclude 'storage/logs/*' --exclude 'storage/app/*' --exclude 'storage/framework/cache/*' \
+  --exclude 'storage/framework/sessions/*' --exclude 'storage/framework/views/*' \
+  --exclude 'bootstrap/cache/*.php' --exclude public/hot --exclude .claude --exclude 'database/*.sqlite' \
+  ./ "$HOST:$APP/"
+
+echo "Installing and migrating…"
+ssh -o BatchMode=yes "$HOST" "cd $APP && chown -R horsefax:horsefax . \
+  && sudo -u horsefax composer install --no-dev --optimize-autoloader --no-interaction -q \
+  && sudo -u horsefax php artisan migrate --force \
+  && sudo -u horsefax php artisan optimize -q \
+  && systemctl reload php8.4-fpm"
+
+echo "Deployed to https://horsefax.com"
