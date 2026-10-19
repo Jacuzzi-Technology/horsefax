@@ -21,7 +21,7 @@
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 btn-gold">Skip to content</a>
-<header class="bg-forest text-cream">
+<header class="bg-forest text-cream print:hidden">
     <div class="wrap flex items-center justify-between gap-6 py-4">
         <a href="{{ route('home') }}" class="shrink-0" aria-label="Horsefax home"><img src="/img/wordmark-reverse.svg" alt="Horsefax" class="h-[26px] sm:h-[30px] w-auto"></a>
         <nav class="hidden lg:flex items-center gap-6 whitespace-nowrap font-sans text-[11px] font-semibold tracking-[0.16em] uppercase" aria-label="Main">
@@ -64,7 +64,7 @@
 
 <main id="main" class="flex-1">{{ $slot }}</main>
 
-<footer class="bg-forest text-cream/80 mt-auto">
+<footer class="bg-forest text-cream/80 mt-auto print:hidden">
     <div class="wrap py-14 grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
             <img src="/img/wordmark-reverse.svg" alt="Horsefax" class="w-[180px] h-auto">

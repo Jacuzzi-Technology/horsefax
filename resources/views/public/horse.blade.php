@@ -22,6 +22,24 @@
         <div class="bg-ink text-cream"><div class="wrap py-3 font-sans text-[13px]">Preview: this public summary is <strong>off</strong>. Only you and Horsefax staff can see this page. Turn it on in <a href="{{ route('sharing', $horse) }}" class="text-gold-soft underline">Sharing</a>.</div></div>
     @endif
 
+    {{-- Printed / PDF copies: a plain header saying what this is, where it came from and when. --}}
+    <div class="hidden print:flex items-center justify-between border-b border-line pb-3 mb-4">
+        <img src="/img/wordmark.svg" alt="Horsefax" class="h-[22px] w-auto">
+        <p class="font-sans text-[10px] text-muted text-right">{{ $isReport ? 'Horsefax report' : 'Horsefax record' }} {{ $horse->horsefax_id }} · printed {{ now()->format('M j, Y') }} from {{ $isReport ? 'a shared report link' : route('horse.public', $horse) }}<br>Entries are labeled by source; only items marked Horsefax Verified have been checked by Horsefax.</p>
+    </div>
+    <style>
+        @media print {
+            @page { size: letter; margin: 0.55in; }
+            body { background: #fff !important; }
+            .bg-forest, .bg-ink { background: #fff !important; color: #13201A !important; }
+            .bg-forest *, .bg-ink * { color: #13201A !important; }
+            li, tr, .card, figure { break-inside: avoid; }
+            a[href^="http"]:not([href*="horsefax.com"])::after { content: " (" attr(href) ")"; font-size: 9px; color: #666; word-break: break-all; }
+            iframe, video { display: none !important; }
+        }
+    </style>
+    <script>window.addEventListener('beforeprint', () => document.querySelectorAll('details[data-print-open]').forEach(d => d.open = true));</script>
+
     <section class="bg-forest text-cream">
         <div class="wrap py-10 sm:py-14 grid sm:grid-cols-[180px_1fr] gap-8 items-start">
             <div class="w-[180px] h-[180px] bg-ink/40 rounded-[3px] overflow-hidden border border-cream/10">
@@ -73,6 +91,16 @@
 
     <div class="wrap py-12 grid lg:grid-cols-[1fr_300px] gap-12">
         <div class="space-y-14 min-w-0">
+            {{-- Two ways to read the same record (Kate's Life Timeline): by section, or in order of the horse's life. --}}
+            @php $timelineView = request('view') === 'timeline'; @endphp
+            <nav class="flex gap-1 border-b border-line -mt-4 print:hidden" aria-label="Record view">
+                <a href="{{ request()->fullUrlWithQuery(['view' => null]) }}" @if (! $timelineView) aria-current="page" @endif class="no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 border-b-2 {{ $timelineView ? 'border-transparent text-muted hover:text-ink' : 'border-gold text-ink' }}">Standard report</a>
+                <a href="{{ request()->fullUrlWithQuery(['view' => 'timeline']) }}" @if ($timelineView) aria-current="page" @endif class="no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 border-b-2 {{ $timelineView ? 'border-gold text-ink' : 'border-transparent text-muted hover:text-ink' }}">Life timeline</a>
+                <button type="button" onclick="window.print()" class="ml-auto font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 text-gold-dark hover:text-ink">Print / Save as PDF</button>
+            </nav>
+            @if ($timelineView)
+                @include('public.partials.timeline', ['timeline' => \App\Support\Timeline::build($horse, $events, $media, $ownership, fn ($e) => Views::showAmount($e, $audience, $link))])
+            @else
 
             {{-- Identity --}}
             <section aria-labelledby="h-identity">
@@ -261,9 +289,11 @@
                 </section>
             @endif
 
-            <section class="card p-6 bg-cream">
-                <h2 class="text-[22px]">What this {{ $isReport ? 'report' : 'summary' }} does not tell you</h2>
-                <p class="mt-2 text-[16px] leading-relaxed">It shows only what the owner has chosen to share. A missing record is not proof that something did not happen, and Horsefax does not certify a horse as sound, safe or suitable. Before buying, arrange your own pre-purchase exam and check registration details with the registry.</p>
+            @endif
+
+            <section class="card p-6 bg-cream print:break-inside-avoid">
+                <h2 class="text-[22px]">What this {{ $isReport ? 'report' : 'record' }} does not tell you</h2>
+                <p class="mt-2 text-[16px] leading-relaxed">It shows what has been published about this horse, each entry labeled with its source, and what its owner has chosen to share. A missing record is not proof that something did not happen, and Horsefax does not certify a horse as sound, safe or suitable. Before buying, arrange your own pre-purchase exam and check registration details with the registry.</p>
             </section>
         </div>
 
