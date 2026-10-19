@@ -6,6 +6,7 @@ use App\Models\DataSource;
 use App\Models\HarvestPage;
 use App\Models\ShowAppearance;
 use App\Models\ShowRecord;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -17,6 +18,9 @@ use Illuminate\Support\Facades\Storage;
  * files read through the Google Drive API (Richard's choice), one request every few seconds, with an evidence copy of
  * every listing and file. Only "Results_..." PDFs are read, and only the horse's name, NRHA horse number, placing,
  * score and payout are kept (AmShowsParser).
+ *
+ * Run in small batches (cron: a few files an hour, 30 seconds apart; Richard, Oct 19 2026: no rush). If Google shows
+ * its "Sorry... automated queries" page, the run stops and the next day's batches are skipped.
  *
  * NRHA's own results already carry these shows' placed horses. When a row is the same horse, placing and class date
  * as an NRHA result, that result gets the score and horse number instead of a second copy.
@@ -31,6 +35,7 @@ class AmShowsHarvester
         '/michigan-reining-horse-association/', '/nrbc/', '/ovrha/', '/tnrha/'];
     private const API = 'https://www.googleapis.com/drive/v3/files';
     private const FOLDER = 'application/vnd.google-apps.folder';
+    public const BLOCKED = 'harvest.amshows.blocked_until';
 
     private DataSource $source;
     private DataSource $nrha;
@@ -54,6 +59,11 @@ class AmShowsHarvester
             throw new \RuntimeException('GOOGLE_DRIVE_API_KEY is not set.');
         }
         $out = ['folders' => 0, 'files' => 0, 'results' => 0, 'enriched' => 0];
+        if (($until = Cache::get(self::BLOCKED)) && now()->lt(\Illuminate\Support\Carbon::parse($until))) {
+            $this->say('Paused until '.$until.': Google asked us to slow down.');
+
+            return $out;
+        }
         $roots = [];
         foreach (self::PAGES as $path) {
             $html = $this->page(self::SITE.$path, 'index');
@@ -238,7 +248,8 @@ class AmShowsHarvester
         }
         $this->lastRequest = microtime(true);
         try {
-            $r = Http::withHeaders(['User-Agent' => CongressHarvester::UA])->timeout(120)->retry(3, 15000, fn ($e) => true, throw: false)
+            $r = Http::withHeaders(['User-Agent' => CongressHarvester::UA])->timeout(120)->retry(3, 15000, // only on network and server errors; a refusal is never retried
+                    fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException || ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->serverError()), throw: false)
                 ->get($endpoint, array_filter($query, fn ($v) => $v !== null));
         } catch (\Throwable $e) {
             $this->say('failed '.$shown);
@@ -246,6 +257,11 @@ class AmShowsHarvester
             return null;
         }
         $this->say($r->status().' '.$shown);
+        // Google's "Sorry... automated queries" page: it has asked us to stop. Stop the run; never work around it.
+        if (in_array($r->status(), [403, 429], true) && str_contains($r->body(), 'Sorry...')) {
+            Cache::put(self::BLOCKED, now()->addDay()->toIso8601String(), now()->addDays(2)); // a day off before the next batch
+            throw new \RuntimeException('Google is refusing automated downloads from this server (its "Sorry" page). Stopped; files not yet read are retried on the next run.');
+        }
 
         return $r->successful() ? $r : null;
     }

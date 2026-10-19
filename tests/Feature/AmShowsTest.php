@@ -62,4 +62,20 @@ class AmShowsTest extends TestCase
         $new = ShowAppearance::where('horse_name', 'Sample Favorite Nite')->sole();
         $this->assertSame(['OVRHA Aug 2025', 'OVRHA', '2025-08-23', '606406', 3235], [$new->event_name, $new->organization, $new->event_dates, $new->competition_number, (int) $new->earnings_cents]);
     }
+
+    public function test_a_google_block_pauses_the_harvest_for_a_day(): void
+    {
+        config(['horsefax.google_drive_key' => 'sample-key']);
+        \Illuminate\Support\Facades\Http::fake(['showmypony.com/*' => \Illuminate\Support\Facades\Http::response('<a href="https://drive.google.com/drive/folders/SampleFolder123">Results</a>'),
+            'www.googleapis.com/*' => \Illuminate\Support\Facades\Http::response('<html><title>Sorry...</title></html>', 403)]);
+        try {
+            (new AmShowsHarvester(0))->run();
+            $this->fail('expected the run to stop');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Sorry', $e->getMessage());
+        }
+        $this->assertTrue(now()->addHours(23)->lt(\Illuminate\Support\Carbon::parse(\Illuminate\Support\Facades\Cache::get(AmShowsHarvester::BLOCKED))));
+        \Illuminate\Support\Facades\Http::fake(fn () => throw new \Exception('no request should be made while paused'));
+        $this->assertSame(0, (new AmShowsHarvester(0))->run()['folders']);
+    }
 }
