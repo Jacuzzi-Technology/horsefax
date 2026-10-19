@@ -49,7 +49,7 @@
 
     <section class="bg-forest text-cream">
         <div class="wrap py-10 sm:py-14 grid sm:grid-cols-[180px_1fr] gap-8 items-start">
-            <div class="w-[180px] h-[180px] bg-ink/40 rounded-[3px] overflow-hidden border border-cream/10">
+            <div class="w-[180px] h-[180px] rounded-[3px] overflow-hidden {{ $photo ? 'bg-ink/40 border border-cream/10' : '' }}">
                 @if ($photo)<img src="{{ route('files.show', [$photo] + $q) }}" alt="{{ $horse->shortName() }}" class="w-full h-full object-cover">
                 @else<img src="/img/hf-tile.svg" alt="" class="w-full h-full">@endif
             </div>
