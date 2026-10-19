@@ -95,6 +95,47 @@ final class Views
         })->keyBy('position');
     }
 
+    /**
+     * The chart to draw: this record's own lines, then (Richard, Oct 19 2026: always four generations) any gap filled
+     * from the public pedigree of a linked ancestor's record, e.g. the sire's record supplies the sire's grandparents.
+     * Filled lines are marked ->inherited; nothing is saved to this record.
+     */
+    public static function pedigreeChart(Collection $own, int $depth = 4): Collection
+    {
+        $chart = $own->keyBy('position');
+        if ($chart->isEmpty()) {
+            return $chart;
+        }
+        for ($len = 2; $len <= $depth; $len++) {
+            // Linked ancestors one or more generations up, nearest first, for the positions still missing at this depth.
+            $sources = $chart->filter(fn ($e) => strlen($e->position) < $len && $e->linked_horse_id);
+            if ($sources->isEmpty()) {
+                break;
+            }
+            $lines = \App\Models\PedigreeEntry::whereIn('horse_id', $sources->pluck('linked_horse_id')->unique())
+                ->where('visibility', 'public')->whereRaw('length(position) <= ?', [$len - 1])->with('linkedHorse')->get()->groupBy('horse_id');
+            foreach (Record::pedigreePositions() as $pos => $label) {
+                if (strlen($pos) !== $len || $chart->has($pos)) {
+                    continue;
+                }
+                for ($cut = $len - 1; $cut >= 1; $cut--) {
+                    $from = $chart->get(substr($pos, 0, $cut));
+                    $line = $from?->linked_horse_id ? ($lines[$from->linked_horse_id] ?? collect())->firstWhere('position', substr($pos, $cut)) : null;
+                    if ($line) {
+                        $copy = $line->replicate();
+                        $copy->setRelation('linkedHorse', $line->linkedHorse);
+                        $copy->position = $pos;
+                        $copy->inherited = true;
+                        $chart->put($pos, $copy);
+                        break;
+                    }
+                }
+            }
+        }
+
+        return $chart;
+    }
+
     /** Offspring on Horsefax. Readers only see offspring whose own record is public. */
     public static function offspring(Horse $horse, string $audience, ?ShareLink $link = null): Collection
     {

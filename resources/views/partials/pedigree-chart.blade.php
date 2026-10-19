@@ -1,7 +1,11 @@
-{{-- Pedigree chart (allbreedpedigree-style brackets), as many generations as have been entered (at least three). --}}
+{{-- Pedigree chart (allbreedpedigree-style brackets): at least four generations (Richard, Oct 19 2026), gaps filled from
+     linked ancestors' own records (Views::pedigreeChart). Every name opens that horse's page; a name with no record
+     linked yet opens a search for it. --}}
 @php
     use App\Support\Record;
-    $depth = min(Record::PEDIGREE_GENERATIONS, max(3, $pedigree->keys()->map(fn ($p) => strlen($p))->max() ?? 0));
+    $pedigree = \App\Support\Views::pedigreeChart($pedigree);
+    $depth = min(Record::PEDIGREE_GENERATIONS, max(4, $pedigree->keys()->map(fn ($p) => strlen($p))->max() ?? 0));
+    $anyInherited = $pedigree->contains(fn ($e) => $e->inherited ?? false);
     $rows = 2 ** $depth;
 @endphp
 <div class="mt-5 overflow-x-auto">
@@ -19,10 +23,11 @@
             <div role="cell" style="grid-row: {{ $index * $span + 1 }} / span {{ $span }}; grid-column: {{ $g }}"
                  class="flex flex-col justify-center rounded-[2px] border {{ $small ? 'px-2 py-0.5' : 'px-3 py-2' }} {{ $male ? 'bg-forest/[0.04] border-forest/15' : 'bg-gold/[0.06] border-gold/20' }}">
                 @if ($e)
+                    @php $size = $g === 1 ? 'text-[18px]' : ($small ? 'text-[12.5px] leading-tight' : ''); @endphp
                     @if ($e->linkedHorse && ($e->linkedHorse->public_summary || $e->linkedHorse->listed))
-                        <a href="{{ route('horse.public', $e->linkedHorse) }}" class="text-ink {{ $g === 1 ? 'text-[18px]' : ($small ? 'text-[12.5px] leading-tight' : '') }}">{{ $e->name }}</a>
+                        <a href="{{ route('horse.public', $e->linkedHorse) }}" class="text-ink {{ $size }}" @if ($e->inherited ?? false) title="From the ancestor's own Horsefax record" @endif>{{ $e->name }}</a>
                     @else
-                        <span class="text-ink {{ $g === 1 ? 'text-[18px]' : ($small ? 'text-[12.5px] leading-tight' : '') }}">{{ $e->name }}</span>
+                        <a href="{{ route('search', ['name' => $e->name]) }}" class="text-ink no-underline hover:underline {{ $size }}" rel="nofollow">{{ $e->name }}</a>
                     @endif
                     @unless ($small)
                         <span class="font-sans text-[11px] text-muted">{{ collect([$e->registry && $e->registration_number ? $e->registry.' '.$e->registration_number : null, $e->foal_year, $e->color])->filter()->join(' · ') }}</span>
@@ -34,3 +39,6 @@
         @endforeach
     </div>
 </div>
+@if ($anyInherited)
+    <p class="hint mt-2">Some earlier generations come from the pedigree on the ancestor's own Horsefax record.</p>
+@endif
