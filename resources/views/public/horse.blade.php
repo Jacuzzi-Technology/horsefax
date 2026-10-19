@@ -43,9 +43,30 @@
         </div>
     </section>
 
+    {{-- At a glance (Kate's launch review): what the record holds, before the detail. Only what is on record. --}}
+    @php
+        $glance = collect([
+            ['Show results', $shows->count() ?: null],
+            ['Known earnings', ($e = $shows->sum('earnings_cents')) ? HorseEvent::money($e) : null],
+            ['Sale records', $sales->filter(fn ($s) => $s->isPriceEntry() || $s->type === 'sale')->count() ?: null],
+            ['Pedigree', ($gen = (int) $pedigree->max(fn ($p) => strlen($p->position))) ? $gen.' '.Str::plural('generation', $gen) : null],
+            ['Photos & videos', $media->count() ?: null],
+            ['Last updated', collect([$horse->updated_at, $events->max('updated_at'), $media->max('updated_at')])->filter()->max()?->format('M j, Y')],
+        ])->filter(fn ($g) => $g[1] !== null);
+    @endphp
+    @if ($glance->count() > 1)
+        <div class="bg-paper border-b border-line"><div class="wrap py-5">
+            <dl class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                @foreach ($glance as [$label, $value])
+                    <div><dt class="label text-muted text-[10px]">{{ $label }}</dt><dd class="text-[22px] text-ink leading-tight mt-1">{{ $value }}</dd></div>
+                @endforeach
+            </dl>
+        </div></div>
+    @endif
+
     @if (! $isReport && ($horse->fromResults() || $horse->fromPedigree() || in_array($horse->source, ['published', 'ifce'], true)) && ! $horse->activeStewards()->exists())
         <div class="bg-paper border-b border-line"><div class="wrap py-4 font-sans text-[14px] flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span>{{ match ($horse->source) { 'results' => 'Horsefax built this record from published show results.', 'published' => 'Horsefax built this record from a published stallion or foal listing.', 'ifce' => 'From the French national equine database. Source: '.\App\Harvest\IfceImporter::CREDIT.'.', default => 'This record was created because the horse appears in a pedigree on Horsefax.' } }} It has no owner yet, and nothing on it is verified. More than one horse can share a name.</span>
+            <span>{{ match ($horse->source) { 'results' => 'Horsefax built this record from published show results.', 'published' => 'Horsefax built this record from published listings (sale listings, stallion directories or foal lists).', 'ifce' => 'From the French national equine database. Source: '.\App\Harvest\IfceImporter::CREDIT.'.', default => 'This record was created because the horse appears in a pedigree on Horsefax.' } }} It has no owner yet, and nothing on it is verified. More than one horse can share a name.</span>
             <a href="{{ route('horses.claim', $horse) }}" class="text-gold-dark font-semibold">Is this your horse? Claim the record</a>
         </div></div>
     @endif
@@ -187,7 +208,7 @@
                                     <div><p class="text-[18px]">{{ $e->priceLine(Views::showAmount($e, $audience, $link)) }}</p>
                                         <p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->sale_venue }}@if ($e->sourceUrl()) · <a href="{{ $e->sourceUrl() }}" class="text-gold-dark" rel="nofollow noopener" target="_blank">Source</a>@endif</p></div>
                                 @else
-                                <div><p class="text-[18px]">{{ $e->typeLabel() ?? $e->title }}@if ($e->sale_venue) <span class="text-muted">· {{ $e->sale_venue }}</span>@endif</p>
+                                <div><p class="text-[18px]">{{ $e->source_type === 'historical' ? $e->title : ($e->typeLabel() ?? $e->title) }}@if ($e->sale_venue && ! str_contains($e->title, $e->sale_venue)) <span class="text-muted">· {{ $e->sale_venue }}</span>@endif @if ($e->sourceUrl())<a href="{{ $e->sourceUrl() }}" class="font-sans text-[13px] text-gold-dark" target="_blank" rel="noopener">See the listing</a>@endif</p>
                                     @if (Views::showAmount($e, $audience, $link))<p class="font-sans text-[14px] mt-0.5">{{ HorseEvent::money($e->amount_cents) }}</p>@endif</div>
                                 @endif
                                 <div class="text-right"><p class="font-sans text-[13px] text-muted">{{ $e->dateLabel() }}</p><x-claim :item="$e" class="mt-1 justify-end" /></div>

@@ -37,7 +37,7 @@
             <p>Add dated entries for health and care, training, competition, ownership and sales, and transport. Entries stay attributed to the person who added them. To change one of your own entries you add a correction, which supersedes it; the original remains in the history. Invitations for veterinarians, farriers and trainers to add their own attributed entries are coming next.</p>
 
             <h2 id="share">4. Share only what you choose</h2>
-            <p>Everything starts private. You can:</p>
+            <p>Everything you add starts private. (History Horsefax collects from public sources, such as published show and sale results, appears on the record labeled with its source.) You can:</p>
             <ul>
                 <li>publish a <strong>public summary</strong>, which shows only the items you mark Public, and lets people find the horse in Horsefax search;</li>
                 <li>create a <strong>report link</strong> for a buyer, vet or trainer, picking exactly which sections it includes, with an optional expiry. You can revoke it at any moment, and it stops working at once.</li>
