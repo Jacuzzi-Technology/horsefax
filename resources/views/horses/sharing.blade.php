@@ -29,6 +29,7 @@
                 <label class="flex items-start gap-3 text-[17px]"><input type="checkbox" name="public_summary" value="1" class="accent-gold mt-1.5" @checked($horse->public_summary)> <span><strong>Publish a public summary</strong><br><span class="hint">A public page at {{ route('horse.public', $horse) }} showing only the items you've marked Public.</span></span></label>
                 <button class="btn-forest btn-small">Save</button>
             </form>
+            <p class="hint text-[13px] mt-3">You can share more at any time. Hiding something that is already public, or turning the public record off, needs Horsefax staff approval. Sale history can't be hidden.</p>
         </section>
 
         <section class="card p-6">

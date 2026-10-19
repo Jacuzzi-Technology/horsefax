@@ -26,8 +26,22 @@ class SharingController extends Controller
     public function togglePublic(Request $request, Horse $horse)
     {
         abort_unless($horse->canBeEditedBy($request->user()), 403);
-        $horse->forceFill(['public_summary' => $request->boolean('public_summary'), 'listed' => $request->boolean('listed')])->save();
+        // Turning the public record or the search listing off needs staff approval; turning them on applies at once.
+        $requested = 0;
+        foreach (['public_summary' => 'the public record', 'listed' => 'the search listing'] as $field => $what) {
+            $want = $request->boolean($field);
+            if ($horse->{$field} && ! $want && ! $request->user()->isStaff()) {
+                app(\App\Actions\Record\RequestToHide::class)($horse, $request->user(), 'horse', $horse->id, $field, '1', '0', $what);
+                $requested++;
+            } else {
+                $horse->{$field} = $want;
+            }
+        }
+        $horse->save();
         Audit::changes('horse.publication_changed', $horse);
+        if ($requested) {
+            return back()->with('status', 'Sent to Horsefax staff. Turning off the public record or search listing needs their approval; it stays on until then.');
+        }
 
         return back()->with('status', 'Saved. '.($horse->public_summary ? 'Public summary is on; only items marked Public appear on it.' : 'Public summary is off.').($horse->listed ? ' Basic identity is listed in search.' : ' Not listed in search.'));
     }

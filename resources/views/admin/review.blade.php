@@ -55,10 +55,12 @@
             <div class="grid md:grid-cols-2 gap-6 mt-6">
                 <form method="POST" action="{{ route('admin.review.approve', $item) }}" class="card p-6 space-y-3" data-confirm="Approve this item?">
                     @csrf
-                    <h2 class="text-[22px]">{{ ['ownership_claim' => 'Approve claim', 'identifier_conflict' => 'Resolve conflict', 'dispute' => 'Uphold: mark disputed', 'fact_conflict' => 'Use the other value', 'pedigree_conflict' => 'Use the other pedigree line', 'identity_check' => 'Verify identity'][$item->kind] ?? 'Approve' }}</h2>
+                    <h2 class="text-[22px]">{{ ['ownership_claim' => 'Approve claim', 'identifier_conflict' => 'Resolve conflict', 'dispute' => 'Uphold: mark disputed', 'fact_conflict' => 'Use the other value', 'pedigree_conflict' => 'Use the other pedigree line', 'identity_check' => 'Verify identity', 'visibility_change' => 'Approve: hide it'][$item->kind] ?? 'Approve' }}</h2>
                     @if ($item->kind === 'ownership_claim')
                         <p class="text-[15px]">The claimant becomes a verified owner.</p>
                         <label class="flex items-start gap-2 font-sans text-[14px]"><input type="checkbox" name="end_current_owner" value="1" class="accent-gold mt-0.5"> Also end the current owner's stewardship (only when the evidence shows the horse was sold or transferred)</label>
+                    @elseif ($item->kind === 'visibility_change')
+                        <p class="text-[15px]">Make the change the owner asked for. Published-source history (show results, listings) should normally stay public; approve only with a good reason, such as a wrong match. Sale history can't be hidden by owners at all (they get no request), so it never arrives here.</p>
                     @elseif ($item->kind === 'identity_check')
                         <p class="text-[15px]">The name on the ID matches the person and their account. Their identity is marked verified (never shown publicly) and the ID image is deleted.</p>
                         <input type="hidden" name="method" value="id_document">
