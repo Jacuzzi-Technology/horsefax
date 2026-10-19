@@ -305,7 +305,7 @@
 
             <section class="card p-6 bg-cream print:break-inside-avoid">
                 <h2 class="text-[22px]">What this {{ $isReport ? 'report' : 'record' }} does not tell you</h2>
-                <p class="mt-2 text-[16px] leading-relaxed">It shows what has been published about this horse, each entry labeled with its source, and what its owner has chosen to share. A missing record is not proof that something did not happen, and Horsefax does not certify a horse as sound, safe or suitable. Before buying, arrange your own pre-purchase exam and check registration details with the registry.</p>
+                <p class="mt-2 text-[16px] leading-relaxed">It shows what has been published about this horse, each entry labeled with its source, and what its owner has chosen to share. A missing record is not proof that something did not happen, and Horsefax does not certify a horse as sound, safe or suitable. Before buying, arrange your own pre-purchase exam and check registration details with the registry. Horsefax records facts, not opinions: see our <a href="{{ route('factual-record-policy') }}" class="text-gold-dark">factual record policy</a>.</p>
             </section>
         </div>
 

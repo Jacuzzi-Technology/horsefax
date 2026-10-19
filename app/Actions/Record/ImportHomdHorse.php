@@ -205,7 +205,7 @@ class ImportHomdHorse
         ]);
         if ($d['description']) {
             HorseEvent::create([
-                'horse_id' => $horse->id, 'category' => 'training', 'type' => 'evaluation', 'title' => 'Seller\'s description (Horse of My Dreams)',
+                'horse_id' => $horse->id, 'category' => 'other', 'type' => 'note', 'title' => 'Seller\'s description (Horse of My Dreams)', // seller's words: staff-only, never published (factual record policy)
                 'occurred_on' => $d['listed_on'], 'date_precision' => 'month', 'details' => $d['description'].(str_starts_with($d['url'], 'http') ? "\n\nFrom the listing: ".$d['url'] : "\n\nFrom an archived Horse of My Dreams listing."),
                 'contributor_id' => $system->id, 'contributor_role' => 'staff', 'source_type' => 'historical', 'status' => 'unverified', 'visibility' => 'private',
             ]);

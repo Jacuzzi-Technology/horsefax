@@ -57,7 +57,8 @@ class RecordController extends Controller
     {
         return [
             'category' => ['required', Rule::in(array_keys(Record::EVENT_CATEGORIES))],
-            'type' => 'nullable|string|max:40',
+            // Only the types offered today (opinion types are retired: see Record::RETIRED_EVENT_TYPES).
+            'type' => ['nullable', 'string', Rule::in(collect(Record::EVENT_TYPES)->flatMap(fn ($t) => array_keys($t))->unique()->all())],
             'title' => 'required|string|max:160',
             'result' => 'nullable|string|max:120',
             'expires_on' => 'nullable|date',

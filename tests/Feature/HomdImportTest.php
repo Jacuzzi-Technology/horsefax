@@ -63,7 +63,7 @@ class HomdImportTest extends TestCase
         $this->assertSame(0, $other->events()->count());
         $this->assertSame(2, $h->media()->where('visibility', 'public')->where('rights_attested', true)->count()); // photo + video
         $this->assertSame('photo-1.jpg', $h->media()->where('kind', 'photo')->first()->document->original_name);
-        $this->assertSame('private', $h->events()->where('category', 'training')->value('visibility'));
+        $this->assertSame('private', $h->events()->where('title', 'Seller\'s description (Horse of My Dreams)')->value('visibility'));
         $lot = SaleLot::where('horse_id', $h->id)->sole();
         $this->assertSame(['asking', 6500000, 'held'], [$lot->status, $lot->price_cents, $lot->review_status]);
 
@@ -105,6 +105,6 @@ class HomdImportTest extends TestCase
         $listing = $h->events()->where('category', 'ownership')->sole();
         $this->assertStringContainsString('archived Horse of My Dreams listing', $listing->details);
         $this->assertNull($listing->sourceUrl());
-        $this->assertStringStartsWith('Sample text.', $h->events()->where('category', 'training')->value('details'));
+        $this->assertStringStartsWith('Sample text.', $h->events()->where('title', 'Seller\'s description (Horse of My Dreams)')->value('details'));
     }
 }

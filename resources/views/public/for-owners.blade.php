@@ -33,7 +33,7 @@
                     ['Every fact labeled', 'Owner reported, professional attested, official source or Horsefax Verified: readers see exactly what stands behind each entry.'],
                     ['Your privacy kept', 'Report readers never see your name, contact details or address. Ownership history shows when it changed, not who owned the horse.'],
                     ['Pedigree and offspring', 'When a sire or dam is also on Horsefax, records link across generations and offspring appear automatically.'],
-                    ['Professionals vouch for it', 'Trainers, veterinarians and others can add what they know in their own name, which carries more weight than an owner\'s word.'],
+                    ['Professionals add records', 'Your veterinarian, farrier, trainer or breeder can add documented records in their own name: dated, attributed and labeled as professional records.'],
                     ['Print or download', 'Any record or report downloads as a PDF with a QR code that opens the current online version.'],
                 ] as [$h, $p])
                     <div><h3 class="text-[21px]">{{ $h }}</h3><p class="mt-1.5 text-[17px] leading-relaxed text-charcoal/80">{{ $p }}</p></div>

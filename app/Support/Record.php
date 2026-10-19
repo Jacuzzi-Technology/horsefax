@@ -102,7 +102,7 @@ final class Record
     public const EVENT_TYPES = [
         'health' => ['coggins' => 'Coggins (EIA) test', 'health_certificate' => 'Health certificate (CVI)', 'vaccination' => 'Vaccination', 'exam' => 'Veterinary exam', 'pre_purchase' => 'Pre-purchase exam', 'treatment' => 'Treatment / procedure', 'injury' => 'Injury or illness', 'imaging' => 'Radiographs / imaging', 'medication' => 'Medication'],
         'care' => ['farrier' => 'Farrier', 'dental' => 'Dental', 'deworming' => 'Deworming', 'bodywork' => 'Chiropractic / massage', 'nutrition' => 'Feeding / nutrition'],
-        'training' => ['program' => 'Training program', 'evaluation' => 'Evaluation / assessment', 'skill' => 'Skill learned', 'temperament' => 'Temperament observation'],
+        'training' => ['program' => 'Training program (dates, trainer, facility)', 'skill' => 'Documented skill, title or qualification'],
         'competition' => ['show' => 'Show / class result', 'award' => 'Award / title', 'certification' => 'Certification / inspection'],
         'ownership' => ['sale' => 'Sale', 'purchase' => 'Purchase', 'auction' => 'Auction', 'lease' => 'Lease', 'gift' => 'Gift / transfer', 'breeding' => 'Foaled / bred by'],
         'transport' => ['haul' => 'Transport'],
@@ -259,9 +259,17 @@ final class Record
         'documents' => 'Document list (titles and dates, not the files)',
     ];
 
+    /**
+     * Factual record policy (Richard and Kate, Oct 19 2026): Horsefax documents what can be established, not opinions.
+     * These types are no longer offered for new entries; entries made earlier keep their label and history.
+     */
+    public const RETIRED_EVENT_TYPES = [
+        'training' => ['evaluation' => 'Evaluation / assessment', 'temperament' => 'Temperament observation'],
+    ];
+
     public static function eventTypeLabel(?string $category, ?string $type): ?string
     {
-        return $type ? (self::EVENT_TYPES[$category][$type] ?? ucfirst(str_replace('_', ' ', $type))) : null;
+        return $type ? (self::EVENT_TYPES[$category][$type] ?? self::RETIRED_EVENT_TYPES[$category][$type] ?? ucfirst(str_replace('_', ' ', $type))) : null;
     }
 
     public static function normalizeIdentifier(string $value): string

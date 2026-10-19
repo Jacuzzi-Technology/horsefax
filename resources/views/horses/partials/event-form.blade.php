@@ -9,6 +9,7 @@
     <summary class="cursor-pointer text-[20px] text-ink">{{ $ev ? 'Correct this entry' : 'Add a history entry' }}</summary>
     <form method="POST" action="{{ $action }}" enctype="multipart/form-data" class="mt-5 space-y-5" data-event-form>
         @csrf
+        <p class="hint text-[14px] card p-3 bg-cream">Record what can be documented: dates, events, results, training periods, documents. Horsefax doesn't accept opinions about a horse's temperament, suitability, ability or soundness. See our <a href="{{ route('factual-record-policy') }}" class="text-gold-dark" target="_blank">factual record policy</a>.</p>
         <div class="grid sm:grid-cols-3 gap-4">
             <div>
                 <label class="field-label" for="e-cat">Category</label>

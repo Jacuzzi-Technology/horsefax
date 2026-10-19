@@ -163,7 +163,7 @@
                 @foreach ([
                     ['Identity', 'Registered and barn names, registration numbers, microchips (masked), markings, pedigree and photos.'],
                     ['Health history', 'Coggins tests, exams, vaccinations and treatments, year after year, become the horse\'s documented health history, each labeled by who recorded it. The owner decides what of it is shared.'],
-                    ['Training', 'Trainers, programs and skills, with temperament notes kept as dated, attributed observations.'],
+                    ['Training', 'Who trained the horse, where and when, and the titles and qualifications it earned: documented periods, not opinions.'],
                     ['Performance', 'Shows, classes, placings and awards, with participant claims kept apart from official results.'],
                     ['Ownership', 'Dated stewardship from breeder onward. Transfers need the new owner to accept, and history stays attributed.'],
                     ['Documents', 'Registration papers, bills of sale and certificates kept as the evidence behind the facts they support: checksummed, never edited, and with the horse for life.'],

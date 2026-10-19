@@ -21,7 +21,7 @@ Route::get('/sample-report', [PublicController::class, 'sample'])->name('sample'
 Route::get('/sample-report/pdf', [PublicController::class, 'samplePdf'])->middleware('throttle:reports')->name('sample.pdf');
 Route::get('/horse/{horse}/pdf', [PublicController::class, 'horsePdf'])->middleware('throttle:reports')->name('horse.pdf');
 Route::get('/report/{token}/pdf', [PublicController::class, 'reportPdf'])->middleware('throttle:reports')->name('report.pdf');
-foreach (['how-it-works', 'for-owners', 'for-professionals', 'about', 'privacy', 'terms', 'record-corrections'] as $page) {
+foreach (['how-it-works', 'for-owners', 'for-professionals', 'about', 'privacy', 'terms', 'record-corrections', 'factual-record-policy'] as $page) {
     Route::get('/'.$page, [PublicController::class, 'page'])->defaults('page', $page)->name($page);
 }
 Route::get('/contact', [PublicController::class, 'contact'])->name('contact');

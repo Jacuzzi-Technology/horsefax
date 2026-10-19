@@ -87,6 +87,7 @@
         <div class="font-sans text-[13px] space-y-2.5">
             <p class="label text-gold-soft text-[10px]">Trust</p>
             <a href="{{ route('record-corrections') }}" class="block no-underline hover:text-cream">Record corrections</a>
+            <a href="{{ route('factual-record-policy') }}" class="block no-underline hover:text-cream">Factual record policy</a>
             <a href="{{ route('privacy') }}" class="block no-underline hover:text-cream">Privacy</a>
             <a href="{{ route('terms') }}" class="block no-underline hover:text-cream">Terms of use</a>
             <a href="{{ route('contact') }}" class="block no-underline hover:text-cream">Contact</a>
