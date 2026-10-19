@@ -23,9 +23,16 @@
     @endif
 
     {{-- Printed / PDF copies: a plain header saying what this is, where it came from and when. --}}
-    <div class="hidden print:flex items-center justify-between border-b border-line pb-3 mb-4">
+    @php
+        // The current online version: the shared report link for a report, the record for everyone else.
+        $onlineUrl = $sample ? route('sample') : ($isReport ? route('report.show', $link->token) : route('horse.public', $horse));
+    @endphp
+    <div class="hidden print:flex items-center justify-between gap-4 border-b border-line pb-3 mb-4">
         <img src="/img/wordmark.svg" alt="Horsefax" class="h-[22px] w-auto">
-        <p class="font-sans text-[10px] text-muted text-right">{{ $isReport ? 'Horsefax report' : 'Horsefax record' }} {{ $horse->horsefax_id }} · printed {{ now()->format('M j, Y') }} from {{ $isReport ? 'a shared report link' : route('horse.public', $horse) }}<br>Entries are labeled by source; only items marked Horsefax Verified have been checked by Horsefax.</p>
+        <div class="flex items-center gap-3">
+            <p class="font-sans text-[10px] text-muted text-right">{{ $isReport ? 'Horsefax report' : 'Horsefax History Report' }} {{ $horse->horsefax_id }} · printed {{ now()->format('M j, Y') }}<br>Entries are labeled by source; only items marked Horsefax Verified have been checked by Horsefax.<br>Scan for the current version: <a href="{{ $onlineUrl }}">{{ preg_replace('#^https?://#', '', $onlineUrl) }}</a></p>
+            <div class="w-[62px] h-[62px] shrink-0 [&>svg]:w-full [&>svg]:h-full">{!! \App\Support\HorseQr::svg($onlineUrl, 240) !!}</div>
+        </div>
     </div>
     <style>
         @media print {
@@ -34,7 +41,7 @@
             .bg-forest, .bg-ink { background: #fff !important; color: #13201A !important; }
             .bg-forest *, .bg-ink * { color: #13201A !important; }
             li, tr, .card, figure { break-inside: avoid; }
-            a[href^="http"]:not([href*="horsefax.com"])::after { content: " (" attr(href) ")"; font-size: 9px; color: #666; word-break: break-all; }
+            a[href^="http"]:not([href*="horsefax.com"]):not([href*="localhost"])::after { content: " (" attr(href) ")"; font-size: 9px; color: #666; word-break: break-all; }
             iframe, video { display: none !important; }
         }
     </style>
@@ -47,7 +54,7 @@
                 @else<img src="/img/hf-tile.svg" alt="" class="w-full h-full">@endif
             </div>
             <div>
-                <p class="label text-gold-soft">{{ $isReport ? 'Horsefax report' : 'Horsefax public summary' }} · {{ $horse->horsefax_id }}</p>
+                <p class="label text-gold-soft">{{ ! empty($pdfMode) ? 'Horsefax History Report' : ($isReport ? 'Horsefax report' : 'Horsefax record') }} · {{ $horse->horsefax_id }}</p>
                 <h1 class="text-cream text-[38px] sm:text-[52px] leading-[1.05] mt-3">{{ $horse->registered_name ?: $horse->barn_name }}</h1>
                 @if ($horse->registered_name && $horse->barn_name && strcasecmp($horse->registered_name, $horse->barn_name))
                     <p class="text-[20px] italic text-cream/75 mt-1">Barn name "{{ $horse->barn_name }}"</p>
@@ -179,7 +186,7 @@
                                 <tbody>
                                 @foreach ($rows as $e)
                                     <tr>
-                                        <td class="whitespace-nowrap">{{ $e->occurred_on?->format('m/y') ?? '—' }}</td>
+                                        <td class="whitespace-nowrap">{{ $e->occurred_on ? $e->dateLabel() : '—' }}</td>
                                         <td class="min-w-[150px]">{{ $e->event_name ?: $e->title }}@if ($e->organization)<br><span class="font-sans text-[11px] text-muted">{{ $e->organization }}</span>@endif</td>
                                         <td>{{ $e->class_name ?: collect([$e->discipline, $e->division])->filter()->join(' · ') }}</td>
                                         <td>{{ $e->rider }}</td>
@@ -308,17 +315,24 @@
                 <p class="font-sans text-[20px] tracking-[0.08em] text-ink mt-1">{{ $horse->horsefax_id }}</p>
                 <p class="hint">A permanent ID for this horse. It is never reused.</p>
                 @unless ($isReport || $sample)
-                    <button type="button" class="btn-ghost btn-small mt-3" data-copy="{{ route('horse.public', $horse) }}">Copy link</button>
+                    <button type="button" class="btn-ghost btn-small mt-3 print:hidden" data-copy="{{ route('horse.public', $horse) }}">Copy link</button>
+                    <p class="hidden print:block font-sans text-[11px] mt-2">Online: <a href="{{ route('horse.public', $horse) }}">{{ preg_replace('#^https?://#', '', route('horse.public', $horse)) }}</a></p>
                 @endunless
             </div>
             <div class="card p-5">
                 <p class="label text-muted text-[10px] mb-3">Labels used</p>
                 <div class="flex flex-wrap gap-2"><span class="chip-self">Owner reported</span><span class="chip border-[#3b5b7a]/40 text-[#2c4a66] bg-[#3b5b7a]/[0.06]">Professional attested</span><span class="chip border-ink/40 text-ink bg-ink/[0.05]">Official source</span><span class="chip-verified">Horsefax Verified</span><span class="chip-disputed">Disputed</span></div>
-                <p class="hint text-[13px] mt-2">Source and verification are separate: click a Horsefax Verified badge to see how and what it covers.</p>
-                <a href="{{ route('how-it-works') }}#verification" class="block font-sans text-[12px] mt-3 text-gold-dark">What the labels mean</a>
+                <p class="hint text-[13px] mt-2 print:hidden">Source and verification are separate: click a Horsefax Verified badge to see how and what it covers.</p>
+                <p class="hint text-[13px] mt-2 hidden print:block">Source and verification are separate. The online record shows how each Horsefax verification was done and what it covers.</p>
+                <a href="{{ route('how-it-works') }}#verification" class="block font-sans text-[12px] mt-3 text-gold-dark print:hidden">What the labels mean</a>
+                <p class="hidden print:block font-sans text-[11px] mt-2">What the labels mean: <a href="{{ route('how-it-works') }}#verification">{{ preg_replace('#^https?://#', '', route('how-it-works')) }}</a></p>
             </div>
             @unless ($sample)
-            <details class="card p-5" @if ($errors->any()) open @endif>
+            <div class="hidden print:block card p-5">
+                <p class="text-[16px]">Something wrong on this record?</p>
+                <p class="font-sans text-[11px] mt-1">Request a correction on the online record: <a href="{{ route('horse.public', $horse) }}">{{ preg_replace('#^https?://#', '', route('horse.public', $horse)) }}</a>. Horsefax staff review every request.</p>
+            </div>
+            <details class="card p-5 print:hidden" @if ($errors->any()) open @endif>
                 <summary class="cursor-pointer text-[18px] text-ink">Something wrong? Request a correction</summary>
                 <form method="POST" action="{{ route('corrections.store', $horse) }}" class="mt-4 space-y-3">
                     @csrf
@@ -345,7 +359,7 @@
                 </form>
             </details>
             @else
-            <div class="card p-5"><p class="text-[17px]">Ready to start your horse's record?</p><a href="{{ route('horses.create') }}" class="btn-gold btn-small mt-3">Create a Horse Record</a></div>
+            <div class="card p-5 print:hidden"><p class="text-[17px]">Ready to start your horse's record?</p><a href="{{ route('horses.create') }}" class="btn-gold btn-small mt-3">Create a Horse Record</a></div>
             @endunless
         </aside>
     </div>
