@@ -73,6 +73,7 @@ class AdminController extends Controller
     public function horses(Request $request)
     {
         $q = trim((string) $request->query('q'));
+        $f = collect(['registry', 'breed', 'sex', 'color', 'source'])->mapWithKeys(fn ($k) => [$k => trim((string) $request->query($k)) ?: null])->all();
         $horses = Horse::query()
             ->when($q !== '', function ($query) use ($q) {
                 // Indexed lookups unioned (an OR across them would read all 4M+ records).
@@ -83,9 +84,24 @@ class AdminController extends Controller
                     ->union(\App\Models\HorseIdentifier::query()->select('horse_id as id')->where('value_normalized', Record::normalizeIdentifier($q)));
                 $query->whereIn('id', \Illuminate\Support\Facades\DB::query()->fromSub($ids, 'm')->select('id'));
             })
+            ->when($f['registry'], fn ($w, $r) => $w->whereIn('id', \App\Models\HorseIdentifier::select('horse_id')->where('kind', 'registration')->whereNull('superseded_by')->where('registry', $r)))
+            ->when($f['breed'], fn ($w, $v) => $v === '(none)' ? $w->whereNull('breed') : $w->where('breed', $v))
+            ->when($f['sex'], fn ($w, $v) => $v === '(none)' ? $w->whereNull('sex') : $w->where('sex', $v))
+            ->when($f['color'], fn ($w, $v) => $v === '(none)' ? $w->whereNull('color') : $w->where('color', $v))
+            ->when($f['source'], fn ($w, $v) => $v === 'not_ifce' ? $w->where(fn ($x) => $x->whereNull('source')->orWhere('source', '!=', 'ifce')) : $w->where('source', $v))
             ->orderByDesc('created_at')->paginate(50)->withQueryString();
 
-        return view('admin.horses', ['horses' => $horses, 'q' => $q]);
+        // Filter choices with how many records have each, refreshed hourly (counting 4M+ records on every visit is slow).
+        $options = \Illuminate\Support\Facades\Cache::remember('admin.horse-filter-options', 3600, fn () => [
+            'registry' => \App\Models\HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')->whereNotNull('registry')
+                ->selectRaw('registry v, count(distinct horse_id) n')->groupBy('registry')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'breed' => Horse::selectRaw("coalesce(breed, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'sex' => Horse::selectRaw("coalesce(sex, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'color' => Horse::selectRaw("coalesce(color, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'source' => Horse::selectRaw("coalesce(source, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+        ]);
+
+        return view('admin.horses', ['horses' => $horses, 'q' => $q, 'f' => $f, 'options' => $options]);
     }
 
     public function horse(Horse $horse)
