@@ -21,7 +21,7 @@
                         <span class="absolute -left-[25px] top-2 w-2 h-2 rotate-45 {{ $it['kind'] === 'milestone' ? 'bg-gold' : 'bg-forest/50' }}"></span>
                         <p class="label text-[10px] text-muted">{{ \App\Support\Timeline::CATEGORIES[$it['category']] ?? '' }} · {{ $it['when'] }}@if (! empty($it['badge'])) · <span class="text-gold-dark">{{ $it['badge'] }}</span>@endif</p>
                         @if ($it['kind'] === 'career')
-                            <details class="mt-1" data-print-open>
+                            <details class="mt-1" data-print-open @if (! empty($pdfMode)) open @endif>
                                 <summary class="cursor-pointer text-[18px] text-ink">{{ $it['title'] }}@if ($it['earnings']) · {{ HorseEvent::money($it['earnings']) }} earnings @endif @if ($it['best']) · best placing {{ $it['best'] }}@endif</summary>
                                 @if ($it['organizations'])<p class="font-sans text-[13px] text-muted mt-1">{{ implode(', ', $it['organizations']) }}</p>@endif
                                 <ul class="mt-2 space-y-1 font-sans text-[14px]">

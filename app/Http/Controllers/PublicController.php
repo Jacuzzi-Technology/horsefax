@@ -40,6 +40,53 @@ class PublicController extends Controller
     }
 
     /**
+     * One-click PDFs: the same page the reader may already see, rendered to a file (App\Support\ReportPdf). Signed-out
+     * visitors only ever get the summary on screen, so their PDF request sends them to sign in.
+     */
+    public function horsePdf(Request $request, Horse $horse)
+    {
+        if (! $request->user()) {
+            $request->session()->put('url.intended', route('horse.public', $horse));
+
+            return redirect()->route('login');
+        }
+
+        return $this->pdf($this->horse($request, $horse), $horse, $request);
+    }
+
+    public function reportPdf(Request $request, string $token)
+    {
+        $link = ShareLink::where('token', $token)->first();
+        abort_unless($link && $link->isActive(), 404);
+
+        return $this->pdf($this->report($token), $link->horse, $request);
+    }
+
+    public function samplePdf(Request $request)
+    {
+        $data = \App\Support\SampleReport::data();
+
+        return $this->pdf(view('public.horse', $data), $data['horse'], $request);
+    }
+
+    private function pdf($view, Horse $horse, Request $request)
+    {
+        if (! $view instanceof \Illuminate\View\View || $view->name() !== 'public.horse') {
+            return $view; // a redirect, the summary or an error page: nothing to print
+        }
+        abort_unless(\App\Support\ReportPdf::available(), 503, 'PDF downloads are not available right now. Use Print instead.');
+        $pdf = \App\Support\ReportPdf::fromHtml($view->with('pdfMode', true)->render());
+        abort_unless($pdf, 503, 'The PDF could not be made right now. Use Print instead.');
+        \App\Support\Audit::record('record.pdf_downloaded', $horse, null, ['view' => $request->query('view') === 'timeline' ? 'timeline' : 'report'], $horse->id ?? null);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.\App\Support\ReportPdf::filename($horse, $request->query('view') === 'timeline').'"',
+            'Cache-Control' => 'private, no-store',
+        ]);
+    }
+
+    /**
      * As-you-type suggestions under the search box: up to 8 searchable horses whose registered or barn name contains
      * the text, names starting with it first. Only what search already shows (name, foal year, breed, sire, years shown).
      */

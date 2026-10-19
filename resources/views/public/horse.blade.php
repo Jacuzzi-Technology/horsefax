@@ -96,7 +96,12 @@
             <nav class="flex gap-1 border-b border-line -mt-4 print:hidden" aria-label="Record view">
                 <a href="{{ request()->fullUrlWithQuery(['view' => null]) }}" @if (! $timelineView) aria-current="page" @endif class="no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 border-b-2 {{ $timelineView ? 'border-transparent text-muted hover:text-ink' : 'border-gold text-ink' }}">Standard report</a>
                 <a href="{{ request()->fullUrlWithQuery(['view' => 'timeline']) }}" @if ($timelineView) aria-current="page" @endif class="no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 border-b-2 {{ $timelineView ? 'border-gold text-ink' : 'border-transparent text-muted hover:text-ink' }}">Life timeline</a>
-                <button type="button" onclick="window.print()" class="ml-auto font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 text-gold-dark hover:text-ink">Print / Save as PDF</button>
+                @php
+                    $pdfUrl = $sample ? route('sample.pdf') : ($isReport ? route('report.pdf', $link->token) : route('horse.pdf', $horse));
+                    $pdfUrl .= $timelineView ? '?view=timeline' : '';
+                @endphp
+                <a href="{{ $pdfUrl }}" class="ml-auto no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 text-gold-dark hover:text-ink" data-pdf-link>Download PDF</a>
+                <button type="button" onclick="window.print()" class="font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-3 py-3 text-muted hover:text-ink">Print</button>
             </nav>
             @if ($timelineView)
                 @include('public.partials.timeline', ['timeline' => \App\Support\Timeline::build($horse, $events, $media, $ownership, fn ($e) => Views::showAmount($e, $audience, $link))])
