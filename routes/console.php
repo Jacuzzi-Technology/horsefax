@@ -224,3 +224,9 @@ Artisan::command('hf:create-sale-records {source} {--dry-run}', function (string
     $out = app(\App\Actions\Record\CreateRecordsFromSaleLots::class)($source, (bool) $this->option('dry-run'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
     $this->info(($this->option('dry-run') ? 'Dry run (nothing saved): ' : '').json_encode($out));
 })->purpose('Create records for a sale source\'s identified horses that no record matches, with their sale entries');
+
+Artisan::command('hf:harvest-amshows {--delay=3} {--max-files=} {--refresh}', function () {
+    $out = (new \App\Harvest\AmShowsHarvester((float) $this->option('delay'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l), (bool) $this->option('refresh')))
+        ->run($this->option('max-files') ? (int) $this->option('max-files') : null);
+    $this->info('A&M Show Services: '.json_encode($out));
+})->purpose('Collect A&M Show Services (showmypony.com) reining results from its public Google Drive folders');

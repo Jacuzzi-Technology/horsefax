@@ -12,5 +12,7 @@ return [
     'chrome' => env('HORSEFAX_CHROME', '/opt/chrome-headless-shell/chrome-headless-shell'),
     // Where radiograph files live: the server's private disk for now; set to a DigitalOcean Spaces (s3) disk later.
     'radiographs_disk' => env('HORSEFAX_RADIOGRAPHS_DISK', 'local'),
+    // Google Drive API key (Drive API only), for show offices that publish results in public Drive folders.
+    'google_drive_key' => env('GOOGLE_DRIVE_API_KEY'),
     'published_sale_kinds' => array_filter(explode(',', env('HORSEFAX_PUBLISHED_SALE_KINDS', 'reported_sale,offered'))),
 ];

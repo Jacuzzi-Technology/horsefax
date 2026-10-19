@@ -35,7 +35,7 @@ class AttachShowResults
                     'horse_id' => $horse->id, 'category' => 'competition', 'type' => 'show',
                     'title' => $a->class_name, 'organization' => $a->organization === 'AQHA' ? 'AQHA (at the '.$a->event_name.')' : $a->organization,
                     'event_name' => $a->event_name.' '.$a->event_year, 'class_name' => $a->class_name, 'round' => $a->round,
-                    'placing' => $a->placing, 'earnings_cents' => $a->earnings_cents,
+                    'placing' => $a->placing, 'score' => $a->score, 'earnings_cents' => $a->earnings_cents,
                     'occurred_on' => $a->event_year.'-10-01', 'date_precision' => 'year',
                     'details' => 'From the published results: '.$a->source_url,
                     'contributor_id' => $staff->id, 'contributor_role' => 'staff',
