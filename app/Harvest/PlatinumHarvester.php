@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\Storage;
  * robots.txt disallows only WooCommerce cart/log paths and wp-admin; no website terms posted; served through
  * Cloudflare but with no challenge. Reads the listing pages only (20 auctions a page), newest first.
  *
- * Platinum shows "Winning Bid" or "Reserve price Not met!", never "sold", so under Kate's rule a winning bid is a
- * recorded high bid, not a reported sale. Listing titles are often barn names and there's no pedigree, so these lots
+ * Platinum shows "Winning Bid" or "Reserve price Not met!". Richard (Oct 18 2026): a winning bid is shown like a sale,
+ * with the same caveat, as reported by Platinum. Listing titles are often barn names and there's no pedigree, so these lots
  * only ever reach a record through staff review. Seller name, phone and location are on the cards; not stored.
  */
 class PlatinumHarvester
@@ -21,6 +21,7 @@ class PlatinumHarvester
     use PoliteFetch;
 
     public const BASE = 'https://platinumequineauction.com/expired-auctions/';
+    public const SALE_NAME = 'Platinum Equine Auction (online)';
 
     private DataSource $source;
 
@@ -71,12 +72,12 @@ class PlatinumHarvester
                     continue;
                 }
                 SaleLot::record($this->source->id, $c['slug'], [
-                    'harvest_page_id' => $page->id, 'sale_name' => 'Platinum Equine Auction (online)', 'sale_date' => $c['ended'],
+                    'harvest_page_id' => $page->id, 'sale_name' => $c['status'] === 'sold' ? self::SALE_NAME.', winning bid as reported by Platinum' : self::SALE_NAME, 'sale_date' => $c['ended'],
                     'horse_name' => NrchaHarvester::display($c['name']), 'registered' => $c['registered'],
                     'registry' => LiveAgParser::registry(preg_replace('/\s.*$/', '', (string) $c['breed'])),
                     'foal_year' => $c['foal_year'], 'sex' => $c['sex'], 'color' => $c['color'], 'breed' => $c['breed'],
                     'status' => $c['status'], 'price_cents' => $c['price_cents'],
-                    'note' => $c['status'] === 'high_bid' ? 'Platinum reports a winning bid; it does not say the sale completed' : ($c['status'] === 'no_sale' ? 'Reserve not met' : null),
+                    'note' => $c['status'] === 'sold' ? 'Platinum reports this as the winning bid' : ($c['status'] === 'no_sale' ? 'Reserve not met' : null),
                     'source_url' => $c['url'],
                 ]);
                 $new++;

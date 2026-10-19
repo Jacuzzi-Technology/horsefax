@@ -115,7 +115,7 @@ TXT;
             .'<p class="uwa_auction_end_time"><strong>Ending On:</strong> October 11, 2026 9:49 pm EST</p>'.$price.'</li>';
         $cards = PlatinumParser::cards($card('sample-ale', 'SAMPLE ALE (Ginger)', '<span class="woo-ua-winned-for winning_bid">Winning Bid</span>: <span class="amount"><bdi><span>$</span>8,750.00</bdi></span>')
             .$card('sample-pair', 'SAMPLE **2 In 1 Deal**', '<span class="woo-ua-winned-for reserve_not_met">Reserve price Not met!</span>'));
-        $this->assertSame(['SAMPLE ALE', 'high_bid', 875000, 2019, true, '2026-10-11'], [$cards[0]['name'], $cards[0]['status'], $cards[0]['price_cents'], $cards[0]['foal_year'], $cards[0]['registered'], $cards[0]['ended']]);
+        $this->assertSame(['SAMPLE ALE', 'sold', 875000, 2019, true, '2026-10-11'], [$cards[0]['name'], $cards[0]['status'], $cards[0]['price_cents'], $cards[0]['foal_year'], $cards[0]['registered'], $cards[0]['ended']]);
         $this->assertNull($cards[1]['name']); // two horses in one listing
         $this->assertSame("DON'T SAMPLE ON ME", PlatinumParser::name('DON’T SAMPLE ON ME “Reyn”'));
         $this->assertSame('no_sale', $cards[1]['status']);
