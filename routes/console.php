@@ -195,3 +195,27 @@ Artisan::command('hf:import-ifce {file} {--url=https://static.data.gouv.fr/resou
         ->run($this->argument('file'), $this->option('url'), $this->option('limit') ? (int) $this->option('limit') : null, (int) $this->option('chunk'));
     $this->info('IFCE: '.json_encode($out));
 })->purpose('Import the French national equine registry open-data file into horse records');
+
+// Horse of My Dreams horses (Richard's own site), from the WordPress export made by bin/homd-export.php on the HOMD
+// server. Fills blanks, adds pedigree, the listing, photos and video. Resumable: listings already imported are skipped.
+// php artisan hf:import-homd storage/app/private/harvest/homd/homd-horses.json [--no-photos] [--limit=5] [--delay=0.5]
+Artisan::command('hf:import-homd {file} {--no-photos} {--limit=} {--delay=0.5}', function (string $file) {
+    $horses = json_decode(file_get_contents($file), true) ?? [];
+    $import = app(\App\Actions\Record\ImportHomdHorse::class);
+    $out = [];
+    foreach (array_slice($horses, 0, $this->option('limit') ? (int) $this->option('limit') : null) as $i => $h) {
+        $status = $import($h, ! $this->option('no-photos'), (float) $this->option('delay'), fn ($l) => $this->line($l));
+        $out[$status] = ($out[$status] ?? 0) + 1;
+        $this->line(now()->format('H:i:s').' '.($i + 1).'/'.count($horses).' '.$status.' '.($h['registered_name'] ?: $h['barn_name']));
+    }
+    $this->info('HOMD: '.json_encode($out));
+})->purpose('Import Horse of My Dreams horses (identity, pedigree, listing, photos, video) into Horsefax records');
+
+// Billings Livestock Commission horse sales: catalogs (registration numbers, pedigrees) and Top 20/40 price lists, from
+// the live site and the Internet Archive. Resumable; cron runs it weekly with the other sale sources.
+// php artisan hf:harvest-billings [--no-archive] [--delay=3] [--max-files=2]
+Artisan::command('hf:harvest-billings {--no-archive} {--delay=3} {--max-files=}', function () {
+    $out = (new \App\Harvest\BillingsHarvester((float) $this->option('delay'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l)))
+        ->run(! $this->option('no-archive'), $this->option('max-files') ? (int) $this->option('max-files') : null);
+    $this->info('Billings: '.json_encode($out));
+})->purpose('Collect Billings Livestock horse-sale catalogs and Top lists into the sale-lots index');

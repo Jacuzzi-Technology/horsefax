@@ -39,7 +39,14 @@ class MatchSaleLots
         $system = BuildRecordsFromResults::system();
         $attach = app(AttachSaleLot::class);
         $out = ['attached' => 0, 'held' => 0, 'queued' => 0, 'conflict' => 0, 'unmatched' => 0];
-        $q = SaleLot::whereNull('horse_id')->whereIn('status', ['sold', 'high_bid', 'no_sale'])
+        // Lots already tied to a record (HOMD asking prices) but held: attach once their kind is published.
+        SaleLot::whereNotNull('horse_id')->whereNull('horse_event_id')->where('review_status', 'held')->with('horse')->lazyById(500, 'id')
+            ->each(function ($lot) use ($attach, $system, &$out) {
+                if ($lot->horse && $lot->publishable() && $attach($lot, $lot->horse, $system, $lot->match_tier ?? 'staff')) {
+                    $out['attached']++;
+                }
+            });
+        $q = SaleLot::whereNull('horse_id')->whereIn('status', ['sold', 'high_bid', 'no_sale', 'offered'])
             ->where(fn ($w) => $w->whereNull('review_status')->orWhereIn('review_status', ['queued', 'conflict', 'held']));
         $done = 0;
         foreach ($q->lazyById(500, 'id') as $lot) {

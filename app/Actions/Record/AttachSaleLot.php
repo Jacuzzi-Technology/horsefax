@@ -34,11 +34,11 @@ class AttachSaleLot
             ])->filter()->implode("\n");
             $date = $lot->sale_date ?? ($lot->sale_year ? \Illuminate\Support\Carbon::create($lot->sale_year, 1, 1) : null);
             $event = HorseEvent::create([
-                'horse_id' => $horse->id, 'category' => 'ownership', 'type' => 'auction',
+                'horse_id' => $horse->id, 'category' => 'ownership', 'type' => $kind === 'asking' ? 'sale' : 'auction',
                 'title' => HorseEvent::PRICE_KINDS[$kind], 'result' => $kind,
                 'sale_venue' => $lot->sale_name.($lot->lot ? ', lot '.$lot->lot : ''),
                 'occurred_on' => $date, 'date_precision' => $lot->sale_date ? $lot->date_precision : 'year',
-                'amount_cents' => $kind === 'no_sale' ? null : $lot->price_cents, 'amount_visibility' => 'public',
+                'amount_cents' => in_array($kind, ['no_sale', 'offered'], true) ? null : $lot->price_cents, 'amount_visibility' => 'public',
                 'details' => $details, 'contributor_id' => $by->id, 'contributor_role' => 'staff',
                 'source_type' => 'historical', 'status' => 'unverified', 'visibility' => 'public',
             ]);

@@ -20,7 +20,7 @@ class SaleLotController extends Controller
         $q = trim((string) $request->query('q'));
         $lots = SaleLot::with(['source', 'horse'])
             ->when($status === 'matched', fn ($w) => $w->whereNotNull('horse_id'), fn ($w) => $status === 'unmatched'
-                ? $w->whereNull('horse_id')->whereNull('review_status')->whereIn('status', ['sold', 'high_bid', 'no_sale'])
+                ? $w->whereNull('horse_id')->whereNull('review_status')->whereIn('status', ['sold', 'high_bid', 'no_sale', 'offered'])
                 : $w->whereNull('horse_id')->where('review_status', $status))
             ->when($q !== '', fn ($w) => $w->where('name_key', 'like', '%'.ShowRecord::key($q).'%'))
             ->orderByDesc('sale_date')->paginate(50)->withQueryString();

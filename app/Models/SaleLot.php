@@ -28,6 +28,8 @@ class SaleLot extends Model
             'sold' => 'reported_sale',
             'high_bid' => 'high_bid',
             'no_sale' => 'no_sale',
+            'asking' => 'asking',
+            'offered' => 'offered', // catalogued and offered; the sale published no price for it
             default => null, // catalog, withdrawn: nothing to put on a record
         };
     }
