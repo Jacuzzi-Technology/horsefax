@@ -9,12 +9,12 @@
             <p class="mt-6 text-[20px] sm:text-[24px] text-cream/80 max-w-[30em] leading-snug">Look up a horse's history: registration, pedigree, show results and sale records, brought together in one place, with every fact labeled by where it came from.</p>
 
             <form action="{{ route('search') }}" method="GET" class="mt-10 max-w-[720px]" role="search">
-                <label for="hero-name" class="block font-sans text-[11px] font-semibold tracking-[0.2em] uppercase text-cream/70 mb-2">Find a horse by registered name or barn name</label>
+                <label for="hero-name" class="block font-sans text-[11px] font-semibold tracking-[0.2em] uppercase text-cream/70 mb-2">Find a horse by name, registration number or microchip</label>
                 <div class="flex flex-col sm:flex-row gap-2 bg-cream/95 p-2 rounded-[3px] shadow-2xl shadow-black/20">
-                    <div class="relative flex-1"><input id="hero-name" name="name" type="search" required minlength="2" placeholder="e.g. Juniper Creek Lark, or Lark" data-suggest="{{ route('search.suggest') }}" class="w-full bg-white rounded-[2px] px-4 py-3 text-[19px] text-charcoal placeholder:text-muted/80 focus:outline-none"></div>
+                    <div class="relative flex-1"><input id="hero-name" name="name" type="search" required minlength="2" placeholder="Name, registration # or microchip #" data-suggest="{{ route('search.suggest') }}" class="w-full bg-white rounded-[2px] px-4 py-3 text-[19px] text-charcoal placeholder:text-muted/80 focus:outline-none"></div>
                     <button class="btn-gold">Search Horses</button>
                 </div>
-                <p class="font-sans text-[12px] text-cream/60 mt-2">Have a registration or microchip number? You can add it on the next step to narrow the results.</p>
+                <p class="font-sans text-[12px] text-cream/60 mt-2">Registration and microchip numbers must match exactly. Microchip numbers are never shown on records.</p>
                 <p class="font-sans text-[13px] text-gold-soft mt-3">Full records are free with an account during our introductory launch.</p>
             </form>
             <div class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">

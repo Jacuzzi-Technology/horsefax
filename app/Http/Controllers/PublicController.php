@@ -124,6 +124,20 @@ class PublicController extends Controller
         if (isset($c['name']) && ($direct = \App\Support\HorseSearch::byHorsefaxId($c['name']))) {
             return redirect()->route('horse.public', $direct);
         }
+        // One box for everything (Richard, Oct 19 2026): a registration or microchip number typed where the name goes
+        // finds the horse by that number (exact match only); if no horse has it, the text is searched as a name.
+        if (isset($c['name']) && count($c) === 1 && strlen(preg_replace('/\D/', '', $c['name'])) >= 5) {
+            $number = \App\Support\Record::normalizeIdentifier($c['name']);
+            $ids = strlen($number) >= 5 && strlen($number) <= 23 ? \App\Models\HorseIdentifier::whereIn('kind', ['registration', 'microchip'])->whereNull('superseded_by')
+                ->where('value_normalized', $number)->pluck('horse_id')->unique() : collect();
+            $found = $ids->isEmpty() ? collect() : Horse::whereIn('id', $ids)->whereNull('merged_into_id')->where(fn ($w) => $w->where('listed', true)->orWhere('public_summary', true))->get();
+            if ($found->count() === 1) {
+                return redirect()->route('horse.public', $found->first());
+            }
+            if ($found->count() > 1) {
+                return view('public.search', ['c' => $c, 'count' => $found->count(), 'results' => $found->load('pedigree'), 'started' => true, 'showRecords' => collect()]);
+            }
+        }
         $count = 0;
         $results = collect();
         if (\App\Support\HorseSearch::hasStart($c)) {
