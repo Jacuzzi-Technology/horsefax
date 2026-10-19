@@ -43,7 +43,17 @@ class AdminController extends Controller
         };
         $others = HorseIdentifier::whereIn('id', $item->details['other_identifier_ids'] ?? [])->with('horse')->get();
 
+        // Claim evidence at a glance: registration-number match, seller confirmation, the claimant's identity check,
+        // the claim code behind it, and any evidence file already used in another claim.
+        $claim = $item->kind === 'ownership_claim' ? [
+            'confirmations' => \App\Models\ClaimConfirmation::where('review_item_id', $item->id)->get(),
+            'code' => isset($item->details['claim_code_id']) ? \App\Models\ClaimCode::find($item->details['claim_code_id']) : null,
+            'reused' => $documents->isEmpty() ? collect() : Document::whereIn('sha256', $documents->pluck('sha256'))->whereNotIn('id', $documents->pluck('id'))->with('horse')->get(),
+        ] : null;
+        $identity = $item->kind === 'identity_check' ? \App\Models\IdentityCheck::find($item->subject_id) : null;
+
         return view('admin.review', [
+            'claim' => $claim, 'identity' => $identity,
             'item' => $item->load(['horse', 'submitter', 'resolver']),
             'documents' => $documents,
             'subject' => $subject,
@@ -55,7 +65,7 @@ class AdminController extends Controller
     public function approve(Request $request, ReviewItem $item, Reviews $reviews)
     {
         abort_unless($item->status === 'open', 409);
-        $data = $request->validate(['note' => 'required|string|max:2000', 'end_current_owner' => 'nullable|boolean', 'outcome' => 'nullable|in:both_stand,new_is_wrong']);
+        $data = $request->validate(['note' => 'required|string|max:2000', 'end_current_owner' => 'nullable|boolean', 'outcome' => 'nullable|in:both_stand,new_is_wrong', 'method' => 'nullable|in:id_document,video_call,third_party']);
         $reviews->approve($item, $request->user(), $data['note'], $data);
 
         return redirect()->route('admin.queue')->with('status', 'Approved and recorded.');

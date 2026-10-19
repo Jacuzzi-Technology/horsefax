@@ -11,6 +11,7 @@ class ReviewItem extends Model
     use HasUuids;
 
     public const KINDS = [
+        'identity_check' => 'Identity check',
         'ownership_claim' => 'Ownership claim',
         'identifier_conflict' => 'Identifier conflict',
         'dispute' => 'Correction / dispute',

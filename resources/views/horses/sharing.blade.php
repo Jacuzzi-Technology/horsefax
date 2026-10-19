@@ -12,6 +12,15 @@
             </div>
         @endif
 
+        <section class="card p-6 flex gap-5 items-start">
+            <img src="{{ route('horse.qr', [$horse, 'svg']) }}" alt="QR code for this horse's record" class="w-[120px] h-[120px]">
+            <div>
+                <h2 class="text-[24px]">QR code</h2>
+                <p class="mt-2 text-[17px]">Opens this horse's Horsefax record. Put it on a sale ad, stall card or papers. Visitors see the public record.</p>
+                <p class="font-sans text-[13px] mt-3"><a href="{{ route('horse.qr', [$horse, 'svg']) }}?download=1" class="text-gold-dark">Download SVG (for print)</a> · <a href="{{ route('horse.qr', [$horse, 'png']) }}?download=1" class="text-gold-dark">Download PNG</a></p>
+            </div>
+        </section>
+
         <section class="card p-6">
             <h2 class="text-[24px]">Search listing and public summary</h2>
             <form method="POST" action="{{ route('sharing.public', $horse) }}" class="mt-4 space-y-3">

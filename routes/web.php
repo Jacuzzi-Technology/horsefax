@@ -28,10 +28,18 @@ Route::get('/robots.txt', [PublicController::class, 'robots']);
 Route::get('/sitemap.xml', [PublicController::class, 'sitemap']);
 Route::get('/show-records/{record}', [\App\Http\Controllers\ShowRecordController::class, 'show'])->name('show-records.show');
 Route::get('/files/{document}', [FileController::class, 'show'])->middleware('throttle:files')->name('files.show');
+// QR codes with the HF mark, for catalogs and stall cards; and the seller's confirm-or-deny link for a claim.
+Route::get('/horse/{horse}/qr.{format}', [\App\Http\Controllers\QrController::class, 'horse'])->whereIn('format', ['svg', 'png'])->middleware('throttle:files')->name('horse.qr');
+Route::get('/claims/confirm/{token}', [\App\Http\Controllers\ClaimConfirmationController::class, 'show'])->name('claims.confirm');
+Route::post('/claims/confirm/{token}', [\App\Http\Controllers\ClaimConfirmationController::class, 'respond'])->middleware('throttle:forms')->name('claims.confirm.respond');
 
 // Signed in
 Route::middleware(['auth', 'standing'])->group(function () {
     Route::get('/dashboard', [AccountController::class, 'dashboard'])->name('dashboard');
+    Route::get('/claim', [\App\Http\Controllers\ClaimCodeController::class, 'form'])->name('claim-code.form');
+    Route::post('/claim', [\App\Http\Controllers\ClaimCodeController::class, 'redeem'])->middleware('throttle:forms')->name('claim-code.redeem');
+    Route::get('/account/identity', [\App\Http\Controllers\IdentityController::class, 'form'])->name('identity');
+    Route::post('/account/identity', [\App\Http\Controllers\IdentityController::class, 'submit'])->middleware('throttle:uploads')->name('identity.submit');
     Route::get('/account', [AccountController::class, 'account'])->name('account');
 
     Route::get('/horses/new', [HorseController::class, 'create'])->name('horses.create');
@@ -90,6 +98,13 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');
     Route::get('/show-records', [AdminController::class, 'showRecords'])->name('show-records');
     Route::post('/show-records/{record}/attach', [AdminController::class, 'attachResults'])->name('show-records.attach');
+    Route::post('/horses/{horse}/claim-codes', [\App\Http\Controllers\ClaimCodeController::class, 'issue'])->name('claim-codes.issue');
+    Route::get('/claim-codes/{code}', [\App\Http\Controllers\ClaimCodeController::class, 'certificate'])->name('claim-codes.certificate');
+    Route::get('/claim-codes/{code}/qr.svg', [\App\Http\Controllers\ClaimCodeController::class, 'qr'])->name('claim-codes.qr');
+    Route::post('/claim-codes/{code}/revoke', [\App\Http\Controllers\ClaimCodeController::class, 'revoke'])->name('claim-codes.revoke');
+    Route::get('/identity/{check}/document', [\App\Http\Controllers\IdentityController::class, 'document'])->name('identity.document');
+    Route::get('/qr', [\App\Http\Controllers\QrController::class, 'batchForm'])->name('qr');
+    Route::post('/qr', [\App\Http\Controllers\QrController::class, 'batch'])->name('qr.batch');
     Route::get('/sale-lots', [\App\Http\Controllers\Admin\SaleLotController::class, 'index'])->name('sale-lots');
     Route::get('/names', [\App\Http\Controllers\Admin\NameReviewController::class, 'index'])->name('names');
     Route::post('/names/{review}', [\App\Http\Controllers\Admin\NameReviewController::class, 'decide'])->name('names.decide');

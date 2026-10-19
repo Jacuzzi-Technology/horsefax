@@ -14,6 +14,18 @@
         </section>
 
         <section class="card p-6">
+            <h2 class="text-[24px]">Identity</h2>
+            @if ($user->identity_verified_at)
+                <p class="mt-2 text-[17px]">Verified as {{ $user->identity_verified_name }} on {{ $user->identity_verified_at->format('M j, Y') }}. Never shown publicly.</p>
+            @elseif (\App\Models\IdentityCheck::where('user_id', $user->id)->where('status', 'pending')->exists())
+                <p class="mt-2 text-[17px]">Your ID is with Horsefax staff.</p>
+            @else
+                <p class="mt-2 text-[17px]">Verifying your identity strengthens ownership claims. It's checked by staff and never shown publicly.</p>
+                <a href="{{ route('identity') }}" class="btn-forest btn-small mt-3">Verify your identity</a>
+            @endif
+        </section>
+
+        <section class="card p-6">
             <h2 class="text-[24px]">Password</h2>
             <form method="POST" action="{{ route('user-password.update') }}" class="mt-4 space-y-4">
                 @csrf @method('PUT')
