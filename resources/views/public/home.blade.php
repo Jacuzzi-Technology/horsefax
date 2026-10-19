@@ -162,11 +162,11 @@
             <div class="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-line border border-line">
                 @foreach ([
                     ['Identity', 'Registered and barn names, registration numbers, microchips (masked), markings, pedigree and photos.'],
-                    ['Health', 'Vet visits, vaccinations, Coggins and health certificates. Private by default, shared only when you say so.'],
+                    ['Health history', 'Coggins tests, exams, vaccinations and treatments, year after year, become the horse\'s documented health history, each labeled by who recorded it. The owner decides what of it is shared.'],
                     ['Training', 'Trainers, programs and skills, with temperament notes kept as dated, attributed observations.'],
                     ['Performance', 'Shows, classes, placings and awards, with participant claims kept apart from official results.'],
                     ['Ownership', 'Dated stewardship from breeder onward. Transfers need the new owner to accept, and history stays attributed.'],
-                    ['Documents', 'Original papers kept as evidence, with checksums, and never edited. Readers see what exists, not your files.'],
+                    ['Documents', 'Registration papers, bills of sale and certificates kept as the evidence behind the facts they support: checksummed, never edited, and with the horse for life.'],
                 ] as [$h, $p])
                     <div class="bg-paper p-7">
                         <h3 class="text-[23px]">{{ $h }}</h3>
@@ -183,7 +183,7 @@
             <div>
                 <p class="label text-gold-soft">Built with the people who know the horse</p>
                 <h2 class="text-cream text-[34px] sm:text-[44px] leading-[1.1] mt-4">Owners, breeders, vets, farriers and trainers, each credited for what they add.</h2>
-                <p class="mt-5 text-[19px] text-cream/80 leading-relaxed">Owners decide who can see the record. Contributions stay attributed to whoever made them, so a record can't be quietly rewritten to look cleaner.</p>
+                <p class="mt-5 text-[19px] text-cream/80 leading-relaxed">Owners decide what of their own contributions is shared. Contributions stay attributed to whoever made them, so a record can't be quietly rewritten to look cleaner.</p>
                 <div class="mt-8 flex flex-wrap gap-3">
                     <a href="{{ route('for-owners') }}" class="btn-gold">For owners</a>
                     <a href="{{ route('for-professionals') }}" class="btn-ghost-light">For professionals</a>

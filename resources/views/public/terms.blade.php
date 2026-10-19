@@ -21,7 +21,7 @@
         </ul>
 
         <h2>4. Sharing and transfers</h2>
-        <p>You control what is shared through public summaries and report links. Anyone you give a report link to can see what it includes until it expires or you revoke it, and may have copied what they saw. When a horse changes hands, the record transfers to the new owner, while history stays attributed to whoever contributed it.</p>
+        <p>You control how the information you add is shared, through public summaries and report links; history Horsefax compiles from published sources is shown with its source. Anyone you give a report link to can see what it includes until it expires or you revoke it, and may have copied what they saw. When a horse changes hands, the record transfers to the new owner, while history stays attributed to whoever contributed it.</p>
 
         <h2>5. Acceptable use and use of Horsefax information</h2>
         <p>Do not misuse the Service. In particular, do not access records or accounts you are not authorized to see, probe, scan or test the Service's security, or harvest anyone's personal information.</p>

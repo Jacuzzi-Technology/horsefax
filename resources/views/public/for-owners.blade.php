@@ -29,7 +29,7 @@
 
             <div class="mt-16 pt-10 border-t border-line grid sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-7">
                 @foreach ([
-                    ['Documents as evidence', 'Registration papers and other documents are kept, unedited, as the evidence behind the facts they support.'],
+                    ['Health and documents over time', 'Coggins tests, exams, registration papers and bills of sale accumulate year after year into the horse\'s documented history, kept unedited as evidence.'],
                     ['Every fact labeled', 'Owner reported, professional attested, official source or Horsefax Verified: readers see exactly what stands behind each entry.'],
                     ['Your privacy kept', 'Report readers never see your name, contact details or address. Ownership history shows when it changed, not who owned the horse.'],
                     ['Pedigree and offspring', 'When a sire or dam is also on Horsefax, records link across generations and offspring appear automatically.'],

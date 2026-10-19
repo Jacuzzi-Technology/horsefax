@@ -15,7 +15,7 @@
             <p>Every record gets a permanent <strong>Horsefax ID</strong> (for example HF-7K3M-Q9P2). It stays with the horse for life and is never reused.</p>
 
             <h2 id="verification">2. Add evidence, and see how each fact is known</h2>
-            <p>Upload registration papers, Coggins tests, health certificates, vet and farrier records, show results and bills of sale. Originals are stored as evidence and never edited. Every fact on a record shows two separate things.</p>
+            <p>Add the documents that belong in the horse's history: registration papers, bills of sale, show results, and health records such as Coggins tests and certificates over the years. Originals are kept as evidence and never edited, and they stay with the horse's record whoever owns it. Every fact on a record shows two separate things.</p>
             <h3>Where it came from</h3>
             <ul>
                 <li><strong>Owner reported</strong>: entered by the owner or their authorized representative.</li>

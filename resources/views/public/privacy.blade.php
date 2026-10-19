@@ -22,7 +22,7 @@
 
         <h2>What other people can see</h2>
         <ul>
-            <li>Records are <strong>private by default</strong>. Only you, other people you make stewards of the record, and Horsefax staff can see private items.</li>
+            <li>Items you add are <strong>private by default</strong>. Only you, other people you make stewards of the record, and Horsefax staff can see private items.</li>
             <li>If you turn on a <strong>public summary</strong>, items you mark Public appear on it and in Horsefax search.</li>
             <li>If you create a <strong>report link</strong>, anyone with the link can see the items marked Shared or Public in the sections you chose, until the link expires or you revoke it.</li>
             <li>Public summaries and reports never show your name, email, address or other contact details, the identities of previous owners, or your original document files. Microchip numbers are masked.</li>
