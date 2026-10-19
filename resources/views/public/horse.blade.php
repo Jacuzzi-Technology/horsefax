@@ -264,6 +264,27 @@
                 </section>
             @endif
 
+            {{-- Radiographs: shown when the owner has opened them to buyers (or this report link includes them). --}}
+            @php
+                $radSets = $sample ? collect() : \App\Models\RadiographSet::where('horse_id', $horse->id)->withCount('files')
+                    ->when($isReport, fn ($q) => $q->where('in_reports', true), fn ($q) => $q->where('access', '!=', 'private'))->orderByDesc('taken_on')->get()
+                    ->filter(fn ($s) => $s->files_count && ($isReport ? $link->includes('health') : true));
+            @endphp
+            @if ($radSets->isNotEmpty())
+                <section aria-labelledby="h-rads">
+                    <h2 id="h-rads" class="text-[28px] border-b border-line pb-2">Radiographs</h2>
+                    <ul class="mt-4 divide-y divide-line border-y border-line">
+                        @foreach ($radSets as $s)
+                            <li class="py-3 flex flex-wrap justify-between gap-3 items-center">
+                                <div><p class="text-[18px]">{{ $s->title() }}</p><p class="font-sans text-[13px] text-muted">{{ $s->attribution() }} · {{ $s->files_count }} {{ Str::plural('file', $s->files_count) }} · {{ $s->source_type === 'professional_attested' ? 'added by the veterinarian' : 'supplied by the owner' }}</p></div>
+                                <a href="{{ route('radiographs.view', [$horse, $s] + $q) }}" class="btn-ghost btn-small print:hidden">{{ $s->viewableBy(auth()->user(), $link) ? 'View radiographs' : ($s->access === 'on_request' ? 'Request access' : 'View radiographs') }}</a>
+                            </li>
+                        @endforeach
+                    </ul>
+                    <p class="hint mt-2">Shared by the owner for buyers. Horsefax doesn't interpret radiographs; have your own veterinarian review them.</p>
+                </section>
+            @endif
+
             {{-- Media --}}
             @if ($media->isNotEmpty())
                 <section aria-labelledby="h-media">

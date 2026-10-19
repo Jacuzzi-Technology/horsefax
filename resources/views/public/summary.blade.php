@@ -13,6 +13,7 @@
         $counts['pedigree'] ? 'pedigree' : null,
         $counts['photos'] ? $counts['photos'].' '.Str::plural('photo', $counts['photos']) : null,
         $counts['videos'] ? $counts['videos'].' '.Str::plural('video', $counts['videos']) : null,
+        ! empty($counts['radiographs']) ? 'radiographs' : null,
     ])->filter();
 @endphp
 <x-layouts.site :title="$horse->displayName()" :canonical="route('horse.public', $horse)"

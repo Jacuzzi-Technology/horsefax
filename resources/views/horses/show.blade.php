@@ -29,6 +29,8 @@
             @foreach ($tabs as $k => $label)
                 <a href="{{ route('horses.show', ['horse' => $horse, 'tab' => $k]) }}" class="shrink-0 px-4 py-3 font-sans text-[11.5px] font-semibold tracking-[0.12em] uppercase no-underline rounded-t-[3px] {{ $tab === $k ? 'bg-cream text-ink' : 'text-cream/75 hover:text-cream' }}" @if ($tab === $k) aria-current="page" @endif>{{ $label }}</a>
             @endforeach
+            @php $radPending = \App\Models\RadiographAccess::whereIn('radiograph_set_id', \App\Models\RadiographSet::where('horse_id', $horse->id)->select('id'))->where('status', 'requested')->count(); @endphp
+            <a href="{{ route('radiographs.index', $horse) }}" class="shrink-0 px-4 py-3 font-sans text-[11.5px] font-semibold tracking-[0.12em] uppercase no-underline rounded-t-[3px] text-cream/75 hover:text-cream">Radiographs {!! $radPending ? '<span class="text-gold-soft">('.$radPending.')</span>' : '' !!}</a>
         </nav>
     </section>
 

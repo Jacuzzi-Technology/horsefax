@@ -33,6 +33,9 @@ Route::get('/show-records/{record}', [\App\Http\Controllers\ShowRecordController
 Route::get('/files/{document}', [FileController::class, 'show'])->middleware('throttle:files')->name('files.show');
 // QR codes with the HF mark, for catalogs and stall cards; and the seller's confirm-or-deny link for a claim.
 Route::get('/horse/{horse}/qr.{format}', [\App\Http\Controllers\QrController::class, 'horse'])->whereIn('format', ['svg', 'png'])->middleware('throttle:files')->name('horse.qr');
+// Radiographs: buyers view (when the owner allows) and open files; the request needs an account.
+Route::get('/horse/{horse}/radiographs/{set}', [\App\Http\Controllers\RadiographController::class, 'view'])->name('radiographs.view');
+Route::get('/horse/{horse}/radiographs/{set}/files/{file}', [\App\Http\Controllers\RadiographController::class, 'file'])->middleware('throttle:files')->name('radiographs.file');
 Route::get('/claims/confirm/{token}', [\App\Http\Controllers\ClaimConfirmationController::class, 'show'])->name('claims.confirm');
 Route::post('/claims/confirm/{token}', [\App\Http\Controllers\ClaimConfirmationController::class, 'respond'])->middleware('throttle:forms')->name('claims.confirm.respond');
 
@@ -40,6 +43,13 @@ Route::post('/claims/confirm/{token}', [\App\Http\Controllers\ClaimConfirmationC
 Route::middleware(['auth', 'standing'])->group(function () {
     Route::get('/dashboard', [AccountController::class, 'dashboard'])->name('dashboard');
     Route::get('/claim', [\App\Http\Controllers\ClaimCodeController::class, 'form'])->name('claim-code.form');
+    Route::get('/horses/{horse}/radiographs', [\App\Http\Controllers\RadiographController::class, 'index'])->name('radiographs.index');
+    Route::post('/horses/{horse}/radiographs', [\App\Http\Controllers\RadiographController::class, 'store'])->middleware('throttle:forms')->name('radiographs.store');
+    Route::get('/horses/{horse}/radiographs/{set}', [\App\Http\Controllers\RadiographController::class, 'manage'])->name('radiographs.manage');
+    Route::post('/horses/{horse}/radiographs/{set}/files', [\App\Http\Controllers\RadiographController::class, 'upload'])->middleware('throttle:radiograph-uploads')->name('radiographs.upload');
+    Route::post('/horses/{horse}/radiographs/{set}/access', [\App\Http\Controllers\RadiographController::class, 'updateAccess'])->name('radiographs.access');
+    Route::post('/horses/{horse}/radiographs/{set}/requests/{access}', [\App\Http\Controllers\RadiographController::class, 'decide'])->name('radiographs.decide');
+    Route::post('/horse/{horse}/radiographs/{set}/request', [\App\Http\Controllers\RadiographController::class, 'requestAccess'])->middleware('throttle:forms')->name('radiographs.request');
     Route::post('/claim', [\App\Http\Controllers\ClaimCodeController::class, 'redeem'])->middleware('throttle:forms')->name('claim-code.redeem');
     Route::get('/account/identity', [\App\Http\Controllers\IdentityController::class, 'form'])->name('identity');
     Route::post('/account/identity', [\App\Http\Controllers\IdentityController::class, 'submit'])->middleware('throttle:uploads')->name('identity.submit');

@@ -26,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
         $key = fn (Request $r) => $r->user()?->id ?: $r->ip();
         RateLimiter::for('search', fn (Request $r) => Limit::perMinute($r->user() ? 60 : 20)->by($key($r)));
         RateLimiter::for('suggest', fn (Request $r) => Limit::perMinute(120)->by($key($r)));
+        RateLimiter::for('radiograph-uploads', fn (Request $r) => Limit::perMinute(120)->by($r->user()?->id ?: $r->ip())); // one request per file, sets run to dozens of files
         RateLimiter::for('reports', fn (Request $r) => Limit::perMinute(30)->by($r->ip()));
         RateLimiter::for('forms', fn (Request $r) => Limit::perMinute(6)->by($key($r)));
         RateLimiter::for('uploads', fn (Request $r) => Limit::perMinute(30)->by($key($r)));

@@ -186,6 +186,7 @@ class PublicController extends Controller
                 'pedigree' => Views::pedigree($horse, 'public')->isNotEmpty(),
                 'photos' => ($media = Views::media($horse, 'public'))->where('kind', 'photo')->count(),
                 'videos' => $media->whereIn('kind', ['video', 'video_link'])->count(),
+                'radiographs' => \App\Models\RadiographSet::where('horse_id', $horse->id)->where('access', '!=', 'private')->has('files')->count(),
             ]]);
         }
 
