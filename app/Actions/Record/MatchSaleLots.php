@@ -39,8 +39,10 @@ class MatchSaleLots
         $system = BuildRecordsFromResults::system();
         $attach = app(AttachSaleLot::class);
         $out = ['attached' => 0, 'held' => 0, 'queued' => 0, 'conflict' => 0, 'unmatched' => 0];
-        // Lots already tied to a record (HOMD asking prices) but held: attach once their kind is published.
-        SaleLot::whereNotNull('horse_id')->whereNull('horse_event_id')->where('review_status', 'held')->with('horse')->lazyById(500, 'id')
+        // Lots already tied to a record but with nothing on it yet: held kinds (HOMD asking prices) once they're published,
+        // and catalog lots once the sale publishes their result.
+        SaleLot::whereNotNull('horse_id')->whereNull('horse_event_id')->where(fn ($w) => $w->where('review_status', 'held')->orWhereNull('review_status'))
+            ->where('status', '!=', 'catalog')->with('horse')->lazyById(500, 'id')
             ->each(function ($lot) use ($attach, $system, &$out) {
                 if ($lot->horse && $lot->publishable() && $attach($lot, $lot->horse, $system, $lot->match_tier ?? 'staff')) {
                     $out['attached']++;

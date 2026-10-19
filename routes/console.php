@@ -219,3 +219,8 @@ Artisan::command('hf:harvest-billings {--no-archive} {--delay=3} {--max-files=}'
         ->run(! $this->option('no-archive'), $this->option('max-files') ? (int) $this->option('max-files') : null);
     $this->info('Billings: '.json_encode($out));
 })->purpose('Collect Billings Livestock horse-sale catalogs and Top lists into the sale-lots index');
+
+Artisan::command('hf:create-sale-records {source} {--dry-run}', function (string $source) {
+    $out = app(\App\Actions\Record\CreateRecordsFromSaleLots::class)($source, (bool) $this->option('dry-run'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+    $this->info(($this->option('dry-run') ? 'Dry run (nothing saved): ' : '').json_encode($out));
+})->purpose('Create records for a sale source\'s identified horses that no record matches, with their sale entries');
