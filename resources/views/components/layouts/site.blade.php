@@ -29,6 +29,7 @@
             <a href="{{ route('how-it-works') }}" class="no-underline hover:text-gold-soft">How It Works</a>
             <a href="{{ route('for-owners') }}" class="no-underline hover:text-gold-soft">For Owners</a>
             <a href="{{ route('for-professionals') }}" class="no-underline hover:text-gold-soft">For Professionals</a>
+            <a href="{{ route('partners') }}" class="no-underline hover:text-gold-soft">Partners</a>
         </nav>
         <div class="flex items-center gap-4 whitespace-nowrap">
             @auth
@@ -46,6 +47,7 @@
                     <a href="{{ route('how-it-works') }}" class="no-underline">How It Works</a>
                     <a href="{{ route('for-owners') }}" class="no-underline">For Owners</a>
                     <a href="{{ route('for-professionals') }}" class="no-underline">For Professionals</a>
+                    <a href="{{ route('partners') }}" class="no-underline">Partners</a>
                     @auth
                         <a href="{{ route('account') }}" class="no-underline">Account</a>
                         <form method="POST" action="{{ route('logout') }}">@csrf<button class="uppercase tracking-[0.14em] cursor-pointer">Sign out</button></form>
@@ -82,6 +84,7 @@
             <p class="label text-gold-soft text-[10px]">For</p>
             <a href="{{ route('for-owners') }}" class="block no-underline hover:text-cream">Owners & breeders</a>
             <a href="{{ route('for-professionals') }}" class="block no-underline hover:text-cream">Vets, farriers & trainers</a>
+            <a href="{{ route('partners') }}" class="block no-underline hover:text-cream">Partners & affiliates</a>
             <a href="{{ route('register') }}" class="block no-underline hover:text-cream">Create a record</a>
         </div>
         <div class="font-sans text-[13px] space-y-2.5">

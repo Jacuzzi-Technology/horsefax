@@ -1,5 +1,5 @@
 <x-layouts.site title="Contact" description="Contact the Horsefax team.">
-    <x-page-header eyebrow="Contact" title="Talk to the Horsefax team." />
+    <x-page-header eyebrow="Contact" title="Talk to the Horsefax team." lede="For data or affiliate partnerships, use the inquiry form on our Partners page." />
     <div class="wrap py-14 max-w-[720px]">
         <form method="POST" action="{{ route('contact.send') }}" class="card p-6 sm:p-8 space-y-5">
             @csrf
@@ -11,7 +11,7 @@
             <div>
                 <label class="field-label" for="topic">Topic</label>
                 <select id="topic" name="topic" class="field">
-                    @foreach (['general' => 'General question', 'records' => 'Help with a record', 'corrections' => 'A correction or dispute', 'professionals' => 'Professional contributors', 'press' => 'Press or partnership', 'privacy' => 'Privacy request'] as $k => $v)
+                    @foreach (['general' => 'General question', 'records' => 'Help with a record', 'corrections' => 'A correction or dispute', 'professionals' => 'Professional contributors', 'press' => 'Press', 'privacy' => 'Privacy request'] as $k => $v)
                         <option value="{{ $k }}" @selected(old('topic') === $k)>{{ $v }}</option>
                     @endforeach
                 </select>

@@ -257,6 +257,47 @@ class PublicController extends Controller
         return redirect()->route('contact')->with('status', 'Thank you. Your message reached the Horsefax team (reference #'.$message->id.').');
     }
 
+    /**
+     * Partnership inquiries from the Partners page: into the same staff inbox as contact messages, with the
+     * organization's details kept alongside.
+     */
+    public function sendPartnerInquiry(Request $request)
+    {
+        if ($request->filled('website_url')) { // honeypot
+            return redirect()->route('partners')->with('status', 'Thank you. We will be in touch.');
+        }
+        $data = $request->validate([
+            'organization' => 'required|string|max:200',
+            'name' => 'required|string|max:120',
+            'email' => 'required|email|max:200',
+            'website' => 'nullable|string|max:300',
+            'interest' => 'required|in:'.implode(',', array_keys(self::PARTNER_INTERESTS)),
+            'record_count' => 'nullable|string|max:60',
+            'message' => 'required|string|max:5000',
+        ]);
+        $details = array_filter([
+            'organization' => $data['organization'],
+            'website' => $data['website'] ?? null,
+            'interest' => self::PARTNER_INTERESTS[$data['interest']],
+            'records' => $data['record_count'] ?? null,
+        ]);
+        $message = ContactMessage::create([
+            'name' => $data['name'], 'email' => $data['email'], 'topic' => 'partnership',
+            'message' => $data['message'], 'details' => $details,
+        ]);
+        Notify::staff('New Horsefax partnership inquiry: '.$data['organization'],
+            collect($details)->map(fn ($v, $k) => ucfirst($k).': '.$v)->join("\n")."\nFrom: {$data['name']} <{$data['email']}>\n\n{$data['message']}");
+
+        return redirect()->route('partners')->with('status', 'Thank you. Your inquiry reached the Horsefax team (reference #'.$message->id.').');
+    }
+
+    public const PARTNER_INTERESTS = [
+        'records' => 'Contribute historical records',
+        'reports' => 'Offer Horsefax reports to customers',
+        'both' => 'Both / integrated partnership',
+        'unsure' => 'Not sure yet',
+    ];
+
     /** Anyone can ask for a correction. It goes to staff; nothing on the record changes until they rule on it. */
     public function reportCorrection(Request $request, Horse $horse)
     {
@@ -313,7 +354,7 @@ class PublicController extends Controller
 
     public function sitemap()
     {
-        $pages = ['/', '/how-it-works', '/for-owners', '/for-professionals', '/sample-report', '/about', '/contact', '/record-corrections', '/privacy', '/terms'];
+        $pages = ['/', '/how-it-works', '/for-owners', '/for-professionals', '/partners', '/sample-report', '/about', '/contact', '/record-corrections', '/privacy', '/terms'];
         $horses = Horse::where('public_summary', true)->orderBy('updated_at', 'desc')->limit(5000)->get(['horsefax_id', 'updated_at']);
         $showRecords = \App\Models\ShowRecord::whereNull('horse_id')->orderByDesc('appearances')->limit(40000)->get(['id', 'updated_at']);
 

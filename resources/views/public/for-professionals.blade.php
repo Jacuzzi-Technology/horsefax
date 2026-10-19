@@ -25,6 +25,6 @@
         </ul>
         <h2>Working with Horsefax</h2>
         <p>Owners can invite their veterinarian, farrier, trainer or breeder to contribute in their own name today. For registries, associations, sale companies and veterinary software providers, we're building data partnerships so records arrive directly from their source, with the owner's permission where it's required.</p>
-        <p>To talk about contributing or partnering, <a href="{{ route('contact') }}">get in touch</a>.</p>
+        <p>Registries, associations, sale companies and breeders can read about <a href="{{ route('partners') }}">partnering with Horsefax</a> and send a partnership inquiry. Individual professionals can <a href="{{ route('contact') }}">get in touch</a>.</p>
     </div>
 </x-layouts.site>

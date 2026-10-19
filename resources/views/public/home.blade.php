@@ -32,6 +32,7 @@
                 <h2 class="text-[34px] sm:text-[44px] leading-[1.1] mt-4">Horse history that has been scattered, brought together.</h2>
                 <p class="mt-5 text-[19px] leading-relaxed max-w-[32em]">A horse's story is spread across registries, show associations, sale companies and owners' files. Horsefax gathers what has been published into one record per horse, and adds more every day as new sources and new results come in.</p>
                 <p class="mt-4 text-[17px] leading-relaxed text-charcoal/85 max-w-[34em]">Some horses already have years of results and sales on file; others have only a few entries so far. Records grow as we add sources and as owners and professionals contribute. A missing record never means nothing happened.</p>
+                <p class="mt-4 font-sans text-[14px]">Keep records of your own? <a href="{{ route('partners') }}" class="text-gold-dark">Partner with Horsefax</a></p>
             </div>
             <dl class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-px bg-line border border-line">
                 @foreach ([
@@ -187,10 +188,11 @@
                 <div class="mt-8 flex flex-wrap gap-3">
                     <a href="{{ route('for-owners') }}" class="btn-gold">For owners</a>
                     <a href="{{ route('for-professionals') }}" class="btn-ghost-light">For professionals</a>
+                    <a href="{{ route('partners') }}" class="btn-ghost-light">Partners</a>
                 </div>
             </div>
             <ul class="grid grid-cols-2 gap-3 font-sans text-[13px] font-semibold tracking-[0.12em] uppercase">
-                @foreach (['Owners', 'Breeders', 'Veterinarians', 'Farriers', 'Trainers', 'Registries (future partners)'] as $who)
+                @foreach (['Owners', 'Breeders', 'Veterinarians', 'Farriers', 'Trainers', 'Registries & sale companies'] as $who)
                     <li class="border border-cream/15 rounded-[3px] px-4 py-4 flex items-center gap-3"><span class="w-1.5 h-1.5 bg-gold rotate-45 shrink-0"></span>{{ $who }}</li>
                 @endforeach
             </ul>
