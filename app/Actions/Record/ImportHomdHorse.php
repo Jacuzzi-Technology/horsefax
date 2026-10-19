@@ -197,7 +197,7 @@ class ImportHomdHorse
         }
         HorseEvent::create([
             'horse_id' => $horse->id, 'category' => 'ownership', 'type' => 'sale',
-            'title' => $d['sold'] ? 'Sold by Horse of My Dreams' : 'Listed for sale by Horse of My Dreams',
+            'title' => $d['sold'] ? 'Reported sold by Horse of My Dreams' : 'Listed for sale by Horse of My Dreams', // Kate: listed / reported sold / confirmed sale
             'sale_venue' => 'Horse of My Dreams', 'occurred_on' => $d['listed_on'], 'date_precision' => 'month',
             'details' => (str_starts_with($d['url'], 'http') ? 'From the published listing: '.$d['url'] : 'From an archived Horse of My Dreams listing (earlier version of the website, no longer online).')
                 ."\nDate shown is when the listing was posted.",

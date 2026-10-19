@@ -1,4 +1,4 @@
-@props(['title' => null, 'description' => 'Horsefax keeps a lasting, evidence-backed record of a horse\'s identity and history, shared only the way its owner chooses.', 'robots' => null, 'canonical' => null])
+@props(['title' => null, 'description' => 'Horsefax brings a horse\'s history together in one record: registration, pedigree, competition, sales and ownership, with every fact labeled by where it came from.', 'robots' => null, 'canonical' => null])
 <!doctype html>
 <html lang="en">
 <head>
@@ -69,7 +69,7 @@
         <div>
             <img src="/img/wordmark-reverse.svg" alt="Horsefax" class="w-[180px] h-auto">
             <p class="label text-[9.5px] tracking-[0.3em] text-cream/75 mt-3">Because Every Horse Has A History.™</p>
-            <p class="mt-6 text-[16px] text-cream/70 max-w-[22em]">A lasting record of identity, care and accomplishment, shared only the way its owner chooses.</p>
+            <p class="mt-6 text-[16px] text-cream/70 max-w-[22em]">Discovering, preserving and connecting the records that tell a horse's story, from registration and competition to ownership and beyond.</p>
         </div>
         <div class="font-sans text-[13px] space-y-2.5">
             <p class="label text-gold-soft text-[10px]">Horsefax</p>

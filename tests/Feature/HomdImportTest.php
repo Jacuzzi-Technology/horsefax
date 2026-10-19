@@ -67,7 +67,7 @@ class HomdImportTest extends TestCase
         $lot = SaleLot::where('horse_id', $h->id)->sole();
         $this->assertSame(['asking', 6500000, 'held'], [$lot->status, $lot->price_cents, $lot->review_status]);
 
-        $this->actingAs($this->reader())->get(route('horse.public', $h))->assertOk()->assertSee('Sold by Horse of My Dreams')->assertSee('See the listing')
+        $this->actingAs($this->reader())->get(route('horse.public', $h))->assertOk()->assertSee('Reported sold by Horse of My Dreams')->assertSee('See the listing')
             ->assertDontSee('Sample description')->assertDontSee('$65,000');
 
         // Rerun: nothing is added twice.
