@@ -50,7 +50,7 @@ class IfceImportTest extends TestCase
         $this->assertSame(['KWPN (Dutch Warmblood)', 'Dark Bay'], [$felix->breed, $felix->color]);
         $this->assertSame('2014-10-20', HorseEvent::where('horse_id', $felix->id)->where('type', 'death')->sole()->occurred_on->toDateString());
 
-        $this->get(route('horse.public', $qh))->assertOk()->assertSee('French national equine database')->assertSee('Quarter Horse')->assertSee('United States');
+        $this->actingAs($this->reader())->get(route('horse.public', $qh))->assertOk()->assertSee('French national equine database')->assertSee('Quarter Horse')->assertSee('United States');
         // Never matched by name alone.
         $this->assertSame(0, Horse::named('Sample Gun It')->count());
 

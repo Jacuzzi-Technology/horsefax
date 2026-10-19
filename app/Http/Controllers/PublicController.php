@@ -19,7 +19,14 @@ class PublicController extends Controller
 {
     public function home()
     {
-        return view('public.home');
+        // The size of the database, refreshed hourly (counting millions of rows on every visit would be slow).
+        $stats = \Illuminate\Support\Facades\Cache::remember('home.stats', 3600, fn () => [
+            'horses' => Horse::whereNull('merged_into_id')->count(),
+            'results' => \App\Models\ShowAppearance::count(),
+            'sales' => \App\Models\SaleLot::whereNotIn('status', ['catalog', 'withdrawn'])->count(),
+        ]);
+
+        return view('public.home', ['stats' => $stats]);
     }
 
     public function page(string $page)
@@ -104,6 +111,21 @@ class PublicController extends Controller
 
             // Listed but not published: basic identity only, and a way for the owner to claim it.
             return view('public.listing', ['horse' => $horse]);
+        }
+
+        // Signed-out visitors see a summary and an invitation to a free account (Richard, Oct 18 2026); after signing
+        // up or in they come back to this record.
+        if (! $request->user()) {
+            $request->session()->put('url.intended', route('horse.public', $horse));
+            $events = Views::events($horse, 'public');
+
+            return view('public.summary', ['horse' => $horse, 'counts' => [
+                'results' => $events->where('category', 'competition')->count(),
+                'sales' => $events->where('category', 'ownership')->count(),
+                'pedigree' => Views::pedigree($horse, 'public')->isNotEmpty(),
+                'photos' => ($media = Views::media($horse, 'public'))->where('kind', 'photo')->count(),
+                'videos' => $media->whereIn('kind', ['video', 'video_link'])->count(),
+            ]]);
         }
 
         return view('public.horse', [

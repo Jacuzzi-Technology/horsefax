@@ -157,7 +157,7 @@ TXT;
         $this->assertSame('1234567', $match->identifiers()->where('kind', 'registration')->value('value'));
         $this->assertSame(2024, $match->fresh()->birth_year);
 
-        $this->get(route('horse.public', $match))->assertOk()
+        $this->actingAs($this->reader())->get(route('horse.public', $match))->assertOk()
             ->assertSee('Reported auction sale — $4,700')->assertSee('Recorded high bid — $12,000 · Sale unconfirmed')
             ->assertSee('Sample Super Sale, lot 5')->assertSee(HorseEvent::PRICE_NOTE);
 

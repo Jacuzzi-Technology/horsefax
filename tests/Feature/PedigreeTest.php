@@ -113,6 +113,6 @@ class PedigreeTest extends TestCase
         }
         $foal->forceFill(['public_summary' => true])->save();
         auth()->logout();
-        $this->get("/horse/{$foal->horsefax_id}")->assertOk()->assertSee('Gen Five')->assertSee('5 generations');
+        $this->actingAs($this->reader())->get("/horse/{$foal->horsefax_id}")->assertOk()->assertSee('Gen Five')->assertSee('5 generations');
     }
 }
