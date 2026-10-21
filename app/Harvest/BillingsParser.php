@@ -124,6 +124,10 @@ class BillingsParser
     public static function descriptor(string $d): array
     {
         $d = trim($d);
+        // Catalogs before about 2022 print a two-digit year: "07 AQHA Bay Gelding", "98 Grade Sorrel Mare".
+        if (preg_match('/^(\d\d)\s+(?=[A-Za-z])/', $d, $two)) {
+            $d = ((int) $two[1] > (int) date('y') + 1 ? '19' : '20').$two[1].substr($d, 2);
+        }
         $year = preg_match('/^((?:19|20)\d\d)\b/', $d, $m) ? (int) $m[1] : null;
         $rest = trim(preg_replace('/^(19|20)\d\d\s*/', '', $d));
         $registry = preg_match('/^(AQHA|APHA|ApHC|APHC|PtHA|ABRA|PHBA|IBHA|AMHA|POA|IQPA|ARHA|RHAA|NCHA|GVHS|FHHSI|FPZV|AHA|JC|TB|Grade|GRADE|Registered)\b/i', $rest, $r) ? strtoupper($r[1]) : null;

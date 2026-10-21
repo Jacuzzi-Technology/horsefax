@@ -13,6 +13,9 @@ class BillingsTest extends TestCase
     {
         $this->assertSame(['foal_year' => 2024, 'registry' => 'AQHA', 'color' => 'Bay', 'sex' => 'gelding'], BillingsParser::descriptor('2024 AQHA Bay Gelding'));
         $this->assertSame(['foal_year' => 2018, 'registry' => null, 'color' => 'Frosted Chestnut Mini Appaloosa', 'sex' => 'mare'], BillingsParser::descriptor('2018 Grade Frosted Chestnut Mini Appaloosa Mare'));
+        // Catalogs before about 2022 print two-digit years.
+        $this->assertSame(['foal_year' => 2007, 'registry' => 'AQHA', 'color' => 'Bay Roan', 'sex' => 'gelding'], BillingsParser::descriptor('07 AQHA Bay Roan Gelding'));
+        $this->assertSame(['foal_year' => 1998, 'registry' => null, 'color' => 'Sorrel', 'sex' => 'mare'], BillingsParser::descriptor('98 Grade Sorrel Mare'));
         $this->assertSame(['2026-10-23', 'day'], BillingsHarvester::saleDate('oct26catweb.pdf', "Welcome\nOCTOBER 23-24-25 FALL SPECIAL"));
         $this->assertSame(['2025-02-01', 'month'], BillingsHarvester::saleDate('febcat25web2.pdf', 'no date here'));
         $this->assertTrue(BillingsHarvester::isTopList('SEPTEMBER-2026-TOP-20.pdf'));
