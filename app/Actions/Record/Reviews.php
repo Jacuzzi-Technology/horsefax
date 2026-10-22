@@ -26,6 +26,9 @@ class Reviews
                 'results_match' => ($rec = \App\Models\ShowRecord::find($item->subject_id)) && ! $rec->horse_id ? app(AttachShowResults::class)($rec, $item->horse, $staff) : null,
                 'fact_conflict' => ($fact = \App\Models\HorseFact::find($item->subject_id)) ? RecordFacts::accept($fact) : null,
                 'pedigree_conflict' => $this->usePedigreeLine($item),
+                // Staff confirmed results under a former name are this horse's; a flagged rename just stands.
+                ShowNameRule::KIND => ($item->details['case'] ?? null) === 'former_name_results' && ($rec = \App\Models\ShowRecord::find($item->subject_id))
+                    && (! $rec->horse_id || $rec->horse_id === $item->horse_id) ? app(AttachShowResults::class)($rec, $item->horse, $staff, true, true) : null,
                 'visibility_change' => RequestToHide::apply($item),
                 'identity_check' => $this->decideIdentity($item, $staff, 'verified', $note, $options['method'] ?? 'id_document'),
                 default => null,

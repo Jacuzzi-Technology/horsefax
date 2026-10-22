@@ -55,7 +55,7 @@
             <div class="grid md:grid-cols-2 gap-6 mt-6">
                 <form method="POST" action="{{ route('admin.review.approve', $item) }}" class="card p-6 space-y-3" data-confirm="Approve this item?">
                     @csrf
-                    <h2 class="text-[22px]">{{ ['ownership_claim' => 'Approve claim', 'identifier_conflict' => 'Resolve conflict', 'dispute' => 'Uphold: mark disputed', 'fact_conflict' => 'Use the other value', 'pedigree_conflict' => 'Use the other pedigree line', 'identity_check' => 'Verify identity', 'visibility_change' => 'Approve: hide it'][$item->kind] ?? 'Approve' }}</h2>
+                    <h2 class="text-[22px]">{{ ['ownership_claim' => 'Approve claim', 'identifier_conflict' => 'Resolve conflict', 'dispute' => 'Uphold: mark disputed', 'fact_conflict' => 'Use the other value', 'pedigree_conflict' => 'Use the other pedigree line', 'identity_check' => 'Verify identity', 'visibility_change' => 'Approve: hide it', 'name_rule' => ($item->details['case'] ?? null) === 'former_name_results' ? 'Attach them anyway' : 'The rename stands'][$item->kind] ?? 'Approve' }}</h2>
                     @if ($item->kind === 'ownership_claim')
                         <p class="text-[15px]">The claimant becomes a verified owner.</p>
                         <label class="flex items-start gap-2 font-sans text-[14px]"><input type="checkbox" name="end_current_owner" value="1" class="accent-gold mt-0.5"> Also end the current owner's stewardship (only when the evidence shows the horse was sold or transferred)</label>
@@ -67,6 +67,10 @@
                     @elseif ($item->kind === 'identifier_conflict')
                         <label class="flex items-start gap-2 font-sans text-[14px]"><input type="radio" name="outcome" value="both_stand" checked class="accent-gold mt-0.5"> Both stand (e.g. the same number in different registries)</label>
                         <label class="flex items-start gap-2 font-sans text-[14px]"><input type="radio" name="outcome" value="new_is_wrong" class="accent-gold mt-0.5"> The number on this new record is wrong: mark it disputed</label>
+                    @elseif ($item->kind === 'name_rule' && ($item->details['case'] ?? null) === 'former_name_results')
+                        <p class="text-[15px]">You've confirmed from the papers or the show that these results are this horse's, even though they're under its previous name. They are attached as historical entries. Rejecting leaves them unattached.</p>
+                    @elseif ($item->kind === 'name_rule')
+                        <p class="text-[15px]">You've checked the papers and the new registered name is right. Nothing changes; the decision is logged.</p>
                     @elseif (in_array($item->kind, ['fact_conflict', 'pedigree_conflict'], true))
                         <p class="text-[15px]">Use the other value: it becomes the current one, and the current value is kept in the record's history (never deleted). Check the registry first.</p>
                     @else

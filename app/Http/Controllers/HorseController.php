@@ -209,6 +209,7 @@ class HorseController extends Controller
             return back()->withInput()->withErrors(['barn_name' => 'Give the horse a barn name or registered name.']);
         }
         $facts = self::facts($data);
+        $oldName = $horse->registered_name;
         $role = \App\Actions\Record\RecordEvent::roleOf($horse, $request->user());
         $held = app(\App\Actions\Record\RecordFacts::class)($horse, $request->user(), \App\Actions\Record\RecordFacts::fromColumns($facts), \App\Support\Record::sourceForRole($role), $role);
         // Values held for review don't change the horse yet.
@@ -220,11 +221,19 @@ class HorseController extends Controller
         }
         $horse->fill($facts)->save();
         Audit::changes('horse.identity_updated', $horse);
+        $renamedAfterShows = $oldName && $horse->registered_name && \App\Models\ShowRecord::key($oldName) !== \App\Models\ShowRecord::key($horse->registered_name)
+            && ($shown = \App\Actions\Record\ShowNameRule::shownAs($horse, $oldName));
+        if ($renamedAfterShows) {
+            \App\Actions\Record\ShowNameRule::flagRename($horse, $oldName, $horse->registered_name, $shown, $request->user());
+        }
 
         $msg = 'Identity details saved. Each change is kept in the record history.';
         if ($held) {
             $labels = collect($held)->map(fn ($f) => strtolower(\App\Models\HorseFact::FIELDS[$f] ?? $f))->join(', ');
             $msg .= ' Your change to '.$labels.' differs from a verified or professionally supplied value, so it has gone to Horsefax staff for review.';
+        }
+        if ($renamedAfterShows) {
+            $msg .= ' This horse has show results under its old name, and AQHA doesn\'t allow a name change after a horse has shown, so Horsefax staff will check the new name.';
         }
 
         return redirect()->route('horses.show', $horse)->with('status', $msg);

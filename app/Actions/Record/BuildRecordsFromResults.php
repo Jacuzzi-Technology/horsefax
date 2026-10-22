@@ -19,7 +19,8 @@ use Illuminate\Support\Str;
  * Left for a person instead:
  *  - names only seen as hunter/jumper show names (EquestrianLive): show names aren't registered names;
  *  - names whose results span more than MAX_SPAN years: almost certainly more than one horse;
- *  - names that match an owned record, or more than one record.
+ *  - names that match an owned record, or more than one record;
+ *  - names that are a horse's previous registered name (ShowNameRule: a shown horse can't be renamed).
  */
 class BuildRecordsFromResults
 {
@@ -33,11 +34,11 @@ class BuildRecordsFromResults
         ]);
     }
 
-    /** @return array{created:int, linked:int, attached:int, skipped_span:int, skipped_ambiguous:int} */
+    /** @return array{created:int, linked:int, attached:int, skipped_span:int, skipped_ambiguous:int, held_former_name:int} */
     public function __invoke(?int $limit = null, ?\Closure $log = null): array
     {
         $system = self::system();
-        $out = ['created' => 0, 'linked' => 0, 'attached' => 0, 'skipped_span' => 0, 'skipped_ambiguous' => 0];
+        $out = ['created' => 0, 'linked' => 0, 'attached' => 0, 'skipped_span' => 0, 'skipped_ambiguous' => 0, 'held_former_name' => 0];
         $attach = app(AttachShowResults::class);
 
         // New results for names already on a record.
@@ -62,6 +63,14 @@ class BuildRecordsFromResults
             }
             if (count($record->registrationNumbers()) > 1) {
                 $out['skipped_ambiguous']++; // published with two registration numbers: two horses share the name
+                continue;
+            }
+            // A horse's old name: never a new record (it would duplicate the horse); staff decide.
+            if (($formerly = ShowNameRule::horsesFormerlyNamed($record))->isNotEmpty()) {
+                foreach ($formerly as $h) {
+                    ShowNameRule::flagFormerName($record, $h, $record->display_name);
+                }
+                $out['held_former_name']++;
                 continue;
             }
             $same = Horse::named($record->display_name)->get();

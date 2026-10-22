@@ -213,6 +213,12 @@ class AdminController extends Controller
         $data = $request->validate(['horsefax_id' => 'required|string', 'note' => 'required|string|max:1000']);
         $horse = Horse::where('horsefax_id', strtoupper(trim($data['horsefax_id'])))->firstOrFail();
         abort_if($record->horse_id && $record->horse_id !== $horse->id, 409, 'These results are already attached to another horse.');
+        if ($former = \App\Actions\Record\ShowNameRule::formerName($record, $horse)) {
+            $item = \App\Actions\Record\ShowNameRule::flagFormerName($record, $horse, $former, $request->user());
+
+            return redirect()->route('admin.review', $item)->with('status', '"'.$record->display_name.'" is a previous name of '.$horse->displayName()
+                .'. A shown horse can\'t be renamed, so these results were not attached: approve this review only if you have confirmed they are this horse.');
+        }
         $n = $attach($record, $horse, $request->user());
         Audit::record('show_results.attach_note', $horse, null, ['note' => $data['note']], $horse->id);
 

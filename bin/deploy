@@ -12,7 +12,7 @@ npm run build >/dev/null
 
 echo "Uploading…"
 rsync -az --delete \
-  --exclude .git --exclude node_modules --exclude vendor --exclude .env --exclude .env.testing --exclude tests \
+  --exclude .git --exclude node_modules --exclude vendor --exclude .env --exclude .env.testing --exclude '.env.bak*' --exclude tests \
   --exclude 'storage/logs/*' --exclude 'storage/app/*' --exclude 'storage/framework/cache/*' \
   --exclude 'storage/framework/sessions/*' --exclude 'storage/framework/views/*' \
   --exclude 'bootstrap/cache/*.php' --exclude public/hot --exclude .claude --exclude 'database/*.sqlite' \

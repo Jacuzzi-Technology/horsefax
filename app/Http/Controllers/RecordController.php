@@ -49,6 +49,12 @@ class RecordController extends Controller
         $data = $request->validate(['name' => 'required|string|max:160', 'kind' => 'required|in:previous,alias', 'visibility' => ['required', Rule::in(array_keys(Record::VISIBILITY))]]);
         $name = HorseName::create($data + ['horse_id' => $horse->id, 'added_by' => $request->user()->id]);
         Audit::record('name.added', $name, null, $data);
+        // A previous name the horse already has show results under: it was renamed after showing.
+        if ($data['kind'] === 'previous' && $horse->registered_name && ($shown = \App\Actions\Record\ShowNameRule::shownAs($horse, $data['name']))) {
+            \App\Actions\Record\ShowNameRule::flagRename($horse, $data['name'], $horse->registered_name, $shown, $request->user());
+
+            return redirect()->route('horses.show', $horse)->with('status', 'Name added. This horse has show results under that name, and AQHA doesn\'t allow a name change after a horse has shown, so Horsefax staff will check it.');
+        }
 
         return redirect()->route('horses.show', $horse)->with('status', 'Name added.');
     }
