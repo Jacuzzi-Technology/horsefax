@@ -182,6 +182,41 @@ Artisan::command('hf:import-pedigrees {file} {--source=stallion-sites}', functio
     $this->info(json_encode($out));
 })->purpose('Import pedigrees read from published stallion pages into horse records');
 
+// AQHA registration papers on file at Horse of My Dreams (Richard, Oct 20 2026): certificates and AQHA Records reports
+// read into a JSON list by the papers-inventory tools. Identity, registration number and pedigree only: owner names
+// and genetic results on the papers are never imported. Oldest horses first, so ancestors exist with their numbers
+// before the charts that name them. Rerunnable: it only fills what's missing.
+// php artisan hf:import-aqha-papers storage/app/private/aqha-papers.json [--dry-run]
+Artisan::command('hf:import-aqha-papers {file} {--dry-run}', function () {
+    $items = json_decode(file_get_contents($this->argument('file')), true, flags: JSON_THROW_ON_ERROR);
+    usort($items, fn ($a, $b) => ($a['foal_year'] ?? 9999) <=> ($b['foal_year'] ?? 9999));
+    $display = fn ($n) => \App\Harvest\NrchaHarvester::display(trim((string) $n));
+    $color = fn ($c) => $c ? \App\Harvest\SuperSiresParser::color(strcasecmp($c, 'gray') === 0 ? 'Grey' : $c) : null;
+    $out = [];
+    foreach ($items as $h) {
+        if (! preg_match('/^[A-Z]?\d{7}$/', (string) ($h['registration_number'] ?? '')) || trim((string) ($h['name'] ?? '')) === '') {
+            $out['invalid'] = ($out['invalid'] ?? 0) + 1;
+            continue;
+        }
+        $ped = collect($h['pedigree'] ?? [])->filter(fn ($l, $p) => preg_match('/^[sd]{1,3}$/', (string) $p) && trim((string) ($l['name'] ?? '')) !== '')
+            ->map(fn ($l) => ['name' => $display($l['name']), 'registry' => 'AQHA', 'registration_number' => $l['registration_number'] ?? null,
+                'foal_year' => $l['foal_year'] ?? null, 'color' => $color($l['color'] ?? null)])->all();
+        $item = [
+            'name' => $display($h['name']), 'registry' => 'AQHA', 'registration_number' => $h['registration_number'],
+            'foal_year' => $h['foal_year'] ?? null, 'birth_date' => $h['birth_date'] ?? null,
+            'sex' => in_array($h['sex'] ?? null, ['mare', 'stallion', 'gelding'], true) ? $h['sex'] : null, 'color' => $color($h['color'] ?? null),
+            'pedigree' => $ped, 'previous_names' => array_map($display, $h['previous_names'] ?? []), 'results' => [],
+        ];
+        if ($this->option('dry-run')) {
+            $out['would_import'] = ($out['would_import'] ?? 0) + 1;
+            continue;
+        }
+        $status = app(\App\Actions\Record\ImportPublishedHorse::class)($item, 'AQHA registration papers on file at Horse of My Dreams ('.($h['document'] ?? 'certificate').')');
+        $out[$status] = ($out[$status] ?? 0) + 1;
+    }
+    $this->info(json_encode($out));
+})->purpose('Import identity, registration numbers and pedigrees from AQHA papers on file');
+
 // Possible duplicate names for staff review (spacing/punctuation variants and one-letter variants). Cron runs it nightly.
 // php artisan hf:find-name-variants
 Artisan::command('hf:find-name-variants', function () {
