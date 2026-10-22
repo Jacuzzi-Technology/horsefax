@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Http;
  * ohio.html), and the "similar horses" links on each ad page add any stragglers. Every list's own total is kept, so
  * the run reports how many ads it could not reach.
  *
- * One request at a time, $delay seconds apart, as HorsefaxBot. Errors back off (30 s doubling); a 403 or a bot
+ * One request at a time, $delay seconds apart (house rule: at least 3), as HorsefaxBot. Errors back off (30 s doubling); a 403 or a bot
  * challenge stops the run (never worked around). Rerunnable: the raw file (ads.jsonl) is the state, ads are fetched
  * once (refreshed after $refreshDays), and ads that drop out of the lists are re-checked and marked gone.
  */
@@ -40,8 +40,9 @@ class DreamHorseHarvester
     private array $seen = [];
     private array $lists = [];
     private string $dir;
+    private array $progress;
 
-    public function __construct(private float $delay = 1.0, private ?\Closure $log = null, ?string $dir = null)
+    public function __construct(private float $delay = 3.0, private ?\Closure $log = null, ?string $dir = null)
     {
         $this->dir = $dir ?? storage_path('app/private/dreamhorse');
         @mkdir($this->dir, 0775, true);
@@ -177,6 +178,7 @@ class DreamHorseHarvester
         }
         $this->lists['_summary'] = ['date' => now()->toDateString(), 'state_total' => $stateTotal, 'color_total' => $colorTotal, 'missed_in_big_lists' => $missed, 'requests' => $this->requests];
         file_put_contents($this->dir.'/discovery-'.now()->format('Y-m-d').'.json', json_encode($this->lists, JSON_PRETTY_PRINT));
+        @unlink($this->dir.'/lists-progress.jsonl'); // listing finished: the next run reads fresh
         $this->say("lists read: state total $stateTotal, color total $colorTotal, ".count($this->seen).' ids found');
 
         return [count($this->lists) - 1, max($stateTotal, $colorTotal), true];
@@ -185,13 +187,31 @@ class DreamHorseHarvester
     /** One list page: its ids join $seen; returns the list's total (null if the page failed). */
     private function list(string $path): ?int
     {
-        $html = $this->get(self::BASE.$path);
-        if ($html === null) {
-            $this->lists[$path] = ['total' => null];
-
-            return null;
+        // A stopped run resumes: list pages read in the last 2 days are taken from the progress file.
+        if (! isset($this->progress)) {
+            $this->progress = [];
+            foreach (is_file($f = $this->dir.'/lists-progress.jsonl') ? file($f) : [] as $line) {
+                if (($l = json_decode($line, true)) && strtotime($l['at']) > time() - 2 * 86400) {
+                    $this->progress[$l['path']] = $l;
+                }
+            }
         }
-        $p = DreamHorseParser::listPage($html);
+        if ($p = $this->progress[$path] ?? null) {
+            unset($p['at'], $p['path']);
+        } else {
+            $html = $this->get(self::BASE.$path);
+            if ($html === null) {
+                $this->lists[$path] = ['total' => null];
+
+                return null;
+            }
+            $p = DreamHorseParser::listPage($html);
+            // Evidence copy: list pages carry no seller descriptions or contact details.
+            $ev = $this->dir.'/evidence/'.now()->format('Y-m-d');
+            @mkdir($ev, 0775, true);
+            file_put_contents($ev.'/'.sha1($path).'.html.gz', gzencode($html, 9));
+            file_put_contents($this->dir.'/lists-progress.jsonl', json_encode(['path' => $path, 'at' => now()->toIso8601String()] + $p, JSON_UNESCAPED_SLASHES)."\n", FILE_APPEND | LOCK_EX);
+        }
         foreach ($p['ids'] as $id) {
             $this->seen[$id] = true;
         }

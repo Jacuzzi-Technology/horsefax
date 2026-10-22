@@ -46,10 +46,11 @@ couldn't reach.
 All commands run in the app directory. Use the horsefax user on the server.
 
 ```bash
-php artisan hf:harvest-dreamhorse --delay=1
+php artisan hf:harvest-dreamhorse --delay=3
 ```
 
-Defaults: list, fetch new ads, re-check gone ones, write the CSV/JSON, then load into `sale_lots`. Options:
+House rules: HorsefaxBot user agent and at least 3 s between requests (`--delay` below 3 is raised to 3; DreamHorse's
+robots.txt sets no Crawl-delay). Defaults: list, fetch new ads, re-check gone ones, write the CSV/JSON, then load into `sale_lots`. Options:
 
 - `--max-ads=50` stops after 50 ad fetches (a trial). A trial never marks ads gone.
 - `--refresh-days=30` refetches live ads last read more than 30 days ago (to catch price changes and sold flags).
@@ -63,7 +64,7 @@ Load a raw file collected elsewhere (for example on the Mac) without fetching an
 php artisan hf:load-dreamhorse --dir=/path/to/dreamhorse
 ```
 
-Expect a full run to take most of a day: about 5,000 list pages plus one page per new ad, at about 1.5 s each.
+Expect a first full run to take about a day and a half: roughly 5,000 list pages plus one page per new ad, at about 3.3 s each.
 Reruns take far less ad time, because each ad is fetched once and then only refreshed. The lists are always read in
 full, since that's how ads that have gone are noticed.
 
@@ -72,6 +73,10 @@ full, since that's how ads that have gone are noticed.
 - `ads.jsonl`: the state, one JSON line per ad. Lines are appended as the run goes and compacted at the end, so a
   killed run resumes where it stopped.
 - `dreamhorse-ads.json` and `dreamhorse-ads.csv`: the current export of every ad on file (live and gone).
+- `lists-progress.jsonl`: list pages read so far in an unfinished listing. A stopped run reuses pages up to 2 days
+  old instead of rereading them. It's deleted when a listing finishes.
+- `evidence/YYYY-MM-DD/*.html.gz`: evidence copies of the list pages, which carry no seller text. Ad pages aren't kept
+  (see above); their parsed facts in `ads.jsonl` are the record.
 - `discovery-YYYY-MM-DD.json`: every list page read, with its total, plus a `_summary` (state total, color total, ads
   missed).
 

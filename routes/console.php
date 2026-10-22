@@ -125,9 +125,10 @@ Artisan::command('hf:harvest-platinum {--all} {--delay=3} {--max-pages=}', funct
 
 // DreamHorse.com horse ads (Richard, Oct 22 2026), facts only, as held asking prices matched on registration number
 // only. Raw file + CSV/JSON in storage/app/private/dreamhorse (--dir to change). See docs/dreamhorse-harvest.md.
-// php artisan hf:harvest-dreamhorse [--delay=1] [--max-ads=50] [--refresh-days=30] [--no-discover] [--no-load]
-Artisan::command('hf:harvest-dreamhorse {--delay=1} {--max-ads=} {--refresh-days=30} {--no-discover} {--no-load} {--dir=}', function () {
-    $h = new \App\Harvest\DreamHorseHarvester((float) $this->option('delay'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l), $this->option('dir') ?: null);
+// php artisan hf:harvest-dreamhorse [--delay=3] [--max-ads=50] [--refresh-days=30] [--no-discover] [--no-load]
+Artisan::command('hf:harvest-dreamhorse {--delay=3} {--max-ads=} {--refresh-days=30} {--no-discover} {--no-load} {--dir=}', function () {
+    // House rule: never under 3 s between requests.
+    $h = new \App\Harvest\DreamHorseHarvester(max(3.0, (float) $this->option('delay')), fn ($l) => $this->line(now()->format('H:i:s').' '.$l), $this->option('dir') ?: null);
     try {
         $out = $h->run(! $this->option('no-discover'), $this->option('max-ads') ? (int) $this->option('max-ads') : null, (int) $this->option('refresh-days'));
     } catch (\App\Harvest\DreamHorseBlocked $e) {
@@ -141,7 +142,7 @@ Artisan::command('hf:harvest-dreamhorse {--delay=1} {--max-ads=} {--refresh-days
 
 // Load a DreamHorse raw file (ads.jsonl in --dir) into sale_lots without fetching anything.
 Artisan::command('hf:load-dreamhorse {--dir=}', function () {
-    $this->info(json_encode((new \App\Harvest\DreamHorseHarvester(1.0, null, $this->option('dir') ?: null))->load()));
+    $this->info(json_encode((new \App\Harvest\DreamHorseHarvester(3.0, null, $this->option('dir') ?: null))->load()));
 })->purpose('Load collected DreamHorse ads into the sale-lots index (registration-number matches only)');
 
 // php artisan hf:match-sales [--limit=100]   (cron runs it nightly after hf:build-records)
