@@ -24,7 +24,7 @@ class FindNameVariants
         $byKey = [];
         foreach ($rows as $r) {
             $k = preg_replace('/[^A-Z0-9]/', '', strtoupper($r->registered_name));
-            if ($k !== '') {
+            if ($k !== '' && ! \App\Support\Record::placeholderName($r->registered_name)) { // "Pending" isn't a name
                 $byKey[$k][] = $r;
             }
         }

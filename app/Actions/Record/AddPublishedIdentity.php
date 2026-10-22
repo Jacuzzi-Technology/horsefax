@@ -24,7 +24,7 @@ class AddPublishedIdentity
         }
         $filled = [];
         $reg = trim((string) ($id['registration_number'] ?? ''));
-        if ($reg !== '' && ! $horse->identifiers()->where('kind', 'registration')->whereNull('superseded_by')->exists()) {
+        if (preg_match('/\d/', $reg) && ! $horse->identifiers()->where('kind', 'registration')->whereNull('superseded_by')->exists()) {
             app(AddIdentifier::class)($horse, $system, ['kind' => 'registration', 'registry' => $id['registry'] ?? null, 'value' => $reg, 'visibility' => 'public', 'source_type' => 'historical']);
             $filled[] = 'registration';
         }

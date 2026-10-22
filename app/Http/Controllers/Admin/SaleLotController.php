@@ -29,7 +29,9 @@ class SaleLotController extends Controller
             ->groupBy(fn ($h) => ShowRecord::key($h->registered_name));
         $counts = SaleLot::selectRaw("count(*) filter (where horse_id is not null) matched, count(*) filter (where horse_id is null and review_status = 'queued') queued, count(*) filter (where horse_id is null and review_status = 'conflict') conflict, count(*) total")->first();
 
-        return view('admin.sale-lots', ['lots' => $lots, 'candidates' => $candidates, 'status' => $status, 'q' => $q, 'counts' => $counts,
+        $suggestions = \App\Models\ReviewSuggestion::with('horse')->where('subject_type', 'sale_lot')->whereIn('subject_id', $lots->pluck('id')->all())->get()->keyBy('subject_id');
+
+        return view('admin.sale-lots', ['suggestions' => $suggestions, 'lots' => $lots, 'candidates' => $candidates, 'status' => $status, 'q' => $q, 'counts' => $counts,
             'sources' => \App\Models\DataSource::whereIn('key', ['liveag', 'premier', 'platinum', 'wsqha'])->get()]);
     }
 

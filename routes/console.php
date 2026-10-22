@@ -225,8 +225,57 @@ Artisan::command('hf:create-sale-records {source} {--dry-run}', function (string
     $this->info(($this->option('dry-run') ? 'Dry run (nothing saved): ' : '').json_encode($out));
 })->purpose('Create records for a sale source\'s identified horses that no record matches, with their sale entries');
 
+// Sale lots flagged "same name, different horse" (every record of that name contradicts the lot): the lot's horse gets
+// its own record when the lot identifies it (registration number or sire). Richard, Oct 19 2026.
+// php artisan hf:split-sale-conflicts [--dry-run]
+Artisan::command('hf:split-sale-conflicts {--dry-run}', function () {
+    $out = app(\App\Actions\Record\CreateRecordsFromSaleLots::class)->splitConflicts((bool) $this->option('dry-run'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+    $this->info(($this->option('dry-run') ? 'Dry run (nothing saved): ' : '').json_encode($out));
+})->purpose('Give conflicting sale lots that identify their horse a record of their own');
+
 Artisan::command('hf:harvest-amshows {--delay=3} {--max-files=} {--refresh}', function () {
     $out = (new \App\Harvest\AmShowsHarvester((float) $this->option('delay'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l), (bool) $this->option('refresh')))
         ->run($this->option('max-files') ? (int) $this->option('max-files') : null);
     $this->info('A&M Show Services: '.json_encode($out));
 })->purpose('Collect A&M Show Services (showmypony.com) reining results from its public Google Drive folders');
+
+// Search-backed suggestions for the staff queues (pilot, Richard Oct 19 2026). Needs BRAVE_SEARCH_API_KEY in .env.
+// Picks items with no suggestion yet: name pairs across priorities (same-letter pairs that disagree first) and sale lots
+// waiting for review or in conflict. php artisan hf:search-suggest [--names=100] [--lots=100]
+Artisan::command('hf:search-suggest {--names=100} {--lots=100}', function () {
+    $web = new \App\Search\WebEvidence(fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+    $suggest = new \App\Actions\Record\SuggestFromSearch($web);
+    $done = \App\Models\ReviewSuggestion::get(['subject_type', 'subject_id'])->groupBy('subject_type')->map(fn ($g) => $g->pluck('subject_id')->all());
+    $n = (int) $this->option('names');
+    $clean = \App\Http\Controllers\Admin\NameReviewController::batchRows()->pluck('review.id')->all(); // those go to the batch page
+    $pairs = collect();
+    foreach ([1, 2, 3, 4] as $p) {
+        $pairs = $pairs->merge(\App\Models\NameReview::with(['a', 'b'])->where('status', 'open')->where('priority', $p)
+            ->whereNotIn('id', array_merge($clean, $done['name_review'] ?? []))->inRandomOrder()->limit((int) ceil($n / 4))->get());
+    }
+    $lotIds = collect(['conflict', 'queued'])->flatMap(fn ($st) => \App\Models\SaleLot::whereNull('horse_id')->where('review_status', $st)
+        ->whereNotIn('id', $done['sale_lot'] ?? [])->inRandomOrder()->limit((int) ceil(((int) $this->option('lots')) / 2))->pluck('id'));
+    $out = [];
+    foreach ($pairs->take($n) as $r) {
+        $s = $suggest->forPair($r);
+        $out['name:'.$s->suggestion] = ($out['name:'.$s->suggestion] ?? 0) + 1;
+        $this->line($r->a->registered_name.' → '.$s->suggestion);
+    }
+    foreach (\App\Models\SaleLot::whereIn('id', $lotIds->take((int) $this->option('lots')))->get() as $lot) {
+        $s = $suggest->forLot($lot);
+        $out['lot:'.$s->suggestion] = ($out['lot:'.$s->suggestion] ?? 0) + 1;
+        $this->line($lot->horse_name.' → '.$s->suggestion);
+    }
+    $this->info(json_encode($out + ['searches' => $web->searches, 'pages_fetched' => $web->fetched]));
+})->purpose('Search the web for name pairs and sale lots waiting for staff, and write suggested answers');
+
+// How the search suggestions are doing: staff accepted vs rejected, and what they cost.
+Artisan::command('hf:search-report', function () {
+    $rows = \App\Models\ReviewSuggestion::selectRaw('subject_type, suggestion, status, count(*) n, sum(cost_cents) cents')->groupBy('subject_type', 'suggestion', 'status')->get();
+    $this->table(['item', 'suggestion', 'status', 'count', 'cost ($)'], $rows->map(fn ($r) => [$r->subject_type, $r->suggestion, $r->status, $r->n, number_format($r->cents / 100, 2)]));
+    $acc = $rows->where('status', 'accepted')->sum('n');
+    $rej = $rows->where('status', 'rejected')->sum('n');
+    $items = $rows->sum('n');
+    $this->info('Items: '.$items.' · with an answer: '.$rows->where('suggestion', '!=', 'unsure')->sum('n').' · accepted '.$acc.', rejected '.$rej
+        .($acc + $rej ? ' ('.round(100 * $acc / ($acc + $rej)).'% accepted)' : '').' · cost per item $'.($items ? number_format($rows->sum('cents') / 100 / $items, 4) : '0'));
+})->purpose('Pilot report for search-backed review suggestions');

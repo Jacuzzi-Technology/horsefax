@@ -73,4 +73,43 @@ class SaleRecordsTest extends TestCase
         $this->assertSame([0, 1], [$out['created'], $out['queued']]);
         $this->assertSame(1, Horse::count());
     }
+
+    public function test_a_conflicting_lot_that_identifies_its_horse_gets_its_own_record(): void
+    {
+        $system = \App\Actions\Record\BuildRecordsFromResults::system();
+        $old = new Horse(['registered_name' => 'Sample Twin Name', 'birth_precision' => 'year', 'birth_year' => 2008]);
+        $old->horsefax_id = \App\Actions\Record\CreateHorse::newId();
+        $old->created_by = $system->id;
+        $old->save();
+        \App\Models\PedigreeEntry::create(['horse_id' => $old->id, 'position' => 's', 'name' => 'Sample Old Sire', 'visibility' => 'public', 'added_by' => $system->id]);
+        $withSire = $this->lot('Sample Twin Name', ['sire_name' => 'Sample New Sire', 'foal_year' => 2020, 'status' => 'sold', 'price_cents' => 800000]);
+        $bare = $this->lot('Sample Twin Name', ['foal_year' => 2021, 'sex' => 'Gelding']);          // contradicts, but identifies nothing
+        $pending = $this->lot('Sample Twin Name', ['registration_number' => 'Pending', 'foal_year' => 2022]); // "Pending" isn't a number
+        $unnamed = $this->lot('AQHA Pending', ['sire_name' => 'Sample New Sire', 'foal_year' => 2026, 'status' => 'catalog']); // no name yet
+        $unnamed2 = $this->lot('Pending', ['sire_name' => 'Sample New Sire', 'foal_year' => 2026, 'status' => 'sold', 'price_cents' => 300000]);
+
+        app(MatchSaleLots::class)();
+        $this->assertSame(['conflict', 'conflict', 'conflict'], [$withSire->fresh()->review_status, $bare->fresh()->review_status, $pending->fresh()->review_status]);
+        $this->assertStringStartsWith(MatchSaleLots::DIFFERENT, $withSire->fresh()->review_note);
+
+        $dry = app(CreateRecordsFromSaleLots::class)->splitConflicts(true);
+        $this->assertSame(1, $dry['created']);
+        $this->assertSame(1, Horse::count());
+
+        $out = app(CreateRecordsFromSaleLots::class)->splitConflicts();
+        $this->assertSame([1, 1, 2], [$out['created'], $out['attached'], $out['skipped_unidentified']]);
+        $this->assertSame(0, app(CreateRecordsFromSaleLots::class)('billings')['created']); // the unnamed foals stay in the index
+        $this->assertSame(0, Horse::whereIn('registered_name', ['AQHA Pending', 'Pending'])->count());
+        $this->assertNull($unnamed2->fresh()->horse_id);
+        $new = Horse::where('registered_name', 'Sample Twin Name')->where('id', '!=', $old->id)->sole();
+        $this->assertSame([$new->id, null], [$withSire->fresh()->horse_id, $withSire->fresh()->review_status]);
+        $this->assertSame(2020, (int) $new->birth_year);
+        $this->assertSame('Sample New Sire', $new->pedigree()->where('position', 's')->value('name'));
+        $this->assertSame('conflict', $bare->fresh()->review_status);
+        $this->assertSame(0, $new->identifiers()->count()); // no "Pending" identifier
+        // The two records are already known to be different horses: the pair doesn't go on the staff list.
+        $this->assertSame('different_horses', \App\Models\NameReview::sole()->status);
+        app(\App\Actions\Record\FindNameVariants::class)();
+        $this->assertSame(0, \App\Models\NameReview::where('status', 'open')->count());
+    }
 }

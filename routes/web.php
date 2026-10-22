@@ -120,6 +120,9 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::get('/qr', [\App\Http\Controllers\QrController::class, 'batchForm'])->name('qr');
     Route::post('/qr', [\App\Http\Controllers\QrController::class, 'batch'])->name('qr.batch');
     Route::get('/sale-lots', [\App\Http\Controllers\Admin\SaleLotController::class, 'index'])->name('sale-lots');
+    Route::post('/suggestions/{suggestion}', [\App\Http\Controllers\Admin\ReviewSuggestionController::class, 'decide'])->name('suggestions.decide');
+    Route::get('/names/batch', [\App\Http\Controllers\Admin\NameReviewController::class, 'batch'])->name('names.batch');
+    Route::post('/names/batch', [\App\Http\Controllers\Admin\NameReviewController::class, 'batchDecide'])->name('names.batch.decide');
     Route::get('/names', [\App\Http\Controllers\Admin\NameReviewController::class, 'index'])->name('names');
     Route::post('/names/{review}', [\App\Http\Controllers\Admin\NameReviewController::class, 'decide'])->name('names.decide');
     Route::post('/sale-lots/{lot}/attach', [\App\Http\Controllers\Admin\SaleLotController::class, 'attach'])->name('sale-lots.attach');

@@ -284,4 +284,13 @@ final class Record
 
         return strlen($v) <= 4 ? '••••' : str_repeat('•', max(4, strlen($v) - 4)).substr($v, -4);
     }
+
+    /**
+     * A stand-in printed where a horse has no name yet ("Pending", "AQHA Pending", "Name pending", "Unnamed", "Foal"),
+     * not a name: never matched, paired or made into a record by it.
+     */
+    public static function placeholderName(?string $name): bool
+    {
+        return (bool) preg_match('/^\s*(horse name:\s*)?((aqha|apha|reg(istration)?|name)\s+)?(pending( registration)?|unnamed( (colt|filly|foal))?|foal|no name|none|n\/?a|tba|tbd)\s*$/i', (string) $name);
+    }
 }

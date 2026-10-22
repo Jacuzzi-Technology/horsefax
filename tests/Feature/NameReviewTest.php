@@ -122,4 +122,46 @@ class NameReviewTest extends TestCase
         $this->actingAs($staff)->post(route('admin.names.decide', $r), ['decision' => $r->horse_a_id === $owned->id ? 'keep_b' : 'keep_a'])->assertStatus(422);
         $this->assertNull($owned->fresh()->merged_into_id);
     }
+
+    public function test_batch_page_lists_only_clean_same_letter_pairs_and_merges_on_staff_click(): void
+    {
+        $show = $this->unowned('Sample Living Tobe Pretty', 'results');          // show spelling: kept by default
+        $sale = $this->unowned('Sample Living To Be Pretty', 'published');
+        $x = $this->unowned('Sample Dreamy Thing', 'results');                    // foal years disagree: one by one only
+        $y = $this->unowned('Sample DreamyThing', 'published');
+        $x->forceFill(['birth_precision' => 'year', 'birth_year' => 2021])->save();
+        $y->forceFill(['birth_precision' => 'year', 'birth_year' => 2020])->save();
+        $p = $this->unowned('Sample Persuaded By Rum', 'results');
+        $q = $this->unowned('Sample PersuadedByRum', 'published');
+        $s = $this->unowned('Sample Skip Me', 'results');
+        $t = $this->unowned('Sample SkipMe', 'pedigree');
+        app(FindNameVariants::class)();
+        $pair = fn ($m, $n) => NameReview::whereIn('horse_a_id', [$m->id, $n->id])->whereIn('horse_b_id', [$m->id, $n->id])->sole();
+
+        $staff = User::factory()->create(['is_staff' => true, 'two_factor_confirmed_at' => now()]);
+        $this->actingAs($staff)->get(route('admin.names.batch'))->assertOk()
+            ->assertSee('Sample Living To Be Pretty')->assertDontSee('Sample DreamyThing');
+        $rows = \App\Http\Controllers\Admin\NameReviewController::batchRows()->keyBy(fn ($r) => $r['review']->id);
+        $this->assertCount(3, $rows);
+        $r = $pair($show, $sale);
+        $this->assertSame($r->horse_a_id === $show->id ? 'keep_a' : 'keep_b', $rows[$r->id]['keep']);
+
+        // Nothing has merged just from listing them.
+        $this->assertSame(0, Horse::whereNotNull('merged_into_id')->count());
+
+        $this->actingAs($staff)->post(route('admin.names.batch.decide'), ['decisions' => [
+            $r->id => $rows[$r->id]['keep'],
+            $pair($p, $q)->id => 'different',
+            $pair($s, $t)->id => 'skip',
+            $pair($x, $y)->id => 'keep_a', // not on the page: refused, left open
+        ]])->assertRedirect(route('admin.names.batch'));
+
+        $this->assertSame($show->id, $sale->fresh()->merged_into_id);
+        $this->assertSame('merged', $r->fresh()->status);
+        $this->assertSame('different_horses', $pair($p, $q)->status);
+        $this->assertSame('open', $pair($s, $t)->status);
+        $this->assertSame('open', $pair($x, $y)->status);
+        $this->assertNull($x->fresh()->merged_into_id);
+        $this->assertNull($y->fresh()->merged_into_id);
+    }
 }

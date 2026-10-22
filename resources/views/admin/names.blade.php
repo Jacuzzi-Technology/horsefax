@@ -12,13 +12,14 @@
             @foreach (N::PRIORITIES as $k => $label)
                 <a href="{{ route('admin.names', ['p' => $k]) }}" class="btn-ghost btn-small {{ $p === $k ? 'bg-gold/15' : '' }}" title="{{ $label }}">{{ $k }}. {{ \Illuminate\Support\Str::limit($label, 44) }} ({{ number_format($counts[$k] ?? 0) }})</a>
             @endforeach
+            <a href="{{ route('admin.names.batch') }}" class="btn-ghost btn-small">Batch: same letters, nothing disagrees</a>
             <a href="{{ route('admin.names', ['status' => 'different_horses']) }}" class="btn-ghost btn-small {{ $status === 'different_horses' ? 'bg-gold/15' : '' }}">Different horses</a>
             <a href="{{ route('admin.names', ['status' => 'merged']) }}" class="btn-ghost btn-small {{ $status === 'merged' ? 'bg-gold/15' : '' }}">Merged</a>
         </div>
 
         <div class="mt-6 space-y-4">
         @forelse ($reviews as $r)
-            <form method="POST" action="{{ route('admin.names.decide', $r) }}" class="card p-4 sm:p-5">
+            <div class="card p-4 sm:p-5"><form method="POST" action="{{ route('admin.names.decide', $r) }}">
                 @csrf
                 <p class="font-sans text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">{{ N::PRIORITIES[$r->priority] ?? '' }}</p>
                 <div class="grid md:grid-cols-2 gap-4 mt-3">
@@ -63,6 +64,10 @@
                     <p class="font-sans text-[13px] mt-3 text-muted">{{ $r->status === 'merged' ? 'Merged, kept '.optional(App\Models\Horse::find($r->kept_horse_id))->registered_name : 'Different horses' }}{{ $r->registration_number ? ' · reg '.$r->registration_number : '' }}{{ $r->note ? ' · '.$r->note : '' }} · {{ $r->decided_at?->format('M j, Y') }}</p>
                 @endif
             </form>
+                @if ($r->status === 'open')
+                    @include('admin.partials.suggestion', ['s' => $suggestions[(string) $r->id] ?? null, 'name' => $r->a->registered_name])
+                @endif
+            </div>
         @empty
             <p class="hint">Nothing here.</p>
         @endforelse

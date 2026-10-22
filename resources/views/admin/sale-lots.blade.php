@@ -10,6 +10,7 @@
         @endforeach
         @if (session('status'))<p class="mt-4 font-sans text-[14px] text-forest">{{ session('status') }}</p>@endif
         @error('horsefax_id')<p class="error mt-4">{{ $message }}</p>@enderror
+        @error('suggestion')<p class="error mt-4">{{ $message }}</p>@enderror
         <div class="flex flex-wrap gap-2 mt-5">
             @foreach (['queued' => 'Waiting', 'conflict' => 'Conflicts', 'held' => 'Matched, not published yet', 'unmatched' => 'No record of that name', 'matched' => 'On records', 'dismissed' => 'Dismissed'] as $k => $label)
                 <a href="{{ route('admin.sale-lots', ['status' => $k, 'q' => $q]) }}" class="btn-ghost btn-small {{ $status === $k ? 'bg-gold/15' : '' }}">{{ $label }}</a>
@@ -55,6 +56,9 @@
                         @endif
                     </td>
                 </tr>
+                @if (! $l->horse_id && in_array($status, ['queued', 'conflict'], true))
+                    <tr><td colspan="5" class="pt-0">@include('admin.partials.suggestion', ['s' => $suggestions[$l->id] ?? null, 'name' => $l->horse_name])</td></tr>
+                @endif
             @endforeach
             </tbody>
         </table>

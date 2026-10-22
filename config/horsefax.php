@@ -15,4 +15,20 @@ return [
     // Google Drive API key (Drive API only), for show offices that publish results in public Drive folders.
     'google_drive_key' => env('GOOGLE_DRIVE_API_KEY'),
     'published_sale_kinds' => array_filter(explode(',', env('HORSEFAX_PUBLISHED_SALE_KINDS', 'reported_sale,offered'))),
+    // Search-backed review suggestions (Richard, Oct 19 2026). Brave Search API: its results are used only to find
+    // pages and are never stored (the Search plan carries no storage rights). Pages are fetched only from the sources
+    // below, each checked ALLOWED (robots + terms) in the source catalog, as HorsefaxBot, 3 s apart per site, robots.txt
+    // obeyed, with a gzipped evidence copy. Facebook and AQHA are only ever linked for staff, never fetched (Facebook's
+    // terms; AQHA needs a license). Everything else found is ignored.
+    'search' => [
+        'brave_key' => env('BRAVE_SEARCH_API_KEY'),
+        'cost_per_search_cents' => (float) env('BRAVE_SEARCH_CENTS', 0.5), // Search plan: $5 per 1,000 (Oct 2026)
+        'delay' => 3,
+        'max_pages_per_item' => 5,
+        'fetch_hosts' => [
+            'bid.live-ag.com', 'wsqharesults.com', 'premierhorsesales.com', 'platinumequineauction.com', 'billingslivestock.com',
+            'nrha.com', 'results.nrcha.com', 'supersires.org', 'highpointperformance.com', 'nebraskarha.org',
+            'quarterhorsecongress.com', 'horseofmydreams.com',
+        ],
+    ],
 ];

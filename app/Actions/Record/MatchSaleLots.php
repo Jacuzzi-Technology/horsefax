@@ -24,6 +24,9 @@ class MatchSaleLots
 {
     public const AUTO = ['registration', 'sire_dam', 'foal_year_parent'];
 
+    /** Start of the note on a conflict where every same-name record contradicts the lot (a different horse). */
+    public const DIFFERENT = 'Same name, different horse: ';
+
     /** @var array<string, list<string>> name key => horse ids */
     private array $byName = [];
 
@@ -82,7 +85,8 @@ class MatchSaleLots
     /** @return array{0:?Horse, 1:?string, 2:?string, 3:?string} horse, tier, review status, note */
     public function match(SaleLot $lot): array
     {
-        if ($lot->registration_number) {
+        // "Pending", "N/A" and the like aren't registration numbers.
+        if ($lot->registration_number && preg_match('/\d/', $lot->registration_number)) {
             $ids = HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')
                 ->where('value_normalized', Record::normalizeIdentifier($lot->registration_number))
                 ->when($lot->registry, fn ($q) => $q->where(fn ($w) => $w->whereNull('registry')->orWhere('registry', $lot->registry)))
@@ -96,6 +100,9 @@ class MatchSaleLots
             }
         }
 
+        if (Record::placeholderName($lot->horse_name)) {
+            return [null, null, null, null]; // "Pending", "Unnamed": no name to match on
+        }
         if (! $this->byName) {
             self::matchable(Horse::whereRaw('lower(registered_name) = lower(?)', [$lot->horse_name]))->pluck('id')
                 ->each(fn ($id) => $this->byName[$lot->name_key][] = $id); // single lot (staff page)
@@ -142,7 +149,7 @@ class MatchSaleLots
             return [null, null, 'queued', $basis];
         }
 
-        return [null, null, 'conflict', 'Same name, different horse: '.implode(', ', $ruledOut)];
+        return [null, null, 'conflict', self::DIFFERENT.implode(', ', $ruledOut)];
     }
 
     public static function matchable($query)
@@ -159,9 +166,10 @@ class MatchSaleLots
             $regs = $h->identifiers()->where('kind', 'registration')->whereNull('superseded_by')->get();
         }
         $year = $h->birth_precision !== 'unknown' ? $h->birth_year : null;
+        $regs = $regs?->filter(fn ($r) => preg_match('/\d/', (string) $r->value_normalized));
 
         return match (true) {
-            $lot->registration_number && $regs && $regs->isNotEmpty()
+            $lot->registration_number && preg_match('/\d/', $lot->registration_number) && $regs && $regs->isNotEmpty()
                 && ! $regs->contains(fn ($r) => $r->value_normalized === Record::normalizeIdentifier($lot->registration_number)) => 'registration number',
             $lot->sire_name && $sire && ShowRecord::key($lot->sire_name) !== ShowRecord::key($sire) => 'sire',
             $lot->dam_name && $dam && ShowRecord::key($lot->dam_name) !== ShowRecord::key($dam) => 'dam',
