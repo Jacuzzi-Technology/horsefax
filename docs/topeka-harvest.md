@@ -14,7 +14,16 @@ The sale pages link two kinds of PDF:
   attached only when the report's lot **and** name agree with the catalogued horse. That also keeps a buyer's name from
   ever being read as a horse's. Reports for sales without a catalog are not loaded.
 
-The Seymour, Northern Indiana Yearling Speed (Standardbred) and Friesian catalogs use other layouts and are not read yet.
+- **Seymour Draft Horse Sale catalogs** (2023, 2026; `TopekaParser::hashCatalog`): "#1 – Name", breed and sex,
+  "Reg #", "Foaled", "Markings" (color) and a 2-generation (2026) or 3-generation (2023) chart. Chart names printed on
+  the "Bred by" and "Remarks" lines are kept by blanking the label text, not cutting it, so columns don't shift.
+  Seymour market reports (2022–2025) price the 2023 catalog; 2026 has no report yet.
+- **Northern Indiana Yearling Speed Sale** (Standardbred yearlings, 2026; `TopekaParser::speedCatalog`): one page per
+  hip with name, color, sex, foaling date, USTA registration number and a 3-generation chart. Race marks
+  ("p, 3, 1:49.4") and dot leaders are stripped; the chart is centred, so generations are found from the widest gaps
+  between offsets. Race and produce records are never kept. The sale is Nov 9–10, 2026, so its lots load as "catalog".
+
+The Friesian catalog uses another layout and is not read yet.
 
 Status: `sold` with a market-report price, otherwise `offered` once the sale is past, `catalog` before it. Sale dates
 are the first day of sale week from the cover, stored with month precision.

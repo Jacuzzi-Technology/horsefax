@@ -24,7 +24,7 @@ class TopekaParser
         }
         $year = $season[1] ?? (preg_match('/(20\d\d)/', $f, $y) ? (int) $y[1] : null);
         $date = null;
-        if (preg_match('/\b('.self::MONTHS.')\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d\d)\b/', $head, $d)) {
+        if (preg_match('/\b('.self::MONTHS.')\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*[-–&]\s*\d{1,2}(?:st|nd|rd|th)?)?,?\s+(20\d\d)\b/', $head, $d)) { // "November 9th-10th, 2026"
             $date = date('Y-m-d', strtotime("$d[1] $d[2] $d[3]"));
             $year ??= (int) $d[3];
         }
@@ -79,7 +79,177 @@ class TopekaParser
                 'foal_year' => $foalYear, 'birth_date' => $birth, 'color' => $color, 'pedigree' => self::pedigree($block)];
         }
 
+        $lots = array_values($lots);
+        if (count($lots) < 5) {
+            $lots = self::hashCatalog($text) ?: $lots;
+        }
+        if (count($lots) < 5) {
+            $lots = self::speedCatalog($text) ?: $lots;
+        }
+
+        return $lots;
+    }
+
+    /**
+     * The Seymour sale's layout: "#1 – Empire's Jordan   $___", then breed and sex, "Reg # 320521", "Foaled: April 27,
+     * 2023", "Markings: Black, …" and a 2- or 3-generation chart. Consignor, breeder and remarks are never kept.
+     */
+    public static function hashCatalog(string $text): array
+    {
+        $lines = preg_split('/\R/', str_replace("\f", "\n", $text));
+        $lots = [];
+        $n = count($lines);
+        for ($i = 0; $i < $n; $i++) {
+            if (! preg_match('/^\s*#(\d+[A-Z]?)\s+[–—-]\s+(.+?)(?:\s+\$_+)?\s*$/u', $lines[$i], $m)) {
+                continue;
+            }
+            $block = [];
+            for ($j = $i + 1; $j < $n && $j < $i + 30 && ! preg_match('/^\s*#\d+[A-Z]?\s+[–—-]\s/u', $lines[$j]); $j++) {
+                $block[] = $lines[$j];
+                if (preg_match('/^\s*Remarks:/', $lines[$j])) {
+                    break; // the lot ends here; page footers and ads follow
+                }
+            }
+            $head = implode("\n", array_slice($block, 0, 6));
+            $breedSex = preg_match('/^\s{20,}([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s+(Mare|Gelding|Stallion|Filly|Colt)\s*$/m', $head, $b) ? $b : null;
+            $name = trim(preg_split('/[“"(]|\s+(?:AKA|A\.K\.A\.)\s+/iu', $m[2])[0]);
+            if ($name === '' || str_contains($name, '$') || str_contains($name, '__') || ! $breedSex) {
+                continue;
+            }
+            $foaled = preg_match('/Foaled:\s*(('.self::MONTHS.')\s+\d{1,2},?\s+(?:19|20)\d\d)/', $head, $f) ? $f[1] : null;
+            $foalYear = $foaled ? (int) substr($foaled, -4) : (preg_match('/Foaled:\s*((?:19|20)\d\d)\b/', $head, $y) ? (int) $y[1] : null);
+            $color = preg_match('/Markings:\s*([A-Za-z][A-Za-z -]{1,25}?)\s*[,.]/', $head, $c) ? ucfirst(strtolower(trim($c[1]))) : null;
+            $lots[$m[1]] = ['lot' => $m[1], 'name' => NrchaHarvester::display(self::tidy($name)),
+                'registration_number' => preg_match('/Reg\s*#\s*([A-Z0-9]*\d[A-Z0-9]*)\b/', $head, $r) && strlen($r[1]) >= 3 ? $r[1] : null, // not "Pending" or "Grade"
+                'breed' => $breedSex[1], 'sex' => strtolower($breedSex[2]),
+                'foal_year' => $foalYear, 'birth_date' => $foaled ? date('Y-m-d', strtotime($foaled)) : null,
+                'color' => $color, 'pedigree' => self::chart($block)];
+        }
+
         return array_values($lots);
+    }
+
+    /**
+     * The Northern Indiana Yearling Speed Sale (Standardbreds): one page per hip — "1   SHOW IN BEST   Aisle",
+     * "Black Filly - Foaled May 28, 2025 - Registration #61RA7", a 3-generation chart whose names carry race marks
+     * ("Bettors Delight p, 3, 1:49.4 ...."), then race and produce records (never kept).
+     */
+    public static function speedCatalog(string $text): array
+    {
+        $lots = [];
+        foreach (explode("\f", $text) as $page) {
+            if (! preg_match('/^\s*(\w+)\s+(?:Filly|Colt|Gelding)\s+-\s+Foaled\s+(('.self::MONTHS.')\s+\d{1,2},?\s+(?:19|20)\d\d)\s+-\s+Registration\s*#\s*([A-Z0-9]+)/m', $page, $d, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+            $before = substr($page, 0, $d[0][1]);
+            if (! preg_match_all('/^\s*(\d{1,3})\s{2,}([A-Z0-9][A-Z0-9 .\'’&-]+?)(?:\s{2,}Aisle)?\s*$/m', $before, $h, PREG_SET_ORDER)) {
+                continue;
+            }
+            [$hip, $name] = [end($h)[1], trim(end($h)[2])];
+            preg_match('/\s((?:Filly|Colt|Gelding))\s+-\s+Foaled/', $d[0][0], $sx);
+            $chartLines = [];
+            foreach (array_slice(preg_split('/\R/', substr($page, $d[0][1])), 1) as $line) {
+                if (preg_match('/^\s*1st dam/i', $line)) {
+                    break;
+                }
+                // Race marks and dot leaders are records, not names; the hip's own name printed beside the chart is not an ancestor.
+                $line = preg_replace('/(\S)\s(?:[pPhH],?\s*\d|[pPhH],\s*T?\d|T\d:|\d,\s*T?\d:)[^\s]*(?:,\s*[T\d:.sQ]+)*\s*\.*/u', '$1  ', $line);
+                $line = preg_replace('/\.{3,}/', '  ', $line);
+                if (strcasecmp(trim($line), $name) === 0) {
+                    continue;
+                }
+                $chartLines[] = $line;
+            }
+            $lots[$hip] = ['lot' => $hip, 'name' => NrchaHarvester::display(self::tidy($name)), 'registration_number' => $d[4][0], 'registry' => 'USTA',
+                'breed' => 'Standardbred', 'sex' => strtolower($sx[1] ?? ''), 'foal_year' => (int) substr($d[2][0], -4),
+                'birth_date' => date('Y-m-d', strtotime($d[2][0])), 'color' => ucfirst(strtolower($d[1][0])), 'pedigree' => self::chart($chartLines)];
+        }
+
+        return array_values($lots);
+    }
+
+    /**
+     * A 2- or 3-generation chart from text columns: cells are grouped by where they start on the line, and a column
+     * is used only with exactly the expected count (2, 4, 8). Labelled lines (Consigned by, Markings, Bred by, Reg #,
+     * Foaled, Remarks) and towns are not names.
+     */
+    public static function chart(array $lines): array
+    {
+        $cells = [];
+        foreach ($lines as $line) {
+            // Blank (don't cut, or the columns shift) the Remarks and Bred by text, keeping a chart name printed beside it.
+            $line = preg_replace_callback('/^\s*(?:Remarks|Bred by):.*?(?=\s{2,}\S|$)/u', fn ($m) => str_repeat(' ', mb_strlen($m[0])), rtrim($line));
+            preg_match_all('/(?<=^|^\s|\s{2})(\S(?:.*?\S)?)(?=\s{2,}|$)/u', $line, $mm, PREG_OFFSET_CAPTURE);
+            foreach ($mm[1] as [$v, $x]) {
+                $v = trim($v);
+                if (preg_match('/^(Consigned|Markings|Bred by|Foaled|Reg\s*#|Remarks|\$_|Aisle|\()/i', $v) || preg_match('/,\s*[A-Z]{2}\b|[a-z]{2}\.\s|^\d/', $v)
+                    || preg_match('/^[A-Z][a-z]+(?:\s[A-Z][a-z]+)*\s+(?:Mare|Gelding|Stallion|Filly|Colt)$/', $v) // the lot's breed and sex
+                    || ! preg_match('/^[A-Z][A-Za-z0-9.\'’&\- ]{1,44}$/u', $v)) {
+                    continue;
+                }
+                $cells[] = [$v, $x];
+            }
+        }
+        // Column starts: cluster the offsets, keep the (up to) three most used, left to right. A stray cell (a wrapped
+        // name's second line) can't add a column; it only upsets the count of the column it lands in.
+        $clusters = [];
+        foreach (array_column($cells, 1) as $x) {
+            foreach ($clusters as &$c) {
+                if (abs($c['x'] - $x) <= 6) {
+                    $c['n']++;
+                    continue 2;
+                }
+            }
+            unset($c);
+            $clusters[] = ['x' => $x, 'n' => 1];
+        }
+        unset($c);
+        usort($clusters, fn ($a, $b) => $b['n'] <=> $a['n']);
+        $cols = array_column(array_filter(array_slice($clusters, 0, 3), fn ($c) => $c['n'] >= 2), 'x');
+        sort($cols);
+        if (count($cols) < 2) {
+            return [];
+        }
+        $by = array_fill(0, count($cols), []);
+        foreach ($cells as [$v, $x]) {
+            foreach ($cols as $i => $c) {
+                if (abs($c - $x) <= 6) {
+                    $by[$i][] = NrchaHarvester::display(self::tidy($v));
+                    break;
+                }
+            }
+        }
+        // Charts printed centred rather than aligned (the Speed sale): the rightmost column is the third generation and
+        // the rest split into two generations at the widest gap between offsets. The counts must still be 2, 4 and 8.
+        if (count($by[0]) !== 2) {
+            $maxX = max(array_column($cells, 1));
+            $third = array_values(array_filter($cells, fn ($c) => $c[1] >= $maxX - 6));
+            $rest = array_values(array_filter($cells, fn ($c) => $c[1] < $maxX - 6));
+            $xs = array_column($rest, 1);
+            sort($xs);
+            $cut = null;
+            for ($i = 1, $gap = 0; $i < count($xs); $i++) {
+                if ($xs[$i] - $xs[$i - 1] > $gap) {
+                    [$gap, $cut] = [$xs[$i] - $xs[$i - 1], $xs[$i]];
+                }
+            }
+            $name = fn ($c) => NrchaHarvester::display(self::tidy($c[0]));
+            if ($cut !== null && count($third) === 8) {
+                $by = [array_map($name, array_values(array_filter($rest, fn ($c) => $c[1] < $cut))), array_map($name, array_values(array_filter($rest, fn ($c) => $c[1] >= $cut))), array_map($name, $third)];
+            }
+        }
+        $p = [];
+        if (count($by[0]) === 2) {
+            [$p['s'], $p['d']] = $by[0];
+        }
+        if (count($by[1]) === 4) {
+            [$p['ss'], $p['sd'], $p['ds'], $p['dd']] = $by[1];
+        }
+        if (isset($by[2]) && count($by[2]) === 8) {
+            [$p['sss'], $p['ssd'], $p['sds'], $p['sdd'], $p['dss'], $p['dsd'], $p['dds'], $p['ddd']] = $by[2];
+        }
+
+        return isset($p['s']) ? $p : [];
     }
 
     /** "Foaled: May 4, 2006. Blonde, stripe" / "Foaled: 6 year old. Blonde." -> [year, date, color]. Ages need the sale year: left to the caller as null. */

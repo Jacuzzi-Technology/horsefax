@@ -73,4 +73,84 @@ TXT;
         $this->assertFalse(TopekaParser::sameName($prices['2']['name'], 'Sample Blaze'));
         $this->assertSame([null, 'catalog', 'report', null], [TopekaHarvester::kind('Consignment%20Form%202026.pdf'), TopekaHarvester::kind('topeka_2026SpringDraftCatalog_Web.pdf'), TopekaHarvester::kind('2025%20Seymour%20Market%20Report.pdf'), TopekaHarvester::kind('Ad%202026.pdf')]);
     }
+
+    public function test_seymour_layout_keeps_chart_names_beside_labels_and_drops_people(): void
+    {
+        $text = <<<'TXT'
+#1 – Sample Jordan                                                                    $___________
+                                                                                   Percheron Gelding
+Consigned by: Sample Farms • Sample, ON                                                Reg # 320521
+Markings: Black, no white markings.                                            Foaled: April 27, 2023
+ Bred by: Sample Breeder, Sample, OH        Sample Empire Sire          Sample Grandsire
+ Sample Sire Line                                                       Sample Granddam
+                                            Sample Mid Dam              Sample Third One
+                                                                        Sample Third Two
+                                            Sample Mid Three            Sample Third Three
+ Sample Dam Line                                                        Sample Third Four
+                                            Sample Mid Four             Sample Third Five
+Remarks: Lead horse talent, no apologies.                               Sample Third Six
+                     Seymour Draft Horse Sale Page 9
+#2 – Sample Patience $___________
+                                                                                       Percheron Mare
+Consigned by: Sample Farms • Sample, ON                                                 Reg # Pending
+Markings: Black.                                                                Foaled: 2022
+#3 –                                                                           $___________
+                                                                                   Belgian Gelding
+Consigned by: Other Farms • Sample, IN
+Markings: Sorrel.                                                               Foaled: 3 year old
+Remarks: Broke.
+TXT;
+        $lots = TopekaParser::hashCatalog($text);
+        $this->assertSame(['1', '2'], array_column($lots, 'lot')); // lot 3 has no name
+        [$a, $b] = $lots;
+        $this->assertSame(['Sample Jordan', '320521', 'Percheron', 'gelding', 2023, '2023-04-27', 'Black'],
+            [$a['name'], $a['registration_number'], $a['breed'], $a['sex'], $a['foal_year'], $a['birth_date'], $a['color']]);
+        $this->assertSame(['Sample Sire Line', 'Sample Dam Line', 'Sample Empire Sire', 'Sample Grandsire', 'Sample Third Six'],
+            [$a['pedigree']['s'], $a['pedigree']['d'], $a['pedigree']['ss'], $a['pedigree']['sss'], $a['pedigree']['ddd']]); // names beside "Bred by" and "Remarks" kept
+        $this->assertSame([null, 2022, []], [$b['registration_number'], $b['foal_year'], $b['pedigree']]); // "Pending" is not a number
+        foreach (['Sample Farms', 'Sample Breeder', 'talent'] as $gone) {
+            $this->assertStringNotContainsString($gone, json_encode($lots));
+        }
+    }
+
+    public function test_speed_sale_pages_strip_race_marks(): void
+    {
+        $page = <<<'TXT'
+                            Consigned by: Sample Consignor, Sample, IN
+
+2                                        SAMPLE SECRET K                                                     Aisle
+                                                 (INDIANA ELIGIBLE)
+                              Brown Filly - Foaled April 26, 2025 - Registration #54R55
+                                                                                                               5
+                                            Microchip #985141010333861
+
+                                                                               Sample Yankee 3, 1:52.2
+                                                       Sample Hill 3, 1:50.1 ..............
+                                                                               Sample Blondie 3, 1:59.4f
+                  Sample Rebuff 3, 1:49.4 .................
+                                                                               Sample Glide 3, 1:55.1
+                                            Sample Madness p, 3, 1:58.0 ........
+                                                                               Sample Miss p,1:56.0
+SAMPLE SECRET K
+                                                                               Sample Lobell 3, 1:55.3
+                                            Sample Hall 3, 1:53.4 ............
+                                                                               Sample Angus 3, 2:03.1f
+          Sample Getinon 4, 1:54.4f......
+                                                                               Sample Glide Two p,T1:55.0
+                                            Sample Mission 3, 1:58.1
+                                                                               Sample Goal 3, 2:00.0
+
+1st dam
+SAMPLE GETINON 4, 1:54.4f ($42,000) 3 wins, by SAMPLE HALL 3, 1:53.4.
+TXT;
+        $lots = TopekaParser::speedCatalog("cover\f".$page);
+        $this->assertCount(1, $lots);
+        $l = $lots[0];
+        $this->assertSame(['2', 'Sample Secret K', '54R55', 'USTA', 'Standardbred', 'filly', 2025, 'Brown'],
+            [$l['lot'], $l['name'], $l['registration_number'], $l['registry'], $l['breed'], $l['sex'], $l['foal_year'], $l['color']]);
+        $this->assertSame(['Sample Rebuff', 'Sample Getinon', 'Sample Hill', 'Sample Madness', 'Sample Mission', 'Sample Yankee', 'Sample Miss', 'Sample Goal'],
+            [$l['pedigree']['s'], $l['pedigree']['d'], $l['pedigree']['ss'], $l['pedigree']['sd'], $l['pedigree']['dd'], $l['pedigree']['sss'], $l['pedigree']['sdd'], $l['pedigree']['ddd']]);
+        $this->assertStringNotContainsString('Consignor', json_encode($lots));
+        $this->assertSame('2026-11-09', TopekaParser::sale('tla_2026SpeedSaleCatalog_Web.pdf', "     November 9th-10th, 2026\n Foaled May 28, 2025")['date']);
+    }
 }

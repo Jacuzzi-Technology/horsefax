@@ -10,9 +10,10 @@ use Illuminate\Support\Facades\Http;
  * Topeka Livestock Auction horse sales (topekalivestock.com, Topeka IN), found Oct 22 2026 under Richard's standing
  * approval. GoDaddy site: robots.txt disallows only /404; no terms of use (a copyright line only); no bot wall.
  *
- * The sale pages link catalog PDFs (draft horses, the Seymour draft sale, the Northern Indiana yearling Standardbred
- * speed sale, Friesian and Clydesdale sales) and "market report" PDFs (lot, description, name, price). A catalog lot
- * gives the name, registration number, foaling date, color, sex, breed and a 3-generation pedigree. A market report
+ * The sale pages link catalog PDFs (draft horses; the Seymour draft sale and the Northern Indiana yearling Standardbred
+ * speed sale, each in its own layout, see TopekaParser::hashCatalog / speedCatalog; a Clydesdale sale; the Friesian
+ * catalog is not read yet) and "market report" PDFs (lot, description, name, price). A catalog lot gives the name,
+ * registration number, foaling date, color, sex, breed and a 2- or 3-generation pedigree. A market report
  * row whose sale and lot agree with a catalogued horse gives that horse's price.
  *
  * Facts only: catalog remarks, "Bred by", consignor, buyer and their towns are never kept (house rule; the kept PDFs
@@ -174,7 +175,7 @@ class TopekaHarvester
         foreach ($this->rows() as $r) {
             $lot = SaleLot::record($src->id, 'tla:'.$r['sale_key'].':'.$r['lot'], [
                 'sale_name' => mb_substr($r['sale_name'], 0, 255), 'sale_date' => $r['sale_date'], 'date_precision' => 'month', 'lot' => $r['lot'], // the cover gives the sale week's first day
-                'horse_name' => mb_substr($r['name'], 0, 255), 'registered' => $r['registration_number'] ? true : null, 'registry' => null,
+                'horse_name' => mb_substr($r['name'], 0, 255), 'registered' => $r['registration_number'] ? true : null, 'registry' => $r['registry'] ?? null,
                 'registration_number' => $r['registration_number'], 'foal_year' => $r['foal_year'], 'birth_date' => $r['birth_date'],
                 'sex' => $r['sex'], 'color' => $r['color'], 'breed' => $r['breed'],
                 'sire_name' => $r['pedigree']['s'] ?? null, 'dam_name' => $r['pedigree']['d'] ?? null, 'dam_sire_name' => $r['pedigree']['ds'] ?? null, 'pedigree' => $r['pedigree'] ?: null,
