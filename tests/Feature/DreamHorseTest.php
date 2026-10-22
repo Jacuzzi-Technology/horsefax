@@ -22,9 +22,9 @@ class DreamHorseTest extends TestCase
         return '<tr><td class="horseLabel" style="width:40%">'.$label.'</td><td class="horseData" style="width:60%"> '.$data.' </td></tr>';
     }
 
-    private function adPage(int $id, string $reg = '7654321'): string
+    private function adPage(int $id, string $reg = '7654321', string $title = 'SAMPLE DUN IT RIGHT (Dunny)'): string
     {
-        return '<html><body><table><tr><td class="titlebar"> SAMPLE DUN IT RIGHT (Dunny) </td></tr></table>'
+        return '<html><body><table><tr><td class="titlebar"> '.$title.' </td></tr></table>'
             .'<table>'.$this->row('Location', '<a href="https://www.dreamhorse.com/zip/26704/horses-for-sale-in-augusta-west-virginia.html">Augusta West Virginia 26704</a><br><small>USA</small><br><p class="x-small"><a href="#">Related Searches by State</a></p>')
             .$this->row(' Breed ', 'AQHA Quarter Horse&nbsp;<a href="https://www.aqha.com"><i></i></a><br><br><p class="x-small"><a href="#">Related Searches by Breed</a></p>')
             .$this->row('Date Foaled', 'JUN 2019 <span class="small">(7)</span>').$this->row('Gender', 'Gelding').$this->row('Height', '15.1 hh')
@@ -65,10 +65,12 @@ class DreamHorseTest extends TestCase
 
         $pages = [
             '/sitemap.txt' => "https://www.dreamhorse.com/s/horses-for-sale-in-ohio.html\n",
-            '/s/horses-for-sale-in-ohio.html' => '<!-- total_rows: 2--><a href="/ad/100.html"></a><a href="/ad/200.html"></a>',
+            '/s/horses-for-sale-in-ohio.html' => '<!-- total_rows: 4--><a href="/ad/100.html"></a><a href="/ad/200.html"></a><a href="/ad/300.html"></a><a href="/ad/400.html"></a>',
             '/ad/100.html' => $this->adPage(100),
             '/ad/101.html' => '<p>Ad Not Found.</p>',
-            '/ad/200.html' => $this->adPage(200, '1111111'), // same name, different number: never matched
+            '/ad/200.html' => $this->adPage(200, '1111111'), // same name, different number: a different horse
+            '/ad/300.html' => $this->adPage(300, '', 'SAMPLE STARLIGHT DOC (Star)'), // a registered name no record has
+            '/ad/400.html' => $this->adPage(400, '', 'Beginner Safe Gelding'), // an ad headline, not a name
         ];
         Http::fake(function ($request) use (&$pages) {
             return Http::response($pages[parse_url($request->url(), PHP_URL_PATH)] ?? '<!-- total_rows: 0-->');
@@ -76,7 +78,7 @@ class DreamHorseTest extends TestCase
         $dir = sys_get_temp_dir().'/dh-test-'.uniqid();
         $harvester = new DreamHorseHarvester(0, null, $dir);
         $out = $harvester->run();
-        $this->assertSame(2, $out['live']);
+        $this->assertSame(4, $out['live']);
         $this->assertStringNotContainsString('never be kept', file_get_contents($dir.'/ads.jsonl'));
         $this->assertFileExists($dir.'/dreamhorse-ads.csv');
 
@@ -85,11 +87,24 @@ class DreamHorseTest extends TestCase
         $lot = SaleLot::where('external_id', '100')->first();
         $this->assertSame([$h->id, 'registration', 'held', 'asking'], [$lot->horse_id, $lot->match_tier, $lot->review_status, $lot->status]);
         $this->assertFalse($lot->publishable());
-        $this->assertNull(SaleLot::where('external_id', '200')->value('horse_id'));
+        // Registered names get new unverified records (Richard, Oct 22 2026); the same-name horse with a different number is a different horse.
+        $this->assertSame(2, $loaded['created_records']);
+        $other = SaleLot::where('external_id', '200')->first();
+        $this->assertNotNull($other->horse_id);
+        $this->assertNotSame($h->id, $other->horse_id);
+        $this->assertSame(['created', 'held'], [$other->match_tier, $other->review_status]);
+        $star = Horse::find(SaleLot::where('external_id', '300')->value('horse_id'));
+        $this->assertSame(['Sample Starlight Doc', 'unverified', 'published'], [$star->registered_name, $star->identity_status, $star->source]);
+        $this->assertNull(SaleLot::where('external_id', '400')->value('horse_id'));
+        $ads = fn () => Horse::where('source', '!=', 'pedigree')->count(); // sires and dams named in the charts get their own records
+        $this->assertSame(3, $ads());
+        $all = Horse::count();
+        $this->assertSame(3, $harvester->load()['already_matched']); // a rerun makes nothing twice
+        $this->assertSame($all, Horse::count());
         $this->assertStringNotContainsString('Sample Seller', (string) SaleLot::all()->toJson());
 
         // Next run: ad 200 has dropped out of the lists and is gone from the site.
-        $pages['/s/horses-for-sale-in-ohio.html'] = '<!-- total_rows: 1--><a href="/ad/100.html"></a>';
+        $pages['/s/horses-for-sale-in-ohio.html'] = '<!-- total_rows: 3--><a href="/ad/100.html"></a><a href="/ad/300.html"></a><a href="/ad/400.html"></a>';
         $pages['/ad/200.html'] = '<p>Ad Not Found.</p>';
         $again = new DreamHorseHarvester(0, null, $dir);
         $this->assertSame(1, $again->run()['gone']);

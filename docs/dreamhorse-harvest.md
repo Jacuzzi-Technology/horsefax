@@ -93,8 +93,20 @@ full, since that's how ads that have gone are noticed.
   Ads marked not for sale (stud, lease only, "Not For Sale") stay in the raw file only.
 - Advertised asking prices aren't published yet (`HORSEFAX_PUBLISHED_SALE_KINDS`). Matched lots are therefore held,
   like HOMD's listings, and `hf:match-sales` attaches them once `asking` is published.
-- Matching is on **registration number only**, following the show-results convention. When exactly one record holds
-  the number (registry agreeing or blank), the lot gets `match_tier=registration` and `review_status=held`. When
-  several records hold it, the lot is a `conflict` for staff. Everything else stays unmatched. Names are never used,
-  and `hf:match-sales` and `hf:create-sale-records` skip `asking` lots, so no new horse records are created
-  from ads.
+- Registration number first, following the show-results convention. When exactly one record holds the number
+  (registry agreeing or blank), the lot gets `match_tier=registration` and `review_status=held`. When several records
+  hold it, the lot is a `conflict` for staff.
+- Registered names next (Richard, Oct 22 2026: "create new unverified horse listings anytime we have the registered
+  names on the sites we're crawling"). The rule is shared with RanchWorldAds in `App\Harvest\AdvertisedRegisteredName`
+  and ends in `CreateRecordsFromSaleLots::createForAdvertised`:
+  - a record agreeing on name + parentage: proposed to staff (`lot_belongs` suggestion), never attached;
+  - a same-name record with nothing to compare: queued for staff, nothing created;
+  - no record of that name, or every same-name record contradicts the ad: a new **Identity unverified** record, with
+    the lot tied to it (`match_tier=created`, held). Sires and dams named in the chart get records too
+    (`AddPublishedIdentity`).
+  - A registered name means the ad gives a registry or "registered", or sire and dam; the horse isn't marked
+    unregistered; the name has 2+ words; and it isn't a mule or donkey.
+- DreamHorse-only pre-filter (`DreamHorseHarvester::namesHorse`): sellers type the title, so the rule only runs when
+  the title gives a barn name in brackets that differs from the name ("BELL'S MILLIE OF THE RIDGE (Lady)"), or the ad
+  has a registration number, and the name doesn't read like a headline ("for sale", "gelding", "safe", "!" ...).
+- A rerun leaves earlier decisions alone: lots already matched or in review aren't touched again.

@@ -365,7 +365,8 @@ class DreamHorseHarvester
     public function load(): array
     {
         $source = $this->source();
-        $out = ['loaded' => 0, 'skipped_not_for_sale' => 0, 'with_reg_number' => 0, 'matched' => 0, 'conflict' => 0];
+        $out = ['loaded' => 0, 'skipped_not_for_sale' => 0, 'with_reg_number' => 0, 'matched' => 0, 'conflict' => 0, 'proposed_match' => 0,
+            'created_records' => 0, 'linked_same_horse' => 0, 'queued_same_name' => 0, 'unmatched' => 0, 'already_matched' => 0, 'already_in_review' => 0];
         foreach ($this->ads as $a) {
             if (! in_array($a['status'], ['live', 'gone'], true) || ! isset($a['url'])) {
                 continue;
@@ -386,15 +387,19 @@ class DreamHorseHarvester
                 'buyers_premium' => 'none', 'note' => mb_substr(self::note($a), 0, 255), 'source_url' => $a['url'],
             ]);
             $out['loaded']++;
-            if ($lot->registration_number) {
-                $out['with_reg_number']++;
-                if ($lot->horse_id) {
-                    $out['matched']++;
-                } elseif ($lot->review_status === null || $lot->review_status === 'conflict') {
-                    $r = $this->matchRegistration($lot);
-                    $out[$r] = ($out[$r] ?? 0) + 1;
-                }
+            $out['with_reg_number'] += $lot->registration_number ? 1 : 0;
+            if ($lot->horse_id || $lot->review_status) {
+                $out[$lot->horse_id ? 'already_matched' : 'already_in_review']++; // a rerun leaves earlier decisions alone
+                continue;
             }
+            if ($lot->registration_number && ($r = $this->matchRegistration($lot)) !== 'unmatched') {
+                $out[$r]++;
+                continue;
+            }
+            // Richard, Oct 22 2026: an ad giving a registered name gets an unverified record (shared rule), but only when
+            // the title reads as one: "NAME (Barn)" or a registration number, never an ad headline.
+            $r = self::namesHorse($a) ? AdvertisedRegisteredName::apply($lot, 'DreamHorse') : 'unmatched';
+            $out[['proposed' => 'proposed_match', 'linked' => 'linked_same_horse', 'created' => 'created_records', 'queued' => 'queued_same_name'][$r] ?? 'unmatched']++;
         }
 
         return $out;
@@ -421,6 +426,22 @@ class DreamHorseHarvester
         }
 
         return 'unmatched';
+    }
+
+    /**
+     * Does the ad's title give the horse's own name? Sellers type the title, so "Performance bred mares for sale!" or
+     * "Beginner Safe Gelding" turn up there. A name counts when the ad gives a different barn name in brackets ("BELL'S
+     * MILLIE OF THE RIDGE (Lady)") or a registration number, and it reads as a name, not a headline.
+     */
+    public static function namesHorse(array $a): bool
+    {
+        $name = trim((string) ($a['name'] ?? ''));
+        $distinctBarn = ! empty($a['barn_name']) && strcasecmp($a['barn_name'], $name) !== 0;
+        if ($name === '' || (! $distinctBarn && empty($a['registration_number']))) {
+            return false;
+        }
+
+        return ! preg_match('/[!?]|\b(for sale|sale|sold|mares?|geldings?|stallions?|fill(y|ies)|colts?|horses?|ponies|pony|registered|broke|safe|prospect|beginner|kid|lease|trade|reduced|price|obo|\d+\s*(yo|year))\b/i', $name);
     }
 
     /** The association as DreamHorse sellers type it, in Horsefax's spelling where there is one. */
