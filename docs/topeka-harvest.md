@@ -23,7 +23,14 @@ The sale pages link two kinds of PDF:
   ("p, 3, 1:49.4") and dot leaders are stripped; the chart is centred, so generations are found from the widest gaps
   between offsets. Race and produce records are never kept. The sale is Nov 9–10, 2026, so its lots load as "catalog".
 
-The Friesian catalog uses another layout and is not read yet.
+- **Friesian Spring Edition & Northern Indiana Riding Horse Sale** (2026, mixed breeds; `hashCatalog` with
+  `ridingChart`): the "#N – Name" layout with only the sex on the header line. Each parent is printed with its breed
+  label ("Gypsy Vanner", "1/2 Friesian", "AQHA") and a "Northern Indiana Riding Horse Sale" stamp is printed over the
+  chart; `unwatermark` blanks the stamp without moving the columns. Sire and dam are read by slot, so an unnamed parent
+  (a breed label alone) doesn't shift the other; grandparents are kept only when exactly four clean names are left.
+  The lot's breed is set only when both parents carry the same label, and a registry only when the catalog prints one
+  ("Reg # … (FBH)"). A horse with no number whose parent is labelled cross, grade or "1/2" is marked not registered,
+  so Richard's registered-name rule makes no record from it. No market report is posted for this sale.
 
 Status: `sold` with a market-report price, otherwise `offered` once the sale is past, `catalog` before it. Sale dates
 are the first day of sale week from the cover, stored with month precision.

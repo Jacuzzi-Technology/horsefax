@@ -153,4 +153,54 @@ TXT;
         $this->assertStringNotContainsString('Consignor', json_encode($lots));
         $this->assertSame('2026-11-09', TopekaParser::sale('tla_2026SpeedSaleCatalog_Web.pdf', "     November 9th-10th, 2026\n Foaled May 28, 2025")['date']);
     }
+
+    public function test_riding_horse_sale_reads_parents_through_the_watermark(): void
+    {
+        $text = <<<'TXT'
+#1 – Sample Sadie Lynne                                                  $___________
+                                                                                          Mare
+Consigned by: Sample Consignor • Sample, OH                                        Reg # 2021201
+Markings: Black                                                         Foaled: April 19, 2021
+                                                                  Sample Julius
+                                  Sample Demetrius
+                                  Friesian
+                                                                    N ortherN
+                                                                  Sample Zariha
+ Sample Sadie Lynne                                                  I NdIaNa
+                                                               rSample Roshwango
+                                                                 IdINg h orse
+                                  Sample Mercede
+                                  Friesian                       Sample Fern
+                                                                         Sale
+Remarks: Broke to drive. Sample remark that is never kept.
+#2 – Sample Conner                                                       $___________
+                                                                                         Stallion
+Consigned by: Other Consignor • Sample, IN
+Markings: Palomino                                                            Foaled: Yearling
+                                 Sample Lights Triple D
+                                 Gypsy Vanner
+                                                                    N ortherN
+ Sample Conner                                                       I NdIaNa
+                                                                r IdINg h orse
+                                 Haflinger/Morgan
+                                                                         Sale
+Remarks: Built like a tank!
+TXT;
+        $lots = TopekaParser::hashCatalog($text);
+        $this->assertCount(2, $lots);
+        [$a, $b] = $lots;
+        $this->assertSame(['Sample Sadie Lynne', '2021201', 'mare', 2021, 'Black', 'Friesian', true],
+            [$a['name'], $a['registration_number'], $a['sex'], $a['foal_year'], $a['color'], $a['breed'], $a['registered']]);
+        $this->assertSame(['s' => 'Sample Demetrius', 'd' => 'Sample Mercede', 'ss' => 'Sample Julius', 'sd' => 'Sample Zariha', 'ds' => 'Sample Roshwango', 'dd' => 'Sample Fern'], $a['pedigree']);
+        // An unnamed dam ("Haflinger/Morgan" only) leaves the sire in place; a crossbred with no number is not registered.
+        $this->assertSame([['s' => 'Sample Lights Triple D'], 'stallion', false, null], [$b['pedigree'], $b['sex'], $b['registered'], $b['breed']]);
+        foreach (['Consignor', 'never kept', 'ortherN', 'Sale'] as $gone) {
+            $this->assertStringNotContainsString($gone, json_encode($lots));
+        }
+        foreach (['1/2 Friesian', '50% Friesian', 'Friesian x STDB', 'Haflinger/Morgan', 'AQHA'] as $label) {
+            $this->assertTrue(TopekaParser::isBreedLabel($label), $label);
+        }
+        $this->assertFalse(TopekaParser::isBreedLabel('Agape of Friesian Glory'));
+        $this->assertFalse(TopekaParser::isBreedLabel('Sample Demetrius'));
+    }
 }

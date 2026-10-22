@@ -32,7 +32,7 @@ class TopekaParser
             // The title line only: draft reports advertise the next Seymour sale.
             (bool) preg_match('/seymour/i', $f.' '.strtok(ltrim($head), "\n")) => ['seymour', 'Seymour Draft Horse Sale'],
             (bool) preg_match('/speed/i', $f) || (bool) preg_match('/Yearling Speed Sale/i', substr($head, 0, 3000)) => ['speed', 'Northern Indiana Yearling Speed Sale'],
-            (bool) preg_match('/friesian/i', $f) => ['friesian', 'Friesian Sale'],
+            (bool) preg_match('/friesian/i', $f) => ['friesian', 'Friesian Spring Edition & Northern Indiana Riding Horse Sale'],
             (bool) preg_match('/clydesdale/i', $f) => ['clydesdale', 'Clydesdale Sale'],
             (bool) preg_match('/berkshire/i', $f) => ['berkshire', 'Berkshire Dispersal'],
             (bool) preg_match('/special/i', $f) => ['special-draft', 'Special Draft Horse Sale'],
@@ -110,20 +110,36 @@ class TopekaParser
                     break; // the lot ends here; page footers and ads follow
                 }
             }
+            $block = array_map([self::class, 'unwatermark'], $block);
             $head = implode("\n", array_slice($block, 0, 6));
             $breedSex = preg_match('/^\s{20,}([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\s+(Mare|Gelding|Stallion|Filly|Colt)\s*$/m', $head, $b) ? $b : null;
+            // The riding-horse sale prints only the sex here; each parent's breed is printed under its name instead.
+            $sexOnly = ! $breedSex && preg_match('/(?:^\s{20,}|\s{2,})(Mare|Gelding|Stallion|Filly|Colt)\s*$/m', $head, $so) ? strtolower($so[1]) : null;
             $name = trim(preg_split('/[“"(]|\s+(?:AKA|A\.K\.A\.)\s+/iu', $m[2])[0]);
-            if ($name === '' || str_contains($name, '$') || str_contains($name, '__') || ! $breedSex) {
+            if ($name === '' || str_contains($name, '$') || str_contains($name, '__') || (! $breedSex && ! $sexOnly)) {
                 continue;
             }
             $foaled = preg_match('/Foaled:\s*(('.self::MONTHS.')\s+\d{1,2},?\s+(?:19|20)\d\d)/', $head, $f) ? $f[1] : null;
             $foalYear = $foaled ? (int) substr($foaled, -4) : (preg_match('/Foaled:\s*((?:19|20)\d\d)\b/', $head, $y) ? (int) $y[1] : null);
-            $color = preg_match('/Markings:\s*([A-Za-z][A-Za-z -]{1,25}?)\s*[,.]/', $head, $c) ? ucfirst(strtolower(trim($c[1]))) : null;
-            $lots[$m[1]] = ['lot' => $m[1], 'name' => NrchaHarvester::display(self::tidy($name)),
-                'registration_number' => preg_match('/Reg\s*#\s*([A-Z0-9]*\d[A-Z0-9]*)\b/', $head, $r) && strlen($r[1]) >= 3 ? $r[1] : null, // not "Pending" or "Grade"
-                'breed' => $breedSex[1], 'sex' => strtolower($breedSex[2]),
-                'foal_year' => $foalYear, 'birth_date' => $foaled ? date('Y-m-d', strtotime($foaled)) : null,
-                'color' => $color, 'pedigree' => self::chart($block)];
+            $color = preg_match('/Markings:\s*([A-Za-z][A-Za-z -]{1,25}?)\s*(?=[,.]|\s{2,}|$)/m', $head, $c) ? ucfirst(strtolower(trim($c[1]))) : null;
+            $reg = preg_match('/Reg\s*#\s*([A-Z0-9-]*\d[A-Z0-9-]*)(?:\s*\(([A-Za-z]{2,6})\))?/', $head, $r) && strlen($r[1]) >= 3 ? $r : null; // not "Pending" or "Grade"
+            $lot = ['lot' => $m[1], 'name' => NrchaHarvester::display(self::tidy($name)), 'registration_number' => $reg[1] ?? null,
+                'registry' => isset($reg[2]) ? strtoupper($reg[2]) : null, 'breed' => $breedSex[1] ?? null, 'sex' => $breedSex ? strtolower($breedSex[2]) : $sexOnly,
+                'foal_year' => $foalYear, 'birth_date' => $foaled ? date('Y-m-d', strtotime($foaled)) : null, 'color' => $color];
+            if ($breedSex) {
+                $lot['pedigree'] = self::chart($block);
+            } else {
+                [$lot['pedigree'], $sireBreed, $damBreed] = self::ridingChart($block, $name);
+                // Crossbred or grade parents and no number: not a registered horse (so no record is made from the name).
+                $lot['registered'] = $lot['registration_number'] ? true : (preg_match('#cross|grade|unregistered|\d/\d|\d%|/| x #i', $sireBreed.' '.$damBreed) ? false : null);
+                // A breed only when both parents carry the same label; a registry only when the catalog prints one.
+                $lot['breed'] = $sireBreed && strcasecmp($sireBreed, $damBreed ?? '') === 0 ? (AuctioneerSoftwareParser::registry($sireBreed) ? null : $sireBreed) : null;
+                $both = AuctioneerSoftwareParser::registry((string) $sireBreed) ?: null;
+                if (! $lot['registry'] && $both && $both === AuctioneerSoftwareParser::registry((string) $damBreed) && $lot['registration_number']) {
+                    $lot['registry'] = $both;
+                }
+            }
+            $lots[$m[1]] = $lot;
         }
 
         return array_values($lots);
@@ -166,6 +182,80 @@ class TopekaParser
         }
 
         return array_values($lots);
+    }
+
+    /** The "Northern Indiana Riding Horse Sale" stamp printed over the chart, blanked so the columns keep their offsets. */
+    public static function unwatermark(string $line): string
+    {
+        $line = preg_replace_callback('/N\s?ortherN|I\s?NdIaNa|IdINg|h\s?orse/u', fn ($m) => str_repeat(' ', mb_strlen($m[0])), $line);
+        $line = preg_replace('/(?<=\s)r(?=[A-Z])|(?<=\s)r(?=\s|$)/', ' ', $line); // the stamp's "r" glued to a name ("rAvalon")
+
+        return preg_replace('/(?<=\s{2})Sale\s*$/', '', $line);
+    }
+
+    /**
+     * The riding-horse sale's 2-generation chart: the horse's own name at the left, each parent (with its breed label
+     * on the next line) in the middle, the four grandparents at the right. Grandparents are used only when exactly four
+     * clean names are left. Returns [pedigree, sire's breed label, dam's breed label].
+     */
+    public static function ridingChart(array $block, string $name): array
+    {
+        $mid = [];
+        $right = [];
+        foreach ($block as $line) {
+            if (preg_match('/^\s*(Consigned|Markings|Remarks|Bred by|Trained)/i', $line)) {
+                continue;
+            }
+            preg_match_all('/(?<=^|^\s|\s{2})(\S(?:.*?\S)?)(?=\s{2,}|$)/u', rtrim($line), $mm, PREG_OFFSET_CAPTURE);
+            foreach ($mm[1] as [$v, $x]) {
+                $v = trim($v);
+                if ($x < 15 || strcasecmp(self::tidy($v), self::tidy($name)) === 0 || preg_match('/^\$_|Page \d|Reg\s*#|Foaled|^(?:Mare|Gelding|Stallion|Filly|Colt)$/', $v)) {
+                    continue;
+                }
+                if ($x < 50) {
+                    $mid[] = $v;
+                } else {
+                    $right[] = $v;
+                }
+            }
+        }
+        // Sire slot, then dam slot: a breed label closes its slot, so an unnamed parent ("Haflinger/Morgan" alone) still
+        // leaves the other parent in the right place.
+        $parents = [null, null];
+        $breeds = [null, null];
+        $slot = 0;
+        foreach ($mid as $v) {
+            if ($slot > 1) {
+                break;
+            }
+            if (self::isBreedLabel($v)) {
+                $breeds[$slot++] = $v;
+            } elseif ($parents[$slot] === null) {
+                $parents[$slot] = $v;
+            } elseif ($slot === 0) {
+                $parents[$slot = 1] = $v;
+            }
+        }
+        if (! $parents[0] && ! $parents[1]) {
+            return [[], $breeds[0], $breeds[1]];
+        }
+        $right = array_values(array_filter($right, fn ($v) => preg_match('/^[A-Z0-9][A-Za-z0-9.\'’&\- ]{1,44}$/u', $v) && ! self::isBreedLabel($v)));
+        $p = array_filter(['s' => $parents[0] ? NrchaHarvester::display(self::tidy($parents[0])) : null, 'd' => $parents[1] ? NrchaHarvester::display(self::tidy($parents[1])) : null]);
+        if (count($right) === 4 && $parents[0] && $parents[1]) {
+            [$p['ss'], $p['sd'], $p['ds'], $p['dd']] = array_map(fn ($v) => NrchaHarvester::display(self::tidy($v)), $right);
+        }
+
+        return [$p, $breeds[0], $breeds[1]];
+    }
+
+    /** "Gypsy Vanner", "1/2 Friesian", "Haflinger/Morgan", "AQHA", "Quarter Horse Cross": every word a breed word. */
+    public static function isBreedLabel(string $v): bool
+    {
+        $word = '(?:AQHA|APHA|ApHC|PtHA|KFPS|FHANA|FPZV|FBH|GVHS|AHR|AMHA|Grade|Unknown|Unregistered|Registered|Friesian|Sporthorse|Sport|Gypsy|Vanner|Quarter|Horse|Paint|Pinto|Appaloosa|Ha(?:l)?flinger|Morgan|Percheron|Belgian|Clydesdale|Shire|Standardbred|Thoroughbred|Saddlebred|American|Arabian|Draft|Cross|Crossbred|Mustang|Fjord|Pony|Welsh|Shetland|Hackney|Spotted|Saddle|Walker|Walking|Tennessee|Racking|Fox|Trotter|Rocky|Mountain|Kentucky|Missouri|Mule|Andalusian|Warmblood|Drum|Curly|Miniature|Buckskin|Palomino|Dutch|Harness|Gaited|Iberian|Lusitano|Azteca|STDB|STB|TB|QH|QTR|Arab|Paso|Fino|Tobiano|Overo|AAA|Spanish|Mustang|x|and|&)';
+
+        $part = '(?:\d/\d\s+|\d{1,3}%\s*)?'; // "1/2 Friesian", "50% Friesian"
+
+        return (bool) preg_match('#^'.$part.$word.'(?:\s*[/ ]\s*'.$part.$word.')*$#i', trim($v));
     }
 
     /**
