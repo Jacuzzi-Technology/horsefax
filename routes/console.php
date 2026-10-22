@@ -217,6 +217,44 @@ Artisan::command('hf:import-aqha-papers {file} {--dry-run}', function () {
     $this->info(json_encode($out));
 })->purpose('Import identity, registration numbers and pedigrees from AQHA papers on file');
 
+// Registry details from the same AQHA papers (Richard, Oct 21 2026): owner history, parentage verified, how produced,
+// health panel, deceased date, markings, show/race summaries. RECORDED, NOT SHOWN (see RegistryRecord). Matched to
+// horses by registration number only; rerunnable: a document already imported is replaced, never duplicated.
+// php artisan hf:import-registry-records storage/app/private/aqha-registry.json
+Artisan::command('hf:import-registry-records {file}', function () {
+    $items = json_decode(file_get_contents($this->argument('file')), true, flags: JSON_THROW_ON_ERROR);
+    $out = ['documents' => 0, 'owners' => 0, 'no_horse' => 0, 'ambiguous' => 0];
+    foreach ($items as $d) {
+        $ids = \App\Models\HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')
+            ->where('value_normalized', \App\Support\Record::normalizeIdentifier((string) $d['registration_number']))
+            ->where(fn ($q) => $q->whereNull('registry')->orWhere('registry', $d['registry']))->pluck('horse_id')->unique();
+        if ($ids->count() !== 1) {
+            $out[$ids->isEmpty() ? 'no_horse' : 'ambiguous']++;
+            continue;
+        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($d, $ids, &$out) {
+            $rec = \App\Models\RegistryRecord::updateOrCreate(
+                ['registry' => $d['registry'], 'registration_number' => $d['registration_number'], 'document_ref' => $d['document_ref']],
+                ['horse_id' => $ids->first(), 'document_kind' => $d['document_kind'], 'document_date' => $d['document_date'] ?? null,
+                    'source' => $d['source'] ?? null, 'data' => $d['data'] ?: null, 'raw_text' => $d['raw_text'] ?? null]);
+            $rec->owners()->delete();
+            foreach ($d['owners'] ?? [] as $o) {
+                if (trim((string) ($o['name'] ?? '')) === '') {
+                    continue;
+                }
+                $rec->owners()->create(['horse_id' => $rec->horse_id, 'role' => $o['role'] === 'current' ? 'current' : 'previous',
+                    'name' => trim($o['name']), 'city' => $o['city'] ?? null, 'state' => $o['state'] ?? null, 'country' => $o['country'] ?? null,
+                    'date_acquired' => $o['date_acquired'] ?? null]);
+                $out['owners']++;
+            }
+            // Counts only: the horse's audit page is visible to its owner, and these details are not shown.
+            \App\Support\Audit::record('registry_record.imported', $rec, null, ['document' => $d['document_kind'], 'owners' => count($d['owners'] ?? [])], $rec->horse_id);
+            $out['documents']++;
+        });
+    }
+    $this->info(json_encode($out));
+})->purpose('Record registry details (owner history and more) from AQHA papers, not shown on the site');
+
 // Possible duplicate names for staff review (spacing/punctuation variants and one-letter variants). Cron runs it nightly.
 // php artisan hf:find-name-variants
 Artisan::command('hf:find-name-variants', function () {
