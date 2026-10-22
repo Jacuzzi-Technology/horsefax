@@ -3,7 +3,7 @@
     <div class="wrap py-10">
         @include('admin.nav')
         <h1 class="text-[32px]">{{ $horse->displayName() }} <span class="font-sans text-[15px] text-muted">{{ $horse->horsefax_id }}</span></h1>
-        <p class="mt-1 font-sans text-[13px]"><a href="{{ route('horses.show', $horse) }}" class="text-gold-dark">Open as the owner sees it</a> · source: {{ $horse->fromPedigree() ? 'added from a pedigree' : ($horse->fromResults() ? 'built from published show results' : ($horse->source === 'published' ? 'built from a published stallion or foal listing' : ($horse->source === 'ifce' ? 'French national registry open data (IFCE)' : 'created by an owner'))) }}</p>
+        <p class="mt-1 font-sans text-[13px]"><a href="{{ route('horses.show', $horse) }}" class="text-gold-dark">Open as the owner sees it</a> · source: {{ $horse->fromPedigree() ? 'added from a pedigree' : ($horse->fromResults() ? 'built from published show results' : ($horse->source === 'published' ? 'built from published listings (HOMD, stallion or foal lists)' : ($horse->source === 'ifce' ? 'French national registry open data (IFCE)' : 'created by an owner'))) }}</p>
 
         <div class="card p-5 mt-6 flex flex-wrap items-start gap-6">
             <div>
@@ -12,6 +12,28 @@
                 @if ($identityVerification)<p class="font-sans text-[12px] text-muted mt-1">{{ $identityVerification->methodLabel() }} · {{ $identityVerification->verified_at->format('M j, Y') }} · by {{ $identityVerification->staff?->name }}</p>@endif
             </div>
             @include('admin.verify-controls', ['type' => 'horse', 'item' => $horse])
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6 mt-6">
+            <div class="card p-5">
+                <p class="label text-muted text-[10px]">Claim codes</p>
+                <p class="hint text-[13px] mt-1">A one-time code for the buyer, printed on a claim certificate with a QR. Redeeming it makes them the verified owner when nobody else owns the record.</p>
+                <form method="POST" action="{{ route('admin.claim-codes.issue', $horse) }}" class="mt-3 flex flex-wrap gap-2 items-end">
+                    @csrf
+                    <div><label class="field-label text-[11px]" for="issuer">Issued by</label><input id="issuer" name="issuer" required value="Horse of My Dreams" class="font-sans text-[13px] border border-line rounded px-2 py-1"></div>
+                    <div><label class="field-label text-[11px]" for="expires_on">Use by (optional)</label><input id="expires_on" type="date" name="expires_on" class="font-sans text-[13px] border border-line rounded px-2 py-1"></div>
+                    <button class="btn-forest btn-small">Issue code</button>
+                </form>
+                @php $codes = \App\Models\ClaimCode::where('horse_id', $horse->id)->latest()->get(); @endphp
+                @foreach ($codes as $c)
+                    <p class="font-sans text-[13px] mt-2"><a href="{{ route('admin.claim-codes.certificate', $c) }}" class="text-gold-dark">{{ $c->issuer_name }}, {{ $c->created_at->format('M j, Y') }}</a> · {{ $c->redeemed_at ? 'redeemed by '.$c->redeemer?->name.' ('.str_replace('_', ' ', $c->redemption).')' : ($c->revoked_at ? 'revoked' : ($c->usable() ? 'open' : 'expired')) }}</p>
+                @endforeach
+            </div>
+            <div class="card p-5 flex gap-4 items-start">
+                <img src="{{ route('horse.qr', [$horse, 'svg']) }}" alt="QR code for this horse's record" class="w-[110px] h-[110px]">
+                <div><p class="label text-muted text-[10px]">QR code</p><p class="hint text-[13px] mt-1">Opens this horse's Horsefax record. For catalogs, stall cards and papers.</p>
+                    <p class="font-sans text-[13px] mt-2"><a href="{{ route('horse.qr', [$horse, 'svg']) }}?download=1" class="text-gold-dark">SVG (print)</a> · <a href="{{ route('horse.qr', [$horse, 'png']) }}?download=1" class="text-gold-dark">PNG</a> · <a href="{{ route('admin.qr') }}" class="text-gold-dark">A whole catalog</a></p></div>
+            </div>
         </div>
 
         @php

@@ -16,9 +16,18 @@ use Illuminate\Support\Facades\DB;
  */
 class AttachShowResults
 {
-    /** $showNames false leaves out results published under hunter/jumper show names (EquestrianLive), which often aren't the same horse. */
-    public function __invoke(ShowRecord $record, Horse $horse, User $staff, bool $showNames = true): int
+    /**
+     * $showNames false leaves out results published under hunter/jumper show names (EquestrianLive), which often aren't the same horse.
+     * Results under one of the horse's previous names are held for staff (see ShowNameRule) unless $allowFormerName.
+     */
+    public function __invoke(ShowRecord $record, Horse $horse, User $staff, bool $showNames = true, bool $allowFormerName = false): int
     {
+        if (! $allowFormerName && ($former = ShowNameRule::formerName($record, $horse))) {
+            ShowNameRule::flagFormerName($record, $horse, $former, $staff->is(BuildRecordsFromResults::system()) ? null : $staff);
+
+            return 0;
+        }
+
         return DB::transaction(function () use ($record, $horse, $staff, $showNames) {
             $n = 0;
             $q = $record->appearances()->whereNull('horse_event_id')->orderBy('event_year');
@@ -35,7 +44,7 @@ class AttachShowResults
                     'horse_id' => $horse->id, 'category' => 'competition', 'type' => 'show',
                     'title' => $a->class_name, 'organization' => $a->organization === 'AQHA' ? 'AQHA (at the '.$a->event_name.')' : $a->organization,
                     'event_name' => $a->event_name.' '.$a->event_year, 'class_name' => $a->class_name, 'round' => $a->round,
-                    'placing' => $a->placing, 'earnings_cents' => $a->earnings_cents,
+                    'placing' => $a->placing, 'score' => $a->score, 'earnings_cents' => $a->earnings_cents,
                     'occurred_on' => $a->event_year.'-10-01', 'date_precision' => 'year',
                     'details' => 'From the published results: '.$a->source_url,
                     'contributor_id' => $staff->id, 'contributor_role' => 'staff',

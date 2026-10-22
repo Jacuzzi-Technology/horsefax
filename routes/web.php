@@ -18,20 +18,42 @@ Route::get('/search/suggest', [PublicController::class, 'suggest'])->middleware(
 Route::get('/horse/{horse}', [PublicController::class, 'horse'])->name('horse.public');
 Route::get('/report/{token}', [PublicController::class, 'report'])->middleware('throttle:reports')->name('report.show');
 Route::get('/sample-report', [PublicController::class, 'sample'])->name('sample');
-foreach (['how-it-works', 'for-owners', 'for-professionals', 'about', 'privacy', 'terms', 'record-corrections'] as $page) {
+Route::get('/sample-report/pdf', [PublicController::class, 'samplePdf'])->middleware('throttle:reports')->name('sample.pdf');
+Route::get('/horse/{horse}/pdf', [PublicController::class, 'horsePdf'])->middleware('throttle:reports')->name('horse.pdf');
+Route::get('/report/{token}/pdf', [PublicController::class, 'reportPdf'])->middleware('throttle:reports')->name('report.pdf');
+foreach (['how-it-works', 'for-owners', 'for-professionals', 'partners', 'about', 'privacy', 'terms', 'record-corrections', 'factual-record-policy'] as $page) {
     Route::get('/'.$page, [PublicController::class, 'page'])->defaults('page', $page)->name($page);
 }
 Route::get('/contact', [PublicController::class, 'contact'])->name('contact');
 Route::post('/contact', [PublicController::class, 'sendContact'])->middleware('throttle:forms')->name('contact.send');
+Route::post('/partners', [PublicController::class, 'sendPartnerInquiry'])->middleware('throttle:forms')->name('partners.send');
 Route::post('/horse/{horse}/corrections', [PublicController::class, 'reportCorrection'])->middleware('throttle:forms')->name('corrections.store');
 Route::get('/robots.txt', [PublicController::class, 'robots']);
 Route::get('/sitemap.xml', [PublicController::class, 'sitemap']);
 Route::get('/show-records/{record}', [\App\Http\Controllers\ShowRecordController::class, 'show'])->name('show-records.show');
 Route::get('/files/{document}', [FileController::class, 'show'])->middleware('throttle:files')->name('files.show');
+// QR codes with the HF mark, for catalogs and stall cards; and the seller's confirm-or-deny link for a claim.
+Route::get('/horse/{horse}/qr.{format}', [\App\Http\Controllers\QrController::class, 'horse'])->whereIn('format', ['svg', 'png'])->middleware('throttle:files')->name('horse.qr');
+// Radiographs: buyers view (when the owner allows) and open files; the request needs an account.
+Route::get('/horse/{horse}/radiographs/{set}', [\App\Http\Controllers\RadiographController::class, 'view'])->name('radiographs.view');
+Route::get('/horse/{horse}/radiographs/{set}/files/{file}', [\App\Http\Controllers\RadiographController::class, 'file'])->middleware('throttle:files')->name('radiographs.file');
+Route::get('/claims/confirm/{token}', [\App\Http\Controllers\ClaimConfirmationController::class, 'show'])->name('claims.confirm');
+Route::post('/claims/confirm/{token}', [\App\Http\Controllers\ClaimConfirmationController::class, 'respond'])->middleware('throttle:forms')->name('claims.confirm.respond');
 
 // Signed in
 Route::middleware(['auth', 'standing'])->group(function () {
     Route::get('/dashboard', [AccountController::class, 'dashboard'])->name('dashboard');
+    Route::get('/claim', [\App\Http\Controllers\ClaimCodeController::class, 'form'])->name('claim-code.form');
+    Route::get('/horses/{horse}/radiographs', [\App\Http\Controllers\RadiographController::class, 'index'])->name('radiographs.index');
+    Route::post('/horses/{horse}/radiographs', [\App\Http\Controllers\RadiographController::class, 'store'])->middleware('throttle:forms')->name('radiographs.store');
+    Route::get('/horses/{horse}/radiographs/{set}', [\App\Http\Controllers\RadiographController::class, 'manage'])->name('radiographs.manage');
+    Route::post('/horses/{horse}/radiographs/{set}/files', [\App\Http\Controllers\RadiographController::class, 'upload'])->middleware('throttle:radiograph-uploads')->name('radiographs.upload');
+    Route::post('/horses/{horse}/radiographs/{set}/access', [\App\Http\Controllers\RadiographController::class, 'updateAccess'])->name('radiographs.access');
+    Route::post('/horses/{horse}/radiographs/{set}/requests/{access}', [\App\Http\Controllers\RadiographController::class, 'decide'])->name('radiographs.decide');
+    Route::post('/horse/{horse}/radiographs/{set}/request', [\App\Http\Controllers\RadiographController::class, 'requestAccess'])->middleware('throttle:forms')->name('radiographs.request');
+    Route::post('/claim', [\App\Http\Controllers\ClaimCodeController::class, 'redeem'])->middleware('throttle:forms')->name('claim-code.redeem');
+    Route::get('/account/identity', [\App\Http\Controllers\IdentityController::class, 'form'])->name('identity');
+    Route::post('/account/identity', [\App\Http\Controllers\IdentityController::class, 'submit'])->middleware('throttle:uploads')->name('identity.submit');
     Route::get('/account', [AccountController::class, 'account'])->name('account');
 
     Route::get('/horses/new', [HorseController::class, 'create'])->name('horses.create');
@@ -90,7 +112,17 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');
     Route::get('/show-records', [AdminController::class, 'showRecords'])->name('show-records');
     Route::post('/show-records/{record}/attach', [AdminController::class, 'attachResults'])->name('show-records.attach');
+    Route::post('/horses/{horse}/claim-codes', [\App\Http\Controllers\ClaimCodeController::class, 'issue'])->name('claim-codes.issue');
+    Route::get('/claim-codes/{code}', [\App\Http\Controllers\ClaimCodeController::class, 'certificate'])->name('claim-codes.certificate');
+    Route::get('/claim-codes/{code}/qr.svg', [\App\Http\Controllers\ClaimCodeController::class, 'qr'])->name('claim-codes.qr');
+    Route::post('/claim-codes/{code}/revoke', [\App\Http\Controllers\ClaimCodeController::class, 'revoke'])->name('claim-codes.revoke');
+    Route::get('/identity/{check}/document', [\App\Http\Controllers\IdentityController::class, 'document'])->name('identity.document');
+    Route::get('/qr', [\App\Http\Controllers\QrController::class, 'batchForm'])->name('qr');
+    Route::post('/qr', [\App\Http\Controllers\QrController::class, 'batch'])->name('qr.batch');
     Route::get('/sale-lots', [\App\Http\Controllers\Admin\SaleLotController::class, 'index'])->name('sale-lots');
+    Route::post('/suggestions/{suggestion}', [\App\Http\Controllers\Admin\ReviewSuggestionController::class, 'decide'])->name('suggestions.decide');
+    Route::get('/names/batch', [\App\Http\Controllers\Admin\NameReviewController::class, 'batch'])->name('names.batch');
+    Route::post('/names/batch', [\App\Http\Controllers\Admin\NameReviewController::class, 'batchDecide'])->name('names.batch.decide');
     Route::get('/names', [\App\Http\Controllers\Admin\NameReviewController::class, 'index'])->name('names');
     Route::post('/names/{review}', [\App\Http\Controllers\Admin\NameReviewController::class, 'decide'])->name('names.decide');
     Route::post('/sale-lots/{lot}/attach', [\App\Http\Controllers\Admin\SaleLotController::class, 'attach'])->name('sale-lots.attach');

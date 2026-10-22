@@ -12,6 +12,15 @@
             </div>
         @endif
 
+        <section class="card p-6 flex gap-5 items-start">
+            <img src="{{ route('horse.qr', [$horse, 'svg']) }}" alt="QR code for this horse's record" class="w-[120px] h-[120px]">
+            <div>
+                <h2 class="text-[24px]">QR code</h2>
+                <p class="mt-2 text-[17px]">Opens this horse's Horsefax record. Put it on a sale ad, stall card or papers. Visitors see the public record.</p>
+                <p class="font-sans text-[13px] mt-3"><a href="{{ route('horse.qr', [$horse, 'svg']) }}?download=1" class="text-gold-dark">Download SVG (for print)</a> · <a href="{{ route('horse.qr', [$horse, 'png']) }}?download=1" class="text-gold-dark">Download PNG</a></p>
+            </div>
+        </section>
+
         <section class="card p-6">
             <h2 class="text-[24px]">Search listing and public summary</h2>
             <form method="POST" action="{{ route('sharing.public', $horse) }}" class="mt-4 space-y-3">
@@ -20,6 +29,7 @@
                 <label class="flex items-start gap-3 text-[17px]"><input type="checkbox" name="public_summary" value="1" class="accent-gold mt-1.5" @checked($horse->public_summary)> <span><strong>Publish a public summary</strong><br><span class="hint">A public page at {{ route('horse.public', $horse) }} showing only the items you've marked Public.</span></span></label>
                 <button class="btn-forest btn-small">Save</button>
             </form>
+            <p class="hint text-[13px] mt-3">You can share more at any time. Hiding something that is already public, or turning the public record off, needs Horsefax staff approval. Sale history can't be hidden.</p>
         </section>
 
         <section class="card p-6">

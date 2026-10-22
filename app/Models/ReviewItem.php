@@ -11,11 +11,15 @@ class ReviewItem extends Model
     use HasUuids;
 
     public const KINDS = [
+        'visibility_change' => 'Request to hide',
+        'identity_check' => 'Identity check',
         'ownership_claim' => 'Ownership claim',
         'identifier_conflict' => 'Identifier conflict',
         'dispute' => 'Correction / dispute',
         'fact_conflict' => 'Conflicting identity value',
         'results_match' => 'Show results to attach',
+        'pedigree_conflict' => 'Conflicting pedigree line (from a merge)',
+        'name_rule' => 'Name change vs show record',
     ];
 
     protected $guarded = ['id'];

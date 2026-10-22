@@ -15,7 +15,7 @@
             <p>Every record gets a permanent <strong>Horsefax ID</strong> (for example HF-7K3M-Q9P2). It stays with the horse for life and is never reused.</p>
 
             <h2 id="verification">2. Add evidence, and see how each fact is known</h2>
-            <p>Upload registration papers, Coggins tests, health certificates, vet and farrier records, show results and bills of sale. Originals are stored as evidence and never edited. Every fact on a record shows two separate things.</p>
+            <p>Add the documents that belong in the horse's history: registration papers, bills of sale, show results, and health records such as Coggins tests and certificates over the years. Originals are kept as evidence and never edited, and they stay with the horse's record whoever owns it. Every fact on a record shows two separate things.</p>
             <h3>Where it came from</h3>
             <ul>
                 <li><strong>Owner reported</strong>: entered by the owner or their authorized representative.</li>
@@ -37,7 +37,7 @@
             <p>Add dated entries for health and care, training, competition, ownership and sales, and transport. Entries stay attributed to the person who added them. To change one of your own entries you add a correction, which supersedes it; the original remains in the history. Invitations for veterinarians, farriers and trainers to add their own attributed entries are coming next.</p>
 
             <h2 id="share">4. Share only what you choose</h2>
-            <p>Everything starts private. You can:</p>
+            <p>Everything you add starts private. (History Horsefax collects from public sources, such as published show and sale results, appears on the record labeled with its source.) You can:</p>
             <ul>
                 <li>publish a <strong>public summary</strong>, which shows only the items you mark Public, and lets people find the horse in Horsefax search;</li>
                 <li>create a <strong>report link</strong> for a buyer, vet or trainer, picking exactly which sections it includes, with an optional expiry. You can revoke it at any moment, and it stops working at once.</li>

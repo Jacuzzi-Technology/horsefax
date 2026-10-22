@@ -24,6 +24,9 @@ class MatchSaleLots
 {
     public const AUTO = ['registration', 'sire_dam', 'foal_year_parent'];
 
+    /** Start of the note on a conflict where every same-name record contradicts the lot (a different horse). */
+    public const DIFFERENT = 'Same name, different horse: ';
+
     /** @var array<string, list<string>> name key => horse ids */
     private array $byName = [];
 
@@ -39,7 +42,16 @@ class MatchSaleLots
         $system = BuildRecordsFromResults::system();
         $attach = app(AttachSaleLot::class);
         $out = ['attached' => 0, 'held' => 0, 'queued' => 0, 'conflict' => 0, 'unmatched' => 0];
-        $q = SaleLot::whereNull('horse_id')->whereIn('status', ['sold', 'high_bid', 'no_sale'])
+        // Lots already tied to a record but with nothing on it yet: held kinds (HOMD asking prices) once they're published,
+        // and catalog lots once the sale publishes their result.
+        SaleLot::whereNotNull('horse_id')->whereNull('horse_event_id')->where(fn ($w) => $w->where('review_status', 'held')->orWhereNull('review_status'))
+            ->where('status', '!=', 'catalog')->with('horse')->lazyById(500, 'id')
+            ->each(function ($lot) use ($attach, $system, &$out) {
+                if ($lot->horse && $lot->publishable() && $attach($lot, $lot->horse, $system, $lot->match_tier ?? 'staff')) {
+                    $out['attached']++;
+                }
+            });
+        $q = SaleLot::whereNull('horse_id')->whereIn('status', ['sold', 'high_bid', 'no_sale', 'offered'])
             ->where(fn ($w) => $w->whereNull('review_status')->orWhereIn('review_status', ['queued', 'conflict', 'held']));
         $done = 0;
         foreach ($q->lazyById(500, 'id') as $lot) {
@@ -73,7 +85,8 @@ class MatchSaleLots
     /** @return array{0:?Horse, 1:?string, 2:?string, 3:?string} horse, tier, review status, note */
     public function match(SaleLot $lot): array
     {
-        if ($lot->registration_number) {
+        // "Pending", "N/A" and the like aren't registration numbers.
+        if ($lot->registration_number && preg_match('/\d/', $lot->registration_number)) {
             $ids = HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')
                 ->where('value_normalized', Record::normalizeIdentifier($lot->registration_number))
                 ->when($lot->registry, fn ($q) => $q->where(fn ($w) => $w->whereNull('registry')->orWhere('registry', $lot->registry)))
@@ -87,6 +100,9 @@ class MatchSaleLots
             }
         }
 
+        if (Record::placeholderName($lot->horse_name)) {
+            return [null, null, null, null]; // "Pending", "Unnamed": no name to match on
+        }
         if (! $this->byName) {
             self::matchable(Horse::whereRaw('lower(registered_name) = lower(?)', [$lot->horse_name]))->pluck('id')
                 ->each(fn ($id) => $this->byName[$lot->name_key][] = $id); // single lot (staff page)
@@ -133,7 +149,7 @@ class MatchSaleLots
             return [null, null, 'queued', $basis];
         }
 
-        return [null, null, 'conflict', 'Same name, different horse: '.implode(', ', $ruledOut)];
+        return [null, null, 'conflict', self::DIFFERENT.implode(', ', $ruledOut)];
     }
 
     public static function matchable($query)
@@ -150,9 +166,10 @@ class MatchSaleLots
             $regs = $h->identifiers()->where('kind', 'registration')->whereNull('superseded_by')->get();
         }
         $year = $h->birth_precision !== 'unknown' ? $h->birth_year : null;
+        $regs = $regs?->filter(fn ($r) => preg_match('/\d/', (string) $r->value_normalized));
 
         return match (true) {
-            $lot->registration_number && $regs && $regs->isNotEmpty()
+            $lot->registration_number && preg_match('/\d/', $lot->registration_number) && $regs && $regs->isNotEmpty()
                 && ! $regs->contains(fn ($r) => $r->value_normalized === Record::normalizeIdentifier($lot->registration_number)) => 'registration number',
             $lot->sire_name && $sire && ShowRecord::key($lot->sire_name) !== ShowRecord::key($sire) => 'sire',
             $lot->dam_name && $dam && ShowRecord::key($lot->dam_name) !== ShowRecord::key($dam) => 'dam',

@@ -22,14 +22,39 @@
         <div class="bg-ink text-cream"><div class="wrap py-3 font-sans text-[13px]">Preview: this public summary is <strong>off</strong>. Only you and Horsefax staff can see this page. Turn it on in <a href="{{ route('sharing', $horse) }}" class="text-gold-soft underline">Sharing</a>.</div></div>
     @endif
 
+    {{-- Printed / PDF copies: a plain header saying what this is, where it came from and when. --}}
+    @php
+        // The current online version: the shared report link for a report, the record for everyone else.
+        $onlineUrl = $sample ? route('sample') : ($isReport ? route('report.show', $link->token) : route('horse.public', $horse));
+    @endphp
+    <div class="hidden print:flex items-center justify-between gap-4 border-b border-line pb-3 mb-4">
+        <img src="/img/wordmark.svg" alt="Horsefax" class="h-[22px] w-auto">
+        <div class="flex items-center gap-3">
+            <p class="font-sans text-[10px] text-muted text-right">{{ $isReport ? 'Horsefax report' : 'Horsefax History Report' }} {{ $horse->horsefax_id }} · printed {{ now()->format('M j, Y') }}<br>Entries are labeled by source; only items marked Horsefax Verified have been checked by Horsefax.<br>Scan for the current version: <a href="{{ $onlineUrl }}">{{ preg_replace('#^https?://#', '', $onlineUrl) }}</a></p>
+            <div class="w-[62px] h-[62px] shrink-0 [&>svg]:w-full [&>svg]:h-full">{!! \App\Support\HorseQr::svg($onlineUrl, 240) !!}</div>
+        </div>
+    </div>
+    <style>
+        @media print {
+            @page { size: letter; margin: 0.55in; }
+            body { background: #fff !important; }
+            .bg-forest, .bg-ink { background: #fff !important; color: #13201A !important; }
+            .bg-forest *, .bg-ink * { color: #13201A !important; }
+            li, tr, .card, figure { break-inside: avoid; }
+            a[href^="http"]:not([href*="horsefax.com"]):not([href*="localhost"])::after { content: " (" attr(href) ")"; font-size: 9px; color: #666; word-break: break-all; }
+            iframe, video { display: none !important; }
+        }
+    </style>
+    <script>window.addEventListener('beforeprint', () => document.querySelectorAll('details[data-print-open]').forEach(d => d.open = true));</script>
+
     <section class="bg-forest text-cream">
         <div class="wrap py-10 sm:py-14 grid sm:grid-cols-[180px_1fr] gap-8 items-start">
-            <div class="w-[180px] h-[180px] bg-ink/40 rounded-[3px] overflow-hidden border border-cream/10">
+            <div class="w-[180px] h-[180px] rounded-[3px] overflow-hidden {{ $photo ? 'bg-ink/40 border border-cream/10' : '' }}">
                 @if ($photo)<img src="{{ route('files.show', [$photo] + $q) }}" alt="{{ $horse->shortName() }}" class="w-full h-full object-cover">
                 @else<img src="/img/hf-tile.svg" alt="" class="w-full h-full">@endif
             </div>
             <div>
-                <p class="label text-gold-soft">{{ $isReport ? 'Horsefax report' : 'Horsefax public summary' }} · {{ $horse->horsefax_id }}</p>
+                <p class="label text-gold-soft">{{ ! empty($pdfMode) ? 'Horsefax History Report' : ($isReport ? 'Horsefax report' : 'Horsefax record') }} · {{ $horse->horsefax_id }}</p>
                 <h1 class="text-cream text-[38px] sm:text-[52px] leading-[1.05] mt-3">{{ $horse->registered_name ?: $horse->barn_name }}</h1>
                 @if ($horse->registered_name && $horse->barn_name && strcasecmp($horse->registered_name, $horse->barn_name))
                     <p class="text-[20px] italic text-cream/75 mt-1">Barn name "{{ $horse->barn_name }}"</p>
@@ -43,15 +68,51 @@
         </div>
     </section>
 
+    {{-- At a glance (Kate's launch review): what the record holds, before the detail. Only what is on record. --}}
+    @php
+        $glance = collect([
+            ['Show results', $shows->count() ?: null],
+            ['Known earnings', ($e = $shows->sum('earnings_cents')) ? HorseEvent::money($e) : null],
+            ['Sale records', $sales->filter(fn ($s) => $s->isPriceEntry() || $s->type === 'sale')->count() ?: null],
+            ['Pedigree', ($gen = (int) $pedigree->max(fn ($p) => strlen($p->position))) ? $gen.' '.Str::plural('generation', $gen) : null],
+            ['Photos & videos', $media->count() ?: null],
+            ['Last updated', collect([$horse->updated_at, $events->max('updated_at'), $media->max('updated_at')])->filter()->max()?->format('M j, Y')],
+        ])->filter(fn ($g) => $g[1] !== null);
+    @endphp
+    @if ($glance->count() > 1)
+        <div class="bg-paper border-b border-line"><div class="wrap py-5">
+            <dl class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                @foreach ($glance as [$label, $value])
+                    <div><dt class="label text-muted text-[10px]">{{ $label }}</dt><dd class="text-[22px] text-ink leading-tight mt-1">{{ $value }}</dd></div>
+                @endforeach
+            </dl>
+        </div></div>
+    @endif
+
     @if (! $isReport && ($horse->fromResults() || $horse->fromPedigree() || in_array($horse->source, ['published', 'ifce'], true)) && ! $horse->activeStewards()->exists())
         <div class="bg-paper border-b border-line"><div class="wrap py-4 font-sans text-[14px] flex flex-wrap items-center gap-x-6 gap-y-2">
-            <span>{{ match ($horse->source) { 'results' => 'Horsefax built this record from published show results.', 'published' => 'Horsefax built this record from a published stallion or foal listing.', 'ifce' => 'From the French national equine database. Source: '.\App\Harvest\IfceImporter::CREDIT.'.', default => 'This record was created because the horse appears in a pedigree on Horsefax.' } }} It has no owner yet, and nothing on it is verified. More than one horse can share a name.</span>
+            <span>{{ match ($horse->source) { 'results' => 'Horsefax built this record from published show results.', 'published' => 'Horsefax built this record from published listings (sale listings, stallion directories or foal lists).', 'ifce' => 'From the French national equine database. Source: '.\App\Harvest\IfceImporter::CREDIT.'.', default => 'This record was created because the horse appears in a pedigree on Horsefax.' } }} It has no owner yet, and nothing on it is verified. More than one horse can share a name.</span>
             <a href="{{ route('horses.claim', $horse) }}" class="text-gold-dark font-semibold">Is this your horse? Claim the record</a>
         </div></div>
     @endif
 
     <div class="wrap py-12 grid lg:grid-cols-[1fr_300px] gap-12">
         <div class="space-y-14 min-w-0">
+            {{-- Two ways to read the same record (Kate's Life Timeline): by section, or in order of the horse's life. --}}
+            @php $timelineView = request('view') === 'timeline'; @endphp
+            <nav class="flex gap-1 border-b border-line -mt-4 print:hidden" aria-label="Record view">
+                <a href="{{ request()->fullUrlWithQuery(['view' => null]) }}" @if (! $timelineView) aria-current="page" @endif class="no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 border-b-2 {{ $timelineView ? 'border-transparent text-muted hover:text-ink' : 'border-gold text-ink' }}">Standard report</a>
+                <a href="{{ request()->fullUrlWithQuery(['view' => 'timeline']) }}" @if ($timelineView) aria-current="page" @endif class="no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 border-b-2 {{ $timelineView ? 'border-gold text-ink' : 'border-transparent text-muted hover:text-ink' }}">Life timeline</a>
+                @php
+                    $pdfUrl = $sample ? route('sample.pdf') : ($isReport ? route('report.pdf', $link->token) : route('horse.pdf', $horse));
+                    $pdfUrl .= $timelineView ? '?view=timeline' : '';
+                @endphp
+                <a href="{{ $pdfUrl }}" class="ml-auto no-underline font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-4 py-3 text-gold-dark hover:text-ink" data-pdf-link>Download PDF</a>
+                <button type="button" onclick="window.print()" class="font-sans text-[12px] font-semibold tracking-[0.14em] uppercase px-3 py-3 text-muted hover:text-ink">Print</button>
+            </nav>
+            @if ($timelineView)
+                @include('public.partials.timeline', ['timeline' => \App\Support\Timeline::build($horse, $events, $media, $ownership, fn ($e) => Views::showAmount($e, $audience, $link))])
+            @else
 
             {{-- Identity --}}
             <section aria-labelledby="h-identity">
@@ -125,7 +186,7 @@
                                 <tbody>
                                 @foreach ($rows as $e)
                                     <tr>
-                                        <td class="whitespace-nowrap">{{ $e->occurred_on?->format('m/y') ?? '—' }}</td>
+                                        <td class="whitespace-nowrap">{{ $e->occurred_on ? $e->dateLabel() : '—' }}</td>
                                         <td class="min-w-[150px]">{{ $e->event_name ?: $e->title }}@if ($e->organization)<br><span class="font-sans text-[11px] text-muted">{{ $e->organization }}</span>@endif</td>
                                         <td>{{ $e->class_name ?: collect([$e->discipline, $e->division])->filter()->join(' · ') }}</td>
                                         <td>{{ $e->rider }}</td>
@@ -187,7 +248,7 @@
                                     <div><p class="text-[18px]">{{ $e->priceLine(Views::showAmount($e, $audience, $link)) }}</p>
                                         <p class="font-sans text-[13px] text-muted mt-0.5">{{ $e->sale_venue }}@if ($e->sourceUrl()) · <a href="{{ $e->sourceUrl() }}" class="text-gold-dark" rel="nofollow noopener" target="_blank">Source</a>@endif</p></div>
                                 @else
-                                <div><p class="text-[18px]">{{ $e->typeLabel() ?? $e->title }}@if ($e->sale_venue) <span class="text-muted">· {{ $e->sale_venue }}</span>@endif</p>
+                                <div><p class="text-[18px]">{{ $e->source_type === 'historical' ? $e->title : ($e->typeLabel() ?? $e->title) }}@if ($e->sale_venue && ! str_contains($e->title, $e->sale_venue)) <span class="text-muted">· {{ $e->sale_venue }}</span>@endif @if ($e->sourceUrl())<a href="{{ $e->sourceUrl() }}" class="font-sans text-[13px] text-gold-dark" target="_blank" rel="noopener">See the listing</a>@endif</p>
                                     @if (Views::showAmount($e, $audience, $link))<p class="font-sans text-[14px] mt-0.5">{{ HorseEvent::money($e->amount_cents) }}</p>@endif</div>
                                 @endif
                                 <div class="text-right"><p class="font-sans text-[13px] text-muted">{{ $e->dateLabel() }}</p><x-claim :item="$e" class="mt-1 justify-end" /></div>
@@ -200,6 +261,27 @@
                             </li>
                         @endforeach
                     </ul>
+                </section>
+            @endif
+
+            {{-- Radiographs: shown when the owner has opened them to buyers (or this report link includes them). --}}
+            @php
+                $radSets = $sample ? collect() : \App\Models\RadiographSet::where('horse_id', $horse->id)->withCount('files')
+                    ->when($isReport, fn ($q) => $q->where('in_reports', true), fn ($q) => $q->where('access', '!=', 'private'))->orderByDesc('taken_on')->get()
+                    ->filter(fn ($s) => $s->files_count && ($isReport ? $link->includes('health') : true));
+            @endphp
+            @if ($radSets->isNotEmpty())
+                <section aria-labelledby="h-rads">
+                    <h2 id="h-rads" class="text-[28px] border-b border-line pb-2">Radiographs</h2>
+                    <ul class="mt-4 divide-y divide-line border-y border-line">
+                        @foreach ($radSets as $s)
+                            <li class="py-3 flex flex-wrap justify-between gap-3 items-center">
+                                <div><p class="text-[18px]">{{ $s->title() }}</p><p class="font-sans text-[13px] text-muted">{{ $s->attribution() }} · {{ $s->files_count }} {{ Str::plural('file', $s->files_count) }} · {{ $s->source_type === 'professional_attested' ? 'added by the veterinarian' : 'supplied by the owner' }}</p></div>
+                                <a href="{{ route('radiographs.view', [$horse, $s] + $q) }}" class="btn-ghost btn-small print:hidden">{{ $s->viewableBy(auth()->user(), $link) ? 'View radiographs' : ($s->access === 'on_request' ? 'Request access' : 'View radiographs') }}</a>
+                            </li>
+                        @endforeach
+                    </ul>
+                    <p class="hint mt-2">Shared by the owner for buyers. Horsefax doesn't interpret radiographs; have your own veterinarian review them.</p>
                 </section>
             @endif
 
@@ -240,9 +322,11 @@
                 </section>
             @endif
 
-            <section class="card p-6 bg-cream">
-                <h2 class="text-[22px]">What this {{ $isReport ? 'report' : 'summary' }} does not tell you</h2>
-                <p class="mt-2 text-[16px] leading-relaxed">It shows only what the owner has chosen to share. A missing record is not proof that something did not happen, and Horsefax does not certify a horse as sound, safe or suitable. Before buying, arrange your own pre-purchase exam and check registration details with the registry.</p>
+            @endif
+
+            <section class="card p-6 bg-cream print:break-inside-avoid">
+                <h2 class="text-[22px]">What this {{ $isReport ? 'report' : 'record' }} does not tell you</h2>
+                <p class="mt-2 text-[16px] leading-relaxed">It shows what has been published about this horse, each entry labeled with its source, and what its owner has chosen to share. A missing record is not proof that something did not happen, and Horsefax does not certify a horse as sound, safe or suitable. Before buying, arrange your own pre-purchase exam and check registration details with the registry. Horsefax records facts, not opinions: see our <a href="{{ route('factual-record-policy') }}" class="text-gold-dark">factual record policy</a>.</p>
             </section>
         </div>
 
@@ -252,17 +336,24 @@
                 <p class="font-sans text-[20px] tracking-[0.08em] text-ink mt-1">{{ $horse->horsefax_id }}</p>
                 <p class="hint">A permanent ID for this horse. It is never reused.</p>
                 @unless ($isReport || $sample)
-                    <button type="button" class="btn-ghost btn-small mt-3" data-copy="{{ route('horse.public', $horse) }}">Copy link</button>
+                    <button type="button" class="btn-ghost btn-small mt-3 print:hidden" data-copy="{{ route('horse.public', $horse) }}">Copy link</button>
+                    <p class="hidden print:block font-sans text-[11px] mt-2">Online: <a href="{{ route('horse.public', $horse) }}">{{ preg_replace('#^https?://#', '', route('horse.public', $horse)) }}</a></p>
                 @endunless
             </div>
             <div class="card p-5">
                 <p class="label text-muted text-[10px] mb-3">Labels used</p>
                 <div class="flex flex-wrap gap-2"><span class="chip-self">Owner reported</span><span class="chip border-[#3b5b7a]/40 text-[#2c4a66] bg-[#3b5b7a]/[0.06]">Professional attested</span><span class="chip border-ink/40 text-ink bg-ink/[0.05]">Official source</span><span class="chip-verified">Horsefax Verified</span><span class="chip-disputed">Disputed</span></div>
-                <p class="hint text-[13px] mt-2">Source and verification are separate: click a Horsefax Verified badge to see how and what it covers.</p>
-                <a href="{{ route('how-it-works') }}#verification" class="block font-sans text-[12px] mt-3 text-gold-dark">What the labels mean</a>
+                <p class="hint text-[13px] mt-2 print:hidden">Source and verification are separate: click a Horsefax Verified badge to see how and what it covers.</p>
+                <p class="hint text-[13px] mt-2 hidden print:block">Source and verification are separate. The online record shows how each Horsefax verification was done and what it covers.</p>
+                <a href="{{ route('how-it-works') }}#verification" class="block font-sans text-[12px] mt-3 text-gold-dark print:hidden">What the labels mean</a>
+                <p class="hidden print:block font-sans text-[11px] mt-2">What the labels mean: <a href="{{ route('how-it-works') }}#verification">{{ preg_replace('#^https?://#', '', route('how-it-works')) }}</a></p>
             </div>
             @unless ($sample)
-            <details class="card p-5" @if ($errors->any()) open @endif>
+            <div class="hidden print:block card p-5">
+                <p class="text-[16px]">Something wrong on this record?</p>
+                <p class="font-sans text-[11px] mt-1">Request a correction on the online record: <a href="{{ route('horse.public', $horse) }}">{{ preg_replace('#^https?://#', '', route('horse.public', $horse)) }}</a>. Horsefax staff review every request.</p>
+            </div>
+            <details class="card p-5 print:hidden" @if ($errors->any()) open @endif>
                 <summary class="cursor-pointer text-[18px] text-ink">Something wrong? Request a correction</summary>
                 <form method="POST" action="{{ route('corrections.store', $horse) }}" class="mt-4 space-y-3">
                     @csrf
@@ -289,7 +380,7 @@
                 </form>
             </details>
             @else
-            <div class="card p-5"><p class="text-[17px]">Ready to start your horse's record?</p><a href="{{ route('horses.create') }}" class="btn-gold btn-small mt-3">Create a Horse Record</a></div>
+            <div class="card p-5 print:hidden"><p class="text-[17px]">Ready to start your horse's record?</p><a href="{{ route('horses.create') }}" class="btn-gold btn-small mt-3">Create a Horse Record</a></div>
             @endunless
         </aside>
     </div>

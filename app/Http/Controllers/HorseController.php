@@ -209,6 +209,7 @@ class HorseController extends Controller
             return back()->withInput()->withErrors(['barn_name' => 'Give the horse a barn name or registered name.']);
         }
         $facts = self::facts($data);
+        $oldName = $horse->registered_name;
         $role = \App\Actions\Record\RecordEvent::roleOf($horse, $request->user());
         $held = app(\App\Actions\Record\RecordFacts::class)($horse, $request->user(), \App\Actions\Record\RecordFacts::fromColumns($facts), \App\Support\Record::sourceForRole($role), $role);
         // Values held for review don't change the horse yet.
@@ -220,11 +221,19 @@ class HorseController extends Controller
         }
         $horse->fill($facts)->save();
         Audit::changes('horse.identity_updated', $horse);
+        $renamedAfterShows = $oldName && $horse->registered_name && \App\Models\ShowRecord::key($oldName) !== \App\Models\ShowRecord::key($horse->registered_name)
+            && ($shown = \App\Actions\Record\ShowNameRule::shownAs($horse, $oldName));
+        if ($renamedAfterShows) {
+            \App\Actions\Record\ShowNameRule::flagRename($horse, $oldName, $horse->registered_name, $shown, $request->user());
+        }
 
         $msg = 'Identity details saved. Each change is kept in the record history.';
         if ($held) {
             $labels = collect($held)->map(fn ($f) => strtolower(\App\Models\HorseFact::FIELDS[$f] ?? $f))->join(', ');
             $msg .= ' Your change to '.$labels.' differs from a verified or professionally supplied value, so it has gone to Horsefax staff for review.';
+        }
+        if ($renamedAfterShows) {
+            $msg .= ' This horse has show results under its old name, and AQHA doesn\'t allow a name change after a horse has shown, so Horsefax staff will check the new name.';
         }
 
         return redirect()->route('horses.show', $horse)->with('status', $msg);
@@ -257,17 +266,29 @@ class HorseController extends Controller
             'statement' => 'required|string|min:20|max:5000',
             'evidence' => 'required|array|min:1|max:5',
             'evidence.*' => 'file|mimes:'.StoreDocument::MIMES.'|max:'.StoreDocument::MAX_KB,
+            'registration_number' => 'nullable|string|max:40',
+            'seller_name' => 'nullable|required_with:seller_email|string|max:160',
+            'seller_email' => 'nullable|email|max:190',
         ], ['evidence.required' => 'Attach at least one document that shows ownership (bill of sale, transfer, registration papers in your name).']);
 
         $docIds = [];
         foreach ($request->file('evidence') as $file) {
             $docIds[] = $store($horse, $request->user(), $file, ['kind' => 'bill_of_sale', 'title' => 'Ownership claim evidence', 'visibility' => 'private'])->id;
         }
+        // The registration number on the claimant's papers, checked against the record's own (staff see the result).
+        $reg = trim((string) ($data['registration_number'] ?? ''));
+        $regMatch = $reg === '' ? null : $horse->identifiers()->where('kind', 'registration')->whereNull('superseded_by')
+            ->where('value_normalized', \App\Support\Record::normalizeIdentifier($reg))->exists();
         $item = ReviewItem::create([
             'kind' => 'ownership_claim', 'horse_id' => $horse->id, 'submitted_by' => $request->user()->id,
-            'statement' => $data['statement'], 'details' => ['document_ids' => $docIds],
+            'statement' => $data['statement'], 'details' => ['document_ids' => $docIds, 'registration_number' => $reg ?: null,
+                'registration_match' => $regMatch, 'record_has_registration' => $horse->identifiers()->where('kind', 'registration')->whereNull('superseded_by')->exists()],
         ]);
         Audit::record('claim.submitted', $item, null, ['documents' => count($docIds)], $horse->id);
+        // The seller, when named, is asked to confirm the sale.
+        if (! empty($data['seller_email'])) {
+            app(\App\Actions\Claims\AskSellerToConfirm::class)($item, $data['seller_name'], $data['seller_email']);
+        }
         Notify::staff('Horsefax ownership claim for '.$horse->horsefax_id, $data['statement']);
 
         return redirect()->route('dashboard')->with('status', 'Your claim for '.$horse->shortName().' is with Horsefax staff. The current record is unchanged until it has been reviewed.');

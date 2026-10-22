@@ -25,6 +25,12 @@ class Reviews
                 'dispute' => $this->upholdDispute($item, $staff),
                 'results_match' => ($rec = \App\Models\ShowRecord::find($item->subject_id)) && ! $rec->horse_id ? app(AttachShowResults::class)($rec, $item->horse, $staff) : null,
                 'fact_conflict' => ($fact = \App\Models\HorseFact::find($item->subject_id)) ? RecordFacts::accept($fact) : null,
+                'pedigree_conflict' => $this->usePedigreeLine($item),
+                // Staff confirmed results under a former name are this horse's; a flagged rename just stands.
+                ShowNameRule::KIND => ($item->details['case'] ?? null) === 'former_name_results' && ($rec = \App\Models\ShowRecord::find($item->subject_id))
+                    && (! $rec->horse_id || $rec->horse_id === $item->horse_id) ? app(AttachShowResults::class)($rec, $item->horse, $staff, true, true) : null,
+                'visibility_change' => RequestToHide::apply($item),
+                'identity_check' => $this->decideIdentity($item, $staff, 'verified', $note, $options['method'] ?? 'id_document'),
                 default => null,
             };
             $this->close($item, $staff, 'approved', $note);
@@ -33,7 +39,12 @@ class Reviews
 
     public function reject(ReviewItem $item, User $staff, string $note): void
     {
-        DB::transaction(fn () => $this->close($item, $staff, 'rejected', $note));
+        DB::transaction(function () use ($item, $staff, $note) {
+            if ($item->kind === 'identity_check') {
+                $this->decideIdentity($item, $staff, 'rejected', $note, null);
+            }
+            $this->close($item, $staff, 'rejected', $note);
+        });
     }
 
     private function approveClaim(ReviewItem $item, array $options): void
@@ -52,6 +63,19 @@ class Reviews
             $existing = Stewardship::create(['horse_id' => $horse->id, 'user_id' => $item->submitted_by, 'role' => 'owner', 'status' => 'verified', 'started_on' => now()->toDateString()]);
         }
         Audit::record('stewardship.verified', $existing, null, ['user_id' => $item->submitted_by, 'via' => 'ownership_claim']);
+    }
+
+    /** A merge conflict on a pedigree line: staff chose the other line. The current one is kept behind it, never deleted. */
+    private function usePedigreeLine(ReviewItem $item): void
+    {
+        $line = \App\Models\PedigreeEntry::find($item->subject_id);
+        $current = \App\Models\PedigreeEntry::find($item->details['current_entry_id'] ?? null);
+        if (! $line) {
+            return;
+        }
+        $current?->forceFill(['superseded_by' => $line->id, 'status' => 'disputed'])->save();
+        $line->forceFill(['superseded_by' => null, 'status' => 'unverified'])->save();
+        Audit::record('pedigree.conflict_resolved', $line, ['name' => $current?->name], ['name' => $line->name, 'position' => $line->position], $line->horse_id);
     }
 
     private function clearConflict(ReviewItem $item, array $options): void
@@ -87,6 +111,24 @@ class Reviews
             // An upheld dispute also withdraws any Horsefax verification standing behind the item.
             app(Verify::class)->withdraw($subject, $staff, 'Dispute upheld: '.\Illuminate\Support\Str::limit((string) $item->statement, 200), 'disputed');
         }
+    }
+
+    /** Records the identity decision on the person and deletes the ID image: only the result, method and date are kept. */
+    private function decideIdentity(ReviewItem $item, User $staff, string $status, string $note, ?string $method): void
+    {
+        $check = \App\Models\IdentityCheck::find($item->subject_id);
+        if (! $check) {
+            return;
+        }
+        if ($check->document_path) {
+            \Illuminate\Support\Facades\Storage::disk('local')->delete($check->document_path);
+        }
+        $check->forceFill(['status' => $status, 'method' => $method ?? $check->method, 'note' => $note, 'decided_by' => $staff->id, 'decided_at' => now(),
+            'document_path' => null, 'document_deleted_at' => now()])->save();
+        if ($status === 'verified') {
+            $check->user->forceFill(['identity_verified_at' => now(), 'identity_verified_name' => $check->legal_name])->save();
+        }
+        Audit::record('identity.'.$status, $check, null, ['method' => $check->method], null, $staff->id);
     }
 
     private function close(ReviewItem $item, User $staff, string $status, string $note): void

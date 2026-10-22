@@ -20,7 +20,7 @@ class SaleLotController extends Controller
         $q = trim((string) $request->query('q'));
         $lots = SaleLot::with(['source', 'horse'])
             ->when($status === 'matched', fn ($w) => $w->whereNotNull('horse_id'), fn ($w) => $status === 'unmatched'
-                ? $w->whereNull('horse_id')->whereNull('review_status')->whereIn('status', ['sold', 'high_bid', 'no_sale'])
+                ? $w->whereNull('horse_id')->whereNull('review_status')->whereIn('status', ['sold', 'high_bid', 'no_sale', 'offered'])
                 : $w->whereNull('horse_id')->where('review_status', $status))
             ->when($q !== '', fn ($w) => $w->where('name_key', 'like', '%'.ShowRecord::key($q).'%'))
             ->orderByDesc('sale_date')->paginate(50)->withQueryString();
@@ -29,7 +29,9 @@ class SaleLotController extends Controller
             ->groupBy(fn ($h) => ShowRecord::key($h->registered_name));
         $counts = SaleLot::selectRaw("count(*) filter (where horse_id is not null) matched, count(*) filter (where horse_id is null and review_status = 'queued') queued, count(*) filter (where horse_id is null and review_status = 'conflict') conflict, count(*) total")->first();
 
-        return view('admin.sale-lots', ['lots' => $lots, 'candidates' => $candidates, 'status' => $status, 'q' => $q, 'counts' => $counts,
+        $suggestions = \App\Models\ReviewSuggestion::with('horse')->where('subject_type', 'sale_lot')->whereIn('subject_id', $lots->pluck('id')->all())->get()->keyBy('subject_id');
+
+        return view('admin.sale-lots', ['suggestions' => $suggestions, 'lots' => $lots, 'candidates' => $candidates, 'status' => $status, 'q' => $q, 'counts' => $counts,
             'sources' => \App\Models\DataSource::whereIn('key', ['liveag', 'premier', 'platinum', 'wsqha'])->get()]);
     }
 

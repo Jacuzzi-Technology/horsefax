@@ -27,8 +27,10 @@ class Horse extends Model
         $name = trim($name);
 
         // National registry lists (IFCE) have no numbers to tell same-named horses apart: never matched by name alone.
-        return $query->whereNull('merged_into_id')->where(fn ($w) => $w->whereNull('source')->orWhere('source', '!=', 'ifce'))->where(fn ($w) => $w->whereRaw('lower(registered_name) = lower(?)', [$name])
-            ->orWhereIn('id', HorseName::where('kind', 'alias')->whereRaw('lower(name) = lower(?)', [$name])->select('horse_id')));
+        return $query->whereNull('merged_into_id')->where(fn ($w) => $w->whereNull('source')->orWhere('source', '!=', 'ifce'))
+            // One id list from both lookups: an OR across them makes Postgres scan every horse.
+            ->whereIn('id', Horse::query()->select('id')->whereRaw('lower(registered_name) = lower(?)', [$name])
+                ->union(HorseName::where('kind', 'alias')->whereRaw('lower(name) = lower(?)', [$name])->select('horse_id')));
     }
 
     /** Created by Horsefax from a registered name in published show results. */

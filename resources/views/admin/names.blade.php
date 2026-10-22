@@ -12,13 +12,14 @@
             @foreach (N::PRIORITIES as $k => $label)
                 <a href="{{ route('admin.names', ['p' => $k]) }}" class="btn-ghost btn-small {{ $p === $k ? 'bg-gold/15' : '' }}" title="{{ $label }}">{{ $k }}. {{ \Illuminate\Support\Str::limit($label, 44) }} ({{ number_format($counts[$k] ?? 0) }})</a>
             @endforeach
+            <a href="{{ route('admin.names.batch') }}" class="btn-ghost btn-small">Batch: same letters, nothing disagrees</a>
             <a href="{{ route('admin.names', ['status' => 'different_horses']) }}" class="btn-ghost btn-small {{ $status === 'different_horses' ? 'bg-gold/15' : '' }}">Different horses</a>
             <a href="{{ route('admin.names', ['status' => 'merged']) }}" class="btn-ghost btn-small {{ $status === 'merged' ? 'bg-gold/15' : '' }}">Merged</a>
         </div>
 
         <div class="mt-6 space-y-4">
         @forelse ($reviews as $r)
-            <form method="POST" action="{{ route('admin.names.decide', $r) }}" class="card p-4 sm:p-5">
+            <div class="card p-4 sm:p-5"><form method="POST" action="{{ route('admin.names.decide', $r) }}">
                 @csrf
                 <p class="font-sans text-[11px] font-semibold tracking-[0.14em] uppercase text-muted">{{ N::PRIORITIES[$r->priority] ?? '' }}</p>
                 <div class="grid md:grid-cols-2 gap-4 mt-3">
@@ -45,17 +46,28 @@
                         </div>
                     @endforeach
                 </div>
+                @if ($r->status === 'open' && isset($warnings[$r->id]))
+                    <div class="mt-4 border border-gold bg-gold/10 rounded-[3px] px-4 py-3 font-sans text-[14px]">
+                        <p class="font-semibold">⚠ These records disagree. Check the registry before choosing which one to keep.</p>
+                        <ul class="mt-1 list-disc pl-5">@foreach ($warnings[$r->id] as $w)<li>{{ $w }}</li>@endforeach</ul>
+                        <p class="mt-1 text-muted">If you merge, the record you keep wins and the other value goes to the review queue for a final decision, so nothing is lost.</p>
+                    </div>
+                @endif
                 @if ($r->status === 'open')
                     <div class="flex flex-wrap items-end gap-2 mt-4">
                         <input name="note" class="field flex-1 min-w-[220px]" placeholder="Note (optional), e.g. AQHA name search Oct 18">
                         <button name="decision" value="different" class="btn-ghost btn-small">Different horses</button>
-                        <button name="decision" value="keep_a" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_b_id]) disabled title="The other record is owned" @endisset>Same horse: keep “{{ \Illuminate\Support\Str::limit($r->a->registered_name, 24) }}”</button>
-                        <button name="decision" value="keep_b" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_a_id]) disabled title="The other record is owned" @endisset>Same horse: keep “{{ \Illuminate\Support\Str::limit($r->b->registered_name, 24) }}”</button>
+                        <button name="decision" value="keep_a" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_b_id]) disabled title="The other record is owned" @endisset>Same horse: keep left{{ strcasecmp($r->a->registered_name, $r->b->registered_name) ? ' “'.\Illuminate\Support\Str::limit($r->a->registered_name, 24).'”' : '' }} ({{ $r->a->horsefax_id }})</button>
+                        <button name="decision" value="keep_b" class="btn-forest btn-small" @isset($facts['owned'][$r->horse_a_id]) disabled title="The other record is owned" @endisset>Same horse: keep right{{ strcasecmp($r->a->registered_name, $r->b->registered_name) ? ' “'.\Illuminate\Support\Str::limit($r->b->registered_name, 24).'”' : '' }} ({{ $r->b->horsefax_id }})</button>
                     </div>
                 @else
                     <p class="font-sans text-[13px] mt-3 text-muted">{{ $r->status === 'merged' ? 'Merged, kept '.optional(App\Models\Horse::find($r->kept_horse_id))->registered_name : 'Different horses' }}{{ $r->registration_number ? ' · reg '.$r->registration_number : '' }}{{ $r->note ? ' · '.$r->note : '' }} · {{ $r->decided_at?->format('M j, Y') }}</p>
                 @endif
             </form>
+                @if ($r->status === 'open')
+                    @include('admin.partials.suggestion', ['s' => $suggestions[(string) $r->id] ?? null, 'name' => $r->a->registered_name])
+                @endif
+            </div>
         @empty
             <p class="hint">Nothing here.</p>
         @endforelse

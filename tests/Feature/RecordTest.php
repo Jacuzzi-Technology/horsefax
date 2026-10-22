@@ -77,7 +77,7 @@ class RecordTest extends TestCase
         $this->actingAs($owner)->post("/horses/{$horse->horsefax_id}/events", ['category' => 'training', 'title' => 'Reining program', 'date_precision' => 'unknown', 'visibility' => 'public'])->assertRedirect();
         auth()->logout();
 
-        $page = $this->get("/horse/{$horse->horsefax_id}")->assertOk();
+        $page = $this->actingAs($this->reader())->get("/horse/{$horse->horsefax_id}")->assertOk();
         $page->assertSee('Reining program')->assertDontSee('Colic surgery')->assertDontSee('985000000099999')->assertDontSee('Secret Owner')->assertDontSee('secret@example.com');
 
         $link = app(ShareLinks::class)->create($horse, $owner, ['health', 'identifiers'], null, null);
@@ -124,9 +124,9 @@ class RecordTest extends TestCase
         $this->actingAs($stranger)->get("/files/{$doc->id}")->assertNotFound();
         auth()->logout();
         $this->get("/files/{$doc->id}")->assertNotFound();
-        $this->get("/horse/{$horse->horsefax_id}")->assertOk()->assertSee('This record is private'); // listed, not published
+        $this->actingAs($this->reader())->get("/horse/{$horse->horsefax_id}")->assertOk()->assertSee('This record is private'); // listed, not published
         $horse->forceFill(['listed' => false])->save();
-        $this->get("/horse/{$horse->horsefax_id}")->assertNotFound();
+        $this->actingAs($this->reader())->get("/horse/{$horse->horsefax_id}")->assertNotFound();
     }
 
     public function test_claims_need_staff_and_never_displace_the_owner_automatically(): void
@@ -198,7 +198,7 @@ class RecordTest extends TestCase
         $this->assertSame(2, HorseEvent::count());
         $this->assertNotNull($event->fresh()->superseded_by);
         auth()->logout();
-        $this->get("/horse/{$horse->horsefax_id}")->assertSee('Placed 3rd at the futurity')->assertDontSee('Won the futurity');
+        $this->actingAs($this->reader())->get("/horse/{$horse->horsefax_id}")->assertSee('Placed 3rd at the futurity')->assertDontSee('Won the futurity');
     }
 
     public function test_search_narrows_until_ten_or_fewer_match(): void
@@ -223,7 +223,7 @@ class RecordTest extends TestCase
         $this->actingAs($owner)->post("/horses/{$horse->horsefax_id}/media", ['url' => 'https://www.youtube.com/watch?v=abcdefghijk', 'caption' => 'Reining pattern', 'visibility' => 'public'])->assertRedirect();
         $this->assertSame('private', $horse->media()->first()->visibility);
         auth()->logout();
-        $this->get("/horse/{$horse->horsefax_id}")->assertDontSee('Reining pattern');
+        $this->actingAs($this->reader())->get("/horse/{$horse->horsefax_id}")->assertDontSee('Reining pattern');
     }
 
     public function test_staff_pages_need_staff_with_two_factor(): void
@@ -262,7 +262,7 @@ class RecordTest extends TestCase
 
         $horse->forceFill(['public_summary' => true])->save();
         auth()->logout();
-        $this->get("/horse/$h")->assertOk()->assertSee('NRHA Futurity')->assertSee('$318.83')->assertSee('Wimpys High Bid')->assertSee('At the futurity')->assertDontSee('$15,000');
+        $this->actingAs($this->reader())->get("/horse/$h")->assertOk()->assertSee('NRHA Futurity')->assertSee('$318.83')->assertSee('Wimpys High Bid')->assertSee('At the futurity')->assertDontSee('$15,000');
 
         $staff = $this->staff();
         $this->actingAs($staff)->get('/admin')->assertOk();

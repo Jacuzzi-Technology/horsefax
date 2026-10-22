@@ -43,7 +43,17 @@ class AdminController extends Controller
         };
         $others = HorseIdentifier::whereIn('id', $item->details['other_identifier_ids'] ?? [])->with('horse')->get();
 
+        // Claim evidence at a glance: registration-number match, seller confirmation, the claimant's identity check,
+        // the claim code behind it, and any evidence file already used in another claim.
+        $claim = $item->kind === 'ownership_claim' ? [
+            'confirmations' => \App\Models\ClaimConfirmation::where('review_item_id', $item->id)->get(),
+            'code' => isset($item->details['claim_code_id']) ? \App\Models\ClaimCode::find($item->details['claim_code_id']) : null,
+            'reused' => $documents->isEmpty() ? collect() : Document::whereIn('sha256', $documents->pluck('sha256'))->whereNotIn('id', $documents->pluck('id'))->with('horse')->get(),
+        ] : null;
+        $identity = $item->kind === 'identity_check' ? \App\Models\IdentityCheck::find($item->subject_id) : null;
+
         return view('admin.review', [
+            'claim' => $claim, 'identity' => $identity,
             'item' => $item->load(['horse', 'submitter', 'resolver']),
             'documents' => $documents,
             'subject' => $subject,
@@ -55,7 +65,7 @@ class AdminController extends Controller
     public function approve(Request $request, ReviewItem $item, Reviews $reviews)
     {
         abort_unless($item->status === 'open', 409);
-        $data = $request->validate(['note' => 'required|string|max:2000', 'end_current_owner' => 'nullable|boolean', 'outcome' => 'nullable|in:both_stand,new_is_wrong']);
+        $data = $request->validate(['note' => 'required|string|max:2000', 'end_current_owner' => 'nullable|boolean', 'outcome' => 'nullable|in:both_stand,new_is_wrong', 'method' => 'nullable|in:id_document,video_call,third_party']);
         $reviews->approve($item, $request->user(), $data['note'], $data);
 
         return redirect()->route('admin.queue')->with('status', 'Approved and recorded.');
@@ -73,16 +83,35 @@ class AdminController extends Controller
     public function horses(Request $request)
     {
         $q = trim((string) $request->query('q'));
+        $f = collect(['registry', 'breed', 'sex', 'color', 'source'])->mapWithKeys(fn ($k) => [$k => trim((string) $request->query($k)) ?: null])->all();
         $horses = Horse::query()
             ->when($q !== '', function ($query) use ($q) {
-                $like = '%'.$q.'%';
-                $norm = Record::normalizeIdentifier($q);
-                $query->where(fn ($w) => $w->where('registered_name', 'ilike', $like)->orWhere('barn_name', 'ilike', $like)->orWhere('horsefax_id', 'ilike', $like)
-                    ->orWhereHas('identifiers', fn ($i) => $i->where('value_normalized', $norm)));
+                // Indexed lookups unioned (an OR across them would read all 4M+ records).
+                $like = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], mb_strtolower($q)).'%';
+                $ids = Horse::query()->select('id')->whereRaw('lower(registered_name) like ?', [$like])
+                    ->union(Horse::query()->select('id')->whereRaw('lower(barn_name) like ?', [$like]))
+                    ->union(Horse::query()->select('id')->where('horsefax_id', strtoupper(trim($q))))
+                    ->union(\App\Models\HorseIdentifier::query()->select('horse_id as id')->where('value_normalized', Record::normalizeIdentifier($q)));
+                $query->whereIn('id', \Illuminate\Support\Facades\DB::query()->fromSub($ids, 'm')->select('id'));
             })
+            ->when($f['registry'], fn ($w, $r) => $w->whereIn('id', \App\Models\HorseIdentifier::select('horse_id')->where('kind', 'registration')->whereNull('superseded_by')->where('registry', $r)))
+            ->when($f['breed'], fn ($w, $v) => $v === '(none)' ? $w->whereNull('breed') : $w->where('breed', $v))
+            ->when($f['sex'], fn ($w, $v) => $v === '(none)' ? $w->whereNull('sex') : $w->where('sex', $v))
+            ->when($f['color'], fn ($w, $v) => $v === '(none)' ? $w->whereNull('color') : $w->where('color', $v))
+            ->when($f['source'], fn ($w, $v) => $v === 'not_ifce' ? $w->where(fn ($x) => $x->whereNull('source')->orWhere('source', '!=', 'ifce')) : $w->where('source', $v))
             ->orderByDesc('created_at')->paginate(50)->withQueryString();
 
-        return view('admin.horses', ['horses' => $horses, 'q' => $q]);
+        // Filter choices with how many records have each, refreshed hourly (counting 4M+ records on every visit is slow).
+        $options = \Illuminate\Support\Facades\Cache::remember('admin.horse-filter-options', 3600, fn () => [
+            'registry' => \App\Models\HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')->whereNotNull('registry')
+                ->selectRaw('registry v, count(distinct horse_id) n')->groupBy('registry')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'breed' => Horse::selectRaw("coalesce(breed, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'sex' => Horse::selectRaw("coalesce(sex, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'color' => Horse::selectRaw("coalesce(color, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'source' => Horse::selectRaw("coalesce(source, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+        ]);
+
+        return view('admin.horses', ['horses' => $horses, 'q' => $q, 'f' => $f, 'options' => $options]);
     }
 
     public function horse(Horse $horse)
@@ -184,6 +213,12 @@ class AdminController extends Controller
         $data = $request->validate(['horsefax_id' => 'required|string', 'note' => 'required|string|max:1000']);
         $horse = Horse::where('horsefax_id', strtoupper(trim($data['horsefax_id'])))->firstOrFail();
         abort_if($record->horse_id && $record->horse_id !== $horse->id, 409, 'These results are already attached to another horse.');
+        if ($former = \App\Actions\Record\ShowNameRule::formerName($record, $horse)) {
+            $item = \App\Actions\Record\ShowNameRule::flagFormerName($record, $horse, $former, $request->user());
+
+            return redirect()->route('admin.review', $item)->with('status', '"'.$record->display_name.'" is a previous name of '.$horse->displayName()
+                .'. A shown horse can\'t be renamed, so these results were not attached: approve this review only if you have confirmed they are this horse.');
+        }
         $n = $attach($record, $horse, $request->user());
         Audit::record('show_results.attach_note', $horse, null, ['note' => $data['note']], $horse->id);
 

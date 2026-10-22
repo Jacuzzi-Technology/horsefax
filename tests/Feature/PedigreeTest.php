@@ -113,6 +113,36 @@ class PedigreeTest extends TestCase
         }
         $foal->forceFill(['public_summary' => true])->save();
         auth()->logout();
-        $this->get("/horse/{$foal->horsefax_id}")->assertOk()->assertSee('Gen Five')->assertSee('5 generations');
+        $this->actingAs($this->reader())->get("/horse/{$foal->horsefax_id}")->assertOk()->assertSee('Gen Five')->assertSee('5 generations');
+    }
+
+    public function test_the_chart_shows_four_generations_filling_gaps_from_ancestor_records_and_links_every_name(): void
+    {
+        $owner = User::factory()->create();
+        $foal = $this->horse($owner, 'Sample Chart Foal');
+        $foal->forceFill(['public_summary' => true, 'listed' => true])->save();
+        $this->savePedigree($owner, $foal, [
+            's' => ['name' => 'Sample Chart Sire'], 'd' => ['name' => 'Sample Chart Dam'],
+            'ss' => ['name' => 'Sample Grandsire'], 'sd' => ['name' => 'Sample Granddam'],
+            'sss' => ['name' => 'Sample Great Grandsire'],
+        ]);
+        // The grandsire's own record knows two more generations behind him.
+        $grandsire = Horse::where('registered_name', 'Sample Grandsire')->sole();
+        $system = \App\Actions\Record\BuildRecordsFromResults::system();
+        PedigreeEntry::create(['horse_id' => $grandsire->id, 'position' => 'd', 'name' => 'Sample Inherited Dam', 'visibility' => 'public', 'added_by' => $system->id, 'source_type' => 'historical']);
+        PedigreeEntry::create(['horse_id' => $grandsire->id, 'position' => 'ss', 'name' => 'Sample Inherited Line', 'visibility' => 'public', 'added_by' => $system->id, 'source_type' => 'historical']);
+        PedigreeEntry::where('horse_id', $foal->id)->where('position', 'sd')->update(['linked_horse_id' => null]); // a line with no record linked
+
+        $chart = \App\Support\Views::pedigreeChart(\App\Support\Views::pedigree($foal->fresh(), 'public'));
+        $this->assertSame('Sample Inherited Dam', $chart['ssd']->name);
+        $this->assertTrue($chart['ssd']->inherited);
+        $this->assertSame('Sample Inherited Line', $chart['ssss']->name);
+        $this->assertSame('Sample Great Grandsire', $chart['sss']->name); // the record's own line wins
+        $this->assertSame(0, PedigreeEntry::where('horse_id', $foal->id)->where('position', 'ssd')->count()); // nothing saved
+
+        $page = $this->actingAs($this->reader())->get(route('horse.public', $foal))->assertOk();
+        $page->assertSee('Pedigree, 4 generations')->assertSee('Sample Inherited Line')
+            ->assertSee(route('horse.public', Horse::where('registered_name', 'Sample Chart Sire')->sole()), false)
+            ->assertSee(route('search', ['name' => 'Sample Granddam']), false);
     }
 }

@@ -1,9 +1,10 @@
-@props(['title' => null, 'description' => 'Horsefax keeps a lasting, evidence-backed record of a horse\'s identity and history, shared only the way its owner chooses.', 'robots' => null, 'canonical' => null])
+@props(['title' => null, 'description' => 'Horsefax brings a horse\'s history together in one record: registration, pedigree, competition, sales and ownership, with every fact labeled by where it came from.', 'robots' => null, 'canonical' => null])
+@php($inApp = str_contains((string) request()->userAgent(), 'HorsefaxApp/')) {{-- the Horsefax phone app (horsefax-app repo) --}}
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1{{ $inApp ? ', viewport-fit=cover' : '' }}">
     <title>{{ $title ? $title.' | Horsefax' : 'Horsefax | Because Every Horse Has A History.' }}</title>
     <meta name="description" content="{{ $description }}">
     @if ($robots)<meta name="robots" content="{{ $robots }}">@endif
@@ -21,7 +22,31 @@
 </head>
 <body class="min-h-screen flex flex-col">
 <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 btn-gold">Skip to content</a>
-<header class="bg-forest text-cream">
+@if ($inApp)
+<header class="bg-forest text-cream print:hidden sticky top-0 z-40 pt-[env(safe-area-inset-top)]">
+    <div class="wrap flex items-center justify-between gap-4 py-3">
+        <button type="button" id="app-back" class="flex items-center gap-1 -ml-2 p-2 font-sans text-[11px] font-semibold tracking-[0.16em] uppercase cursor-pointer" aria-label="Back"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 3 5 9l6 6"/></svg>Back</button>
+        <img src="/img/wordmark-reverse.svg" alt="Horsefax" class="h-[22px] w-auto">
+        <button type="button" id="app-share" class="flex items-center gap-1 -mr-2 p-2 font-sans text-[11px] font-semibold tracking-[0.16em] uppercase cursor-pointer">Share<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 2v10M5 6l4-4 4 4M3 10v5h12v-5"/></svg></button>
+    </div>
+</header>
+<script>
+    {{-- Back returns to the app's home screen when there is no page to go back to (opened from a link). --}}
+    document.getElementById('app-back').addEventListener('click', () => {
+        if (history.length > 1) { history.back(); return; }
+        location.href = window.Capacitor?.getPlatform?.() === 'android' ? 'https://localhost/' : 'capacitor://localhost/';
+    });
+    document.getElementById('app-share').addEventListener('click', async () => {
+        const data = { title: document.title.replace(/ \| Horsefax$/, '') + ' on Horsefax', url: location.origin + location.pathname };
+        try {
+            if (window.Capacitor?.Plugins?.Share) await window.Capacitor.Plugins.Share.share(data);
+            else if (navigator.share) await navigator.share(data);
+            else { await navigator.clipboard.writeText(data.url); alert('Link copied'); }
+        } catch (e) { /* closed the share sheet */ }
+    });
+</script>
+@else
+<header class="bg-forest text-cream print:hidden">
     <div class="wrap flex items-center justify-between gap-6 py-4">
         <a href="{{ route('home') }}" class="shrink-0" aria-label="Horsefax home"><img src="/img/wordmark-reverse.svg" alt="Horsefax" class="h-[26px] sm:h-[30px] w-auto"></a>
         <nav class="hidden lg:flex items-center gap-6 whitespace-nowrap font-sans text-[11px] font-semibold tracking-[0.16em] uppercase" aria-label="Main">
@@ -29,6 +54,7 @@
             <a href="{{ route('how-it-works') }}" class="no-underline hover:text-gold-soft">How It Works</a>
             <a href="{{ route('for-owners') }}" class="no-underline hover:text-gold-soft">For Owners</a>
             <a href="{{ route('for-professionals') }}" class="no-underline hover:text-gold-soft">For Professionals</a>
+            <a href="{{ route('partners') }}" class="no-underline hover:text-gold-soft">Partners</a>
         </nav>
         <div class="flex items-center gap-4 whitespace-nowrap">
             @auth
@@ -46,6 +72,7 @@
                     <a href="{{ route('how-it-works') }}" class="no-underline">How It Works</a>
                     <a href="{{ route('for-owners') }}" class="no-underline">For Owners</a>
                     <a href="{{ route('for-professionals') }}" class="no-underline">For Professionals</a>
+                    <a href="{{ route('partners') }}" class="no-underline">Partners</a>
                     @auth
                         <a href="{{ route('account') }}" class="no-underline">Account</a>
                         <form method="POST" action="{{ route('logout') }}">@csrf<button class="uppercase tracking-[0.14em] cursor-pointer">Sign out</button></form>
@@ -57,6 +84,7 @@
         </div>
     </div>
 </header>
+@endif
 
 @if (session('status'))
     <div class="bg-gold/15 border-b border-gold/30" role="status"><div class="wrap py-3 font-sans text-[14px] text-ink">{{ session('status') }}</div></div>
@@ -64,12 +92,13 @@
 
 <main id="main" class="flex-1">{{ $slot }}</main>
 
-<footer class="bg-forest text-cream/80 mt-auto">
+@unless ($inApp)
+<footer class="bg-forest text-cream/80 mt-auto print:hidden">
     <div class="wrap py-14 grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
             <img src="/img/wordmark-reverse.svg" alt="Horsefax" class="w-[180px] h-auto">
             <p class="label text-[9.5px] tracking-[0.3em] text-cream/75 mt-3">Because Every Horse Has A History.™</p>
-            <p class="mt-6 text-[16px] text-cream/70 max-w-[22em]">A lasting record of identity, care and accomplishment, shared only the way its owner chooses.</p>
+            <p class="mt-6 text-[16px] text-cream/70 max-w-[22em]">Discovering, preserving and connecting the records that tell a horse's story, from registration and competition to ownership and beyond.</p>
         </div>
         <div class="font-sans text-[13px] space-y-2.5">
             <p class="label text-gold-soft text-[10px]">Horsefax</p>
@@ -82,11 +111,13 @@
             <p class="label text-gold-soft text-[10px]">For</p>
             <a href="{{ route('for-owners') }}" class="block no-underline hover:text-cream">Owners & breeders</a>
             <a href="{{ route('for-professionals') }}" class="block no-underline hover:text-cream">Vets, farriers & trainers</a>
+            <a href="{{ route('partners') }}" class="block no-underline hover:text-cream">Partners & affiliates</a>
             <a href="{{ route('register') }}" class="block no-underline hover:text-cream">Create a record</a>
         </div>
         <div class="font-sans text-[13px] space-y-2.5">
             <p class="label text-gold-soft text-[10px]">Trust</p>
             <a href="{{ route('record-corrections') }}" class="block no-underline hover:text-cream">Record corrections</a>
+            <a href="{{ route('factual-record-policy') }}" class="block no-underline hover:text-cream">Factual record policy</a>
             <a href="{{ route('privacy') }}" class="block no-underline hover:text-cream">Privacy</a>
             <a href="{{ route('terms') }}" class="block no-underline hover:text-cream">Terms of use</a>
             <a href="{{ route('contact') }}" class="block no-underline hover:text-cream">Contact</a>
@@ -99,5 +130,7 @@
         </div>
     </div>
 </footer>
+@endunless
+@if ($inApp)<div class="h-[env(safe-area-inset-bottom)]"></div>@endif
 </body>
 </html>

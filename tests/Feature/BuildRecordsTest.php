@@ -63,7 +63,7 @@ class BuildRecordsTest extends TestCase
         $this->assertNull(Horse::where('registered_name', 'Sample Goldfish')->first());
         $this->assertNull(ShowRecord::where('name_key', 'SAMPLEOWNED')->value('horse_id'));
 
-        $this->get(route('horse.public', $h))->assertOk()->assertSee('built this record from published show results')->assertSee('Sample Lean');
+        $this->actingAs($this->reader())->get(route('horse.public', $h))->assertOk()->assertSee('built this record from published show results')->assertSee('Sample Lean');
         $this->get(route('show-records.show', ShowRecord::where('name_key', 'SAMPLELEAVIN')->first()))->assertRedirect(route('horse.public', $h));
 
         // A later result for the same name is attached on the next run; nothing is duplicated.

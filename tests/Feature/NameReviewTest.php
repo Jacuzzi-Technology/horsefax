@@ -76,6 +76,41 @@ class NameReviewTest extends TestCase
         $this->assertSame(0, Horse::where('registered_name', 'Sample Gotta Lotta Potential')->whereNull('merged_into_id')->count());
     }
 
+    public function test_disagreements_are_shown_kept_and_flagged_not_dropped(): void
+    {
+        $left = $this->unowned('Sample Line Up Behind', 'results');
+        $left->forceFill(['birth_precision' => 'year', 'birth_year' => 2018])->save();
+        $right = $this->unowned('Sample Line Up Behind', 'published');
+        $right->forceFill(['birth_precision' => 'year', 'birth_year' => 2017, 'sex' => 'gelding'])->save();
+        $by = $left->created_by;
+        PedigreeEntry::create(['horse_id' => $left->id, 'position' => 's', 'name' => 'Sample VS Flatline', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $left->id, 'position' => 'd', 'name' => 'Sample Shez Immortal', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $right->id, 'position' => 'd', 'name' => 'Sample Shez Immortal', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $right->id, 'position' => 'ds', 'name' => 'Sample Other Sire', 'visibility' => 'public', 'added_by' => $by]);
+        PedigreeEntry::create(['horse_id' => $right->id, 'position' => 's', 'name' => 'Sample Wrong Sire', 'visibility' => 'public', 'added_by' => $by]);
+        app(FindNameVariants::class)();
+        $r = NameReview::firstOrFail();
+        $staff = User::factory()->create(['is_staff' => true, 'two_factor_confirmed_at' => now()]);
+        $this->actingAs($staff)->get(route('admin.names'))->assertSee('These records disagree')->assertSee('Foal years disagree')->assertSee('Sires disagree');
+
+        $this->actingAs($staff)->post(route('admin.names.decide', $r), ['decision' => $r->horse_a_id === $left->id ? 'keep_a' : 'keep_b'])->assertRedirect();
+        $left->refresh();
+        $this->assertSame([2018, 'gelding'], [(int) $left->birth_year, $left->sex]); // kept record wins; gap filled
+        $this->assertEqualsCanonicalizing(['s' => 'Sample VS Flatline', 'd' => 'Sample Shez Immortal', 'ds' => 'Sample Other Sire'], $left->pedigree()->pluck('name', 'position')->all());
+
+        $items = \App\Models\ReviewItem::where('horse_id', $left->id)->get()->keyBy('kind');
+        $this->assertStringContainsString('Foaled 2017', $items['fact_conflict']->statement);
+        $this->assertStringContainsString('Sample Wrong Sire', $items['pedigree_conflict']->statement);
+
+        // Staff choose the other values: they become current, the replaced ones stay in history.
+        $this->actingAs($staff)->post(route('admin.review.approve', $items['fact_conflict']), ['note' => 'AQHA lookup says 2017'])->assertRedirect();
+        $this->actingAs($staff)->post(route('admin.review.approve', $items['pedigree_conflict']), ['note' => 'AQHA lookup'])->assertRedirect();
+        $left->refresh();
+        $this->assertSame(2017, (int) $left->birth_year);
+        $this->assertSame('Sample Wrong Sire', $left->pedigree()->where('position', 's')->value('name'));
+        $this->assertTrue(PedigreeEntry::where('horse_id', $left->id)->where('name', 'Sample VS Flatline')->whereNotNull('superseded_by')->exists());
+    }
+
     public function test_an_owned_misspelling_is_never_merged(): void
     {
         $owner = User::factory()->create();
@@ -86,5 +121,47 @@ class NameReviewTest extends TestCase
         $staff = User::factory()->create(['is_staff' => true, 'two_factor_confirmed_at' => now()]);
         $this->actingAs($staff)->post(route('admin.names.decide', $r), ['decision' => $r->horse_a_id === $owned->id ? 'keep_b' : 'keep_a'])->assertStatus(422);
         $this->assertNull($owned->fresh()->merged_into_id);
+    }
+
+    public function test_batch_page_lists_only_clean_same_letter_pairs_and_merges_on_staff_click(): void
+    {
+        $show = $this->unowned('Sample Living Tobe Pretty', 'results');          // show spelling: kept by default
+        $sale = $this->unowned('Sample Living To Be Pretty', 'published');
+        $x = $this->unowned('Sample Dreamy Thing', 'results');                    // foal years disagree: one by one only
+        $y = $this->unowned('Sample DreamyThing', 'published');
+        $x->forceFill(['birth_precision' => 'year', 'birth_year' => 2021])->save();
+        $y->forceFill(['birth_precision' => 'year', 'birth_year' => 2020])->save();
+        $p = $this->unowned('Sample Persuaded By Rum', 'results');
+        $q = $this->unowned('Sample PersuadedByRum', 'published');
+        $s = $this->unowned('Sample Skip Me', 'results');
+        $t = $this->unowned('Sample SkipMe', 'pedigree');
+        app(FindNameVariants::class)();
+        $pair = fn ($m, $n) => NameReview::whereIn('horse_a_id', [$m->id, $n->id])->whereIn('horse_b_id', [$m->id, $n->id])->sole();
+
+        $staff = User::factory()->create(['is_staff' => true, 'two_factor_confirmed_at' => now()]);
+        $this->actingAs($staff)->get(route('admin.names.batch'))->assertOk()
+            ->assertSee('Sample Living To Be Pretty')->assertDontSee('Sample DreamyThing');
+        $rows = \App\Http\Controllers\Admin\NameReviewController::batchRows()->keyBy(fn ($r) => $r['review']->id);
+        $this->assertCount(3, $rows);
+        $r = $pair($show, $sale);
+        $this->assertSame($r->horse_a_id === $show->id ? 'keep_a' : 'keep_b', $rows[$r->id]['keep']);
+
+        // Nothing has merged just from listing them.
+        $this->assertSame(0, Horse::whereNotNull('merged_into_id')->count());
+
+        $this->actingAs($staff)->post(route('admin.names.batch.decide'), ['decisions' => [
+            $r->id => $rows[$r->id]['keep'],
+            $pair($p, $q)->id => 'different',
+            $pair($s, $t)->id => 'skip',
+            $pair($x, $y)->id => 'keep_a', // not on the page: refused, left open
+        ]])->assertRedirect(route('admin.names.batch'));
+
+        $this->assertSame($show->id, $sale->fresh()->merged_into_id);
+        $this->assertSame('merged', $r->fresh()->status);
+        $this->assertSame('different_horses', $pair($p, $q)->status);
+        $this->assertSame('open', $pair($s, $t)->status);
+        $this->assertSame('open', $pair($x, $y)->status);
+        $this->assertNull($x->fresh()->merged_into_id);
+        $this->assertNull($y->fresh()->merged_into_id);
     }
 }

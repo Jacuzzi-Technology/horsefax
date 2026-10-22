@@ -29,7 +29,7 @@ class PlatinumParser
             $ended = preg_match('/Ending On:\s*<\/strong>\s*([A-Za-z]+ \d{1,2}, \d{4})/', $card, $e) ? Carbon::parse($e[1])->toDateString() : null;
             $price = null;
             if (preg_match('/winning_bid">.*?<bdi>.*?([\d,]+(?:\.\d\d)?)\s*<\/bdi>/s', $card, $p)) {
-                $status = 'high_bid';
+                $status = 'sold'; // Richard, Oct 18 2026: a Platinum winning bid is reported as a sale, credited to Platinum
                 $price = (int) round((float) str_replace(',', '', $p[1]) * 100);
             } elseif (str_contains($card, 'reserve_not_met')) {
                 $status = 'no_sale';

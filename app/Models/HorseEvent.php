@@ -24,6 +24,7 @@ class HorseEvent extends Model
         'no_sale' => 'No sale',
         'asking' => 'Advertised asking price',
         'documented_private' => 'Documented private sale',
+        'offered' => 'Offered at auction',
     ];
 
     public const PRICE_NOTE = 'Historical prices reflect a horse and the circumstances of a transaction at that time. They are not an estimate of current value.';
@@ -61,7 +62,7 @@ class HorseEvent extends Model
     public function priceLine(bool $withAmount = true): string
     {
         $label = self::PRICE_KINDS[$this->result] ?? ($this->typeLabel() ?? $this->title);
-        $amount = $withAmount ? self::money($this->amount_cents) : null;
+        $amount = $withAmount && $this->result !== 'offered' ? self::money($this->amount_cents) : null;
 
         return $label.($amount ? ' — '.$amount : '').($this->result === 'high_bid' ? ' · Sale unconfirmed' : '');
     }
@@ -69,7 +70,7 @@ class HorseEvent extends Model
     /** The published page an entry came from, when its details name one. */
     public function sourceUrl(): ?string
     {
-        return preg_match('#From the published (?:sale )?results: (https?://\S+)#', (string) $this->details, $m) ? $m[1] : null;
+        return preg_match('#From the published (?:sale )?(?:results|listing): (https?://\S+)#', (string) $this->details, $m) ? $m[1] : null;
     }
 
     public function dateLabel(): string

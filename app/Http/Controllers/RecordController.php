@@ -49,6 +49,12 @@ class RecordController extends Controller
         $data = $request->validate(['name' => 'required|string|max:160', 'kind' => 'required|in:previous,alias', 'visibility' => ['required', Rule::in(array_keys(Record::VISIBILITY))]]);
         $name = HorseName::create($data + ['horse_id' => $horse->id, 'added_by' => $request->user()->id]);
         Audit::record('name.added', $name, null, $data);
+        // A previous name the horse already has show results under: it was renamed after showing.
+        if ($data['kind'] === 'previous' && $horse->registered_name && ($shown = \App\Actions\Record\ShowNameRule::shownAs($horse, $data['name']))) {
+            \App\Actions\Record\ShowNameRule::flagRename($horse, $data['name'], $horse->registered_name, $shown, $request->user());
+
+            return redirect()->route('horses.show', $horse)->with('status', 'Name added. This horse has show results under that name, and AQHA doesn\'t allow a name change after a horse has shown, so Horsefax staff will check it.');
+        }
 
         return redirect()->route('horses.show', $horse)->with('status', 'Name added.');
     }
@@ -57,7 +63,8 @@ class RecordController extends Controller
     {
         return [
             'category' => ['required', Rule::in(array_keys(Record::EVENT_CATEGORIES))],
-            'type' => 'nullable|string|max:40',
+            // Only the types offered today (opinion types are retired: see Record::RETIRED_EVENT_TYPES).
+            'type' => ['nullable', 'string', Rule::in(collect(Record::EVENT_TYPES)->flatMap(fn ($t) => array_keys($t))->unique()->all())],
             'title' => 'required|string|max:160',
             'result' => 'nullable|string|max:120',
             'expires_on' => 'nullable|date',
@@ -115,7 +122,22 @@ class RecordController extends Controller
         if (empty($data['document_id']) && $event->document_id) {
             $data['document_id'] = $event->document_id;
         }
-        $record($horse, $request->user(), $data, $event);
+        // A correction can't hide the entry: it keeps the original's visibility, and a lower one becomes a request.
+        $wanted = $data['visibility'];
+        $hide = ! $request->user()->isStaff() && \App\Actions\Record\RequestToHide::lowers($event->visibility, $wanted);
+        if ($hide) {
+            $data['visibility'] = $event->visibility;
+        }
+        if (! $request->user()->isStaff() && \App\Actions\Record\RequestToHide::isSaleHistory($event, 'event')) {
+            $hide = false; // never even a request: sale history stays as visible as it was
+            if (isset($data['amount_visibility'], $event->amount_visibility) && \App\Actions\Record\RequestToHide::lowers($event->amount_visibility, $data['amount_visibility'])) {
+                $data['amount_visibility'] = $event->amount_visibility;
+            }
+        }
+        $new = $record($horse, $request->user(), $data, $event);
+        if ($hide && $new) {
+            app(\App\Actions\Record\RequestToHide::class)($horse, $request->user(), 'event', $new->id, 'visibility', $event->visibility, $wanted, 'the entry "'.$new->title.'"');
+        }
 
         return redirect()->route('horses.show', ['horse' => $horse, 'tab' => 'history'])->with('status', 'Correction saved. The original entry is kept in the record history.');
     }
@@ -219,6 +241,17 @@ class RecordController extends Controller
             'name' => HorseName::class, 'media' => \App\Models\Media::class,
         };
         $item = $model::where('horse_id', $horse->id)->findOrFail($data['id']);
+        // Hiding needs staff approval (Richard, Oct 19 2026); showing more applies at once.
+        $field = $data['type'] === 'amount' ? 'amount_visibility' : 'visibility';
+        if (! $request->user()->isStaff() && \App\Actions\Record\RequestToHide::lowers($item->{$field}, $data['visibility'])) {
+            if (\App\Actions\Record\RequestToHide::isSaleHistory($item, $data['type'])) {
+                return back()->withErrors(['visibility' => 'Sale history can\'t be hidden. If this sale is wrong or belongs to another horse, use "Something wrong here?" and Horsefax staff will review it.']);
+            }
+            $what = match ($data['type']) { 'amount' => 'a price', 'event' => 'the entry "'.$item->title.'"', 'media' => 'a photo or video', 'document' => 'a document', 'name' => 'the name "'.$item->name.'"', default => 'an identifier' };
+            app(\App\Actions\Record\RequestToHide::class)($horse, $request->user(), $data['type'], $item->id, $field, (string) $item->{$field}, $data['visibility'], $what);
+
+            return back()->with('status', 'Sent to Horsefax staff. Hiding something needs their approval; it stays as it is until then.');
+        }
         if ($data['type'] === 'amount') {
             $item->forceFill(['amount_visibility' => $data['visibility']])->save();
         } elseif ($data['type'] === 'media' && ! $item->rights_attested && $data['visibility'] !== 'private') {

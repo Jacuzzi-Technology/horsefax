@@ -57,7 +57,7 @@ class EvidenceTest extends TestCase
         $this->assertNotNull($reg->verified_at);
         $this->assertSame('owner_reported', $reg->source_type); // source stays: owner uploaded, Horsefax verified
         auth()->logout();
-        $this->get("/horse/{$horse->horsefax_id}")->assertOk()
+        $this->actingAs($this->reader())->get("/horse/{$horse->horsefax_id}")->assertOk()
             ->assertSee('Horsefax Verified')->assertSee('matched against the AQHA record')->assertSee('Horsefax Verification Team')
             ->assertSee('Owner reported')->assertDontSee('Checked AQHA online'); // internal note never shown
 
@@ -100,7 +100,7 @@ class EvidenceTest extends TestCase
         $horse->forceFill(['public_summary' => true])->save();
         auth()->logout();
 
-        $this->get("/horse/{$horse->horsefax_id}")->assertOk()
+        $this->actingAs($this->reader())->get("/horse/{$horse->horsefax_id}")->assertOk()
             ->assertSee('Identity verified')->assertSee('1 professional record')->assertSee('1 owner-reported entry')
             ->assertSee('Professional attested')->assertSee('Reported '.now()->format('M j, Y'));
     }

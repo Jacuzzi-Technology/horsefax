@@ -19,7 +19,14 @@ class PublicController extends Controller
 {
     public function home()
     {
-        return view('public.home');
+        // The size of the database, refreshed hourly (counting millions of rows on every visit would be slow).
+        $stats = \Illuminate\Support\Facades\Cache::remember('home.stats', 3600, fn () => [
+            'horses' => Horse::whereNull('merged_into_id')->count(),
+            'results' => \App\Models\ShowAppearance::count(),
+            'sales' => \App\Models\SaleLot::whereNotIn('status', ['catalog', 'withdrawn'])->count(),
+        ]);
+
+        return view('public.home', ['stats' => $stats]);
     }
 
     public function page(string $page)
@@ -30,6 +37,53 @@ class PublicController extends Controller
     public function sample()
     {
         return view('public.horse', \App\Support\SampleReport::data());
+    }
+
+    /**
+     * One-click PDFs: the same page the reader may already see, rendered to a file (App\Support\ReportPdf). Signed-out
+     * visitors only ever get the summary on screen, so their PDF request sends them to sign in.
+     */
+    public function horsePdf(Request $request, Horse $horse)
+    {
+        if (! $request->user()) {
+            $request->session()->put('url.intended', route('horse.public', $horse));
+
+            return redirect()->route('login');
+        }
+
+        return $this->pdf($this->horse($request, $horse), $horse, $request);
+    }
+
+    public function reportPdf(Request $request, string $token)
+    {
+        $link = ShareLink::where('token', $token)->first();
+        abort_unless($link && $link->isActive(), 404);
+
+        return $this->pdf($this->report($token), $link->horse, $request);
+    }
+
+    public function samplePdf(Request $request)
+    {
+        $data = \App\Support\SampleReport::data();
+
+        return $this->pdf(view('public.horse', $data), $data['horse'], $request);
+    }
+
+    private function pdf($view, Horse $horse, Request $request)
+    {
+        if (! $view instanceof \Illuminate\View\View || $view->name() !== 'public.horse') {
+            return $view; // a redirect, the summary or an error page: nothing to print
+        }
+        abort_unless(\App\Support\ReportPdf::available(), 503, 'PDF downloads are not available right now. Use Print instead.');
+        $pdf = \App\Support\ReportPdf::fromHtml($view->with('pdfMode', true)->render());
+        abort_unless($pdf, 503, 'The PDF could not be made right now. Use Print instead.');
+        \App\Support\Audit::record('record.pdf_downloaded', $horse, null, ['view' => $request->query('view') === 'timeline' ? 'timeline' : 'report'], $horse->id ?? null);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.\App\Support\ReportPdf::filename($horse, $request->query('view') === 'timeline').'"',
+            'Cache-Control' => 'private, no-store',
+        ]);
     }
 
     /**
@@ -70,6 +124,20 @@ class PublicController extends Controller
         if (isset($c['name']) && ($direct = \App\Support\HorseSearch::byHorsefaxId($c['name']))) {
             return redirect()->route('horse.public', $direct);
         }
+        // One box for everything (Richard, Oct 19 2026): a registration or microchip number typed where the name goes
+        // finds the horse by that number (exact match only); if no horse has it, the text is searched as a name.
+        if (isset($c['name']) && count($c) === 1 && strlen(preg_replace('/\D/', '', $c['name'])) >= 5) {
+            $number = \App\Support\Record::normalizeIdentifier($c['name']);
+            $ids = strlen($number) >= 5 && strlen($number) <= 23 ? \App\Models\HorseIdentifier::whereIn('kind', ['registration', 'microchip'])->whereNull('superseded_by')
+                ->where('value_normalized', $number)->pluck('horse_id')->unique() : collect();
+            $found = $ids->isEmpty() ? collect() : Horse::whereIn('id', $ids)->whereNull('merged_into_id')->where(fn ($w) => $w->where('listed', true)->orWhere('public_summary', true))->get();
+            if ($found->count() === 1) {
+                return redirect()->route('horse.public', $found->first());
+            }
+            if ($found->count() > 1) {
+                return view('public.search', ['c' => $c, 'count' => $found->count(), 'results' => $found->load('pedigree'), 'started' => true, 'showRecords' => collect()]);
+            }
+        }
         $count = 0;
         $results = collect();
         if (\App\Support\HorseSearch::hasStart($c)) {
@@ -104,6 +172,22 @@ class PublicController extends Controller
 
             // Listed but not published: basic identity only, and a way for the owner to claim it.
             return view('public.listing', ['horse' => $horse]);
+        }
+
+        // Signed-out visitors see a summary and an invitation to a free account (Richard, Oct 18 2026); after signing
+        // up or in they come back to this record.
+        if (! $request->user()) {
+            $request->session()->put('url.intended', route('horse.public', $horse));
+            $events = Views::events($horse, 'public');
+
+            return view('public.summary', ['horse' => $horse, 'counts' => [
+                'results' => $events->where('category', 'competition')->count(),
+                'sales' => $events->where('category', 'ownership')->count(),
+                'pedigree' => Views::pedigree($horse, 'public')->isNotEmpty(),
+                'photos' => ($media = Views::media($horse, 'public'))->where('kind', 'photo')->count(),
+                'videos' => $media->whereIn('kind', ['video', 'video_link'])->count(),
+                'radiographs' => \App\Models\RadiographSet::where('horse_id', $horse->id)->where('access', '!=', 'private')->has('files')->count(),
+            ]]);
         }
 
         return view('public.horse', [
@@ -173,6 +257,47 @@ class PublicController extends Controller
         return redirect()->route('contact')->with('status', 'Thank you. Your message reached the Horsefax team (reference #'.$message->id.').');
     }
 
+    /**
+     * Partnership inquiries from the Partners page: into the same staff inbox as contact messages, with the
+     * organization's details kept alongside.
+     */
+    public function sendPartnerInquiry(Request $request)
+    {
+        if ($request->filled('website_url')) { // honeypot
+            return redirect()->route('partners')->with('status', 'Thank you. We will be in touch.');
+        }
+        $data = $request->validate([
+            'organization' => 'required|string|max:200',
+            'name' => 'required|string|max:120',
+            'email' => 'required|email|max:200',
+            'website' => 'nullable|string|max:300',
+            'interest' => 'required|in:'.implode(',', array_keys(self::PARTNER_INTERESTS)),
+            'record_count' => 'nullable|string|max:60',
+            'message' => 'required|string|max:5000',
+        ]);
+        $details = array_filter([
+            'organization' => $data['organization'],
+            'website' => $data['website'] ?? null,
+            'interest' => self::PARTNER_INTERESTS[$data['interest']],
+            'records' => $data['record_count'] ?? null,
+        ]);
+        $message = ContactMessage::create([
+            'name' => $data['name'], 'email' => $data['email'], 'topic' => 'partnership',
+            'message' => $data['message'], 'details' => $details,
+        ]);
+        Notify::staff('New Horsefax partnership inquiry: '.$data['organization'],
+            collect($details)->map(fn ($v, $k) => ucfirst($k).': '.$v)->join("\n")."\nFrom: {$data['name']} <{$data['email']}>\n\n{$data['message']}");
+
+        return redirect()->route('partners')->with('status', 'Thank you. Your inquiry reached the Horsefax team (reference #'.$message->id.').');
+    }
+
+    public const PARTNER_INTERESTS = [
+        'records' => 'Contribute historical records',
+        'reports' => 'Offer Horsefax reports to customers',
+        'both' => 'Both / integrated partnership',
+        'unsure' => 'Not sure yet',
+    ];
+
     /** Anyone can ask for a correction. It goes to staff; nothing on the record changes until they rule on it. */
     public function reportCorrection(Request $request, Horse $horse)
     {
@@ -214,7 +339,14 @@ class PublicController extends Controller
     public function robots()
     {
         $body = app()->isProduction()
-            ? "User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\n\nSitemap: ".url('/sitemap.xml')."\n"
+            ? "# Horsefax information may not be scraped, data-mined or compiled into a database without\n"
+                ."# written permission (see ".url('/terms')."). Partners: ask us about the data license API.\n\n"
+                ."# AI training crawlers: not permitted\n"
+                ."User-agent: GPTBot\nUser-agent: ClaudeBot\nUser-agent: CCBot\nUser-agent: Google-Extended\nUser-agent: Applebot-Extended\n"
+                ."User-agent: Bytespider\nUser-agent: meta-externalagent\nUser-agent: Amazonbot\nUser-agent: cohere-training-data-crawler\nDisallow: /\n\n"
+                ."# Bulk SEO/data crawlers\n"
+                ."User-agent: SemrushBot\nUser-agent: AhrefsBot\nUser-agent: MJ12bot\nUser-agent: DotBot\nUser-agent: PetalBot\nDisallow: /\n\n"
+                ."User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\nDisallow: /search\nDisallow: /api/\n\nSitemap: ".url('/sitemap.xml')."\n"
             : "User-agent: *\nDisallow: /\n";
 
         return response($body, 200, ['Content-Type' => 'text/plain']);
@@ -222,7 +354,7 @@ class PublicController extends Controller
 
     public function sitemap()
     {
-        $pages = ['/', '/how-it-works', '/for-owners', '/for-professionals', '/sample-report', '/about', '/contact', '/record-corrections', '/privacy', '/terms'];
+        $pages = ['/', '/how-it-works', '/for-owners', '/for-professionals', '/partners', '/sample-report', '/about', '/contact', '/record-corrections', '/privacy', '/terms'];
         $horses = Horse::where('public_summary', true)->orderBy('updated_at', 'desc')->limit(5000)->get(['horsefax_id', 'updated_at']);
         $showRecords = \App\Models\ShowRecord::whereNull('horse_id')->orderByDesc('appearances')->limit(40000)->get(['id', 'updated_at']);
 
