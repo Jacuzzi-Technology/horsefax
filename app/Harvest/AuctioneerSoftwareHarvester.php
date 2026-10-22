@@ -28,7 +28,7 @@ class AuctioneerSoftwareHarvester
 
     private const CHECKED = 'Checked Oct 22 2026: AuctioneerSoftware platform robots.txt allows all but /admin/, /api/, /asset/ (the /api/ is never used); no bot wall; the sale\'s terms page and the platform\'s privacy/terms page have no scraping, crawling, database or reuse clause. Facts only with a link back: consignor, trainer, contact details, bidders, descriptions and photos are never stored. Collected under Richard\'s standing approval (Oct 22 2026).';
 
-    /** key => [name, base, horse-only site?, currency (USD unless given)] */
+    /** key => [name, base, horse-only site?, currency (USD unless given), day-first dates?] */
     public const SITES = [
         'bigsky' => ['name' => 'Big Sky Horse Sales', 'base' => 'https://bid.bigskyhorsesales.com', 'horses_only' => true],
         'premieronline' => ['name' => 'Premier Online Horse Sales (MM Auction Services)', 'base' => 'https://bid.premieronlinesales.com', 'horses_only' => true],
@@ -36,12 +36,12 @@ class AuctioneerSoftwareHarvester
         'eugene' => ['name' => 'Eugene Horse Auction', 'base' => 'https://www.eugenehorseauction.com', 'horses_only' => true],
         'waverly' => ['name' => 'Waverly Sales Company (Midwest Horse Sale)', 'base' => 'https://www.waverlysales.bid', 'horses_only' => false],
         'mthope' => ['name' => 'Mt. Hope Auction (Mid-Ohio sales)', 'base' => 'https://bid.mthopeauction.com', 'horses_only' => false],
-        'cavan' => ['name' => 'Cavan Equestrian (Cavan Horse & Pony Sales, Ireland)', 'base' => 'https://bid.cavanequestrian.com', 'horses_only' => true, 'currency' => 'EUR'],
-        'goresbridge' => ['name' => 'Goresbridge Horse Sales (Ireland)', 'base' => 'https://www.goresbridgeonlineauctions.com', 'horses_only' => true, 'currency' => 'EUR'],
+        'cavan' => ['name' => 'Cavan Equestrian (Cavan Horse & Pony Sales, Ireland)', 'base' => 'https://bid.cavanequestrian.com', 'horses_only' => true, 'currency' => 'EUR', 'day_first' => true],
+        'goresbridge' => ['name' => 'Goresbridge Horse Sales (Ireland)', 'base' => 'https://www.goresbridgeonlineauctions.com', 'horses_only' => true, 'currency' => 'EUR', 'day_first' => true],
     ];
 
     /** Auctions that aren't horse sales even on a horse-sale site. */
-    public const NOT_HORSES = '/equipment|\btack\b|carriage|furniture|stock ?dog|stallion[- ]service|breeding|semen|fundraiser|relief|custom-(auction|event)|host-your|\btest\b|machinery|antique|steam|produce|hay-|cattle|dairy|herd-dispersal|sheep|goat|pig|consignment-form|alternative-animal|exotic|bird|giraffe|zebra|camel/';
+    public const NOT_HORSES = '/equipment|\btack\b|carriage|furniture|stock ?dog|stallion[- ](?:service|auction|breeding)|breeding|semen|fundraiser|relief|custom-(auction|event)|host-your|\btest\b|machinery|antique|steam|produce|hay-|cattle|dairy|herd-dispersal|sheep|goat|pig|consignment-form|alternative-animal|exotic|bird|giraffe|zebra|camel/';
 
     /** On mixed sale-barn sites, an auction must say it's a horse sale. */
     public const HORSE_WORDS = '/horse|pony|ponies|draft|belgian|percheron|friesian|ha(l)?flinger|fjord|crossbred|gypsy|standardbred|morgan|saddlebred|hackney/';
@@ -162,8 +162,8 @@ class AuctioneerSoftwareHarvester
         $rows = [];
         foreach (glob($this->dir.'/pages/auction-*.done') as $done) {
             $info = json_decode(file_get_contents($done), true);
-            if (! is_array($info)) {
-                continue; // not a horse sale
+            if (! is_array($info) || preg_match(self::NOT_HORSES, $info['slug'])) {
+                continue; // not a horse sale (or excluded since it was kept)
             }
             $id = (int) preg_replace('/\D/', '', basename($done));
             $first = $this->read("list-$id-1");
@@ -171,7 +171,7 @@ class AuctioneerSoftwareHarvester
                 continue;
             }
             $title = trim(preg_replace('/\s+-\s+[^-]+$/', '', (string) AuctioneerSoftwareParser::pageTitle($first))); // drop " - <company>"
-            $date = ($lotPage = $this->read("lot-$id")) ? AuctioneerSoftwareParser::startDate($lotPage) : null;
+            $date = ($lotPage = $this->read("lot-$id")) ? AuctioneerSoftwareParser::startDate($lotPage, $this->site['day_first'] ?? false) : null;
             $date ??= self::dateFromText(AuctioneerSoftwareParser::clean($first));
             $year = $date ? (int) substr($date, 0, 4) : null;
             $lots = [];

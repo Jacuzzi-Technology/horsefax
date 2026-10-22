@@ -62,6 +62,7 @@ class TopekaParser
             // A barn name is not the registered name: in brackets ("(AKA Trigger)"), after AKA, or nested in quotes (“CAPTAIN “ACE””).
             $name = trim(preg_replace('/\s*\((?:AKA|A\.K\.A\.)[^)]*\)\s*/i', ' ', $name));
             $name = trim(preg_split('/[“"]|\s+(?:AKA|A\.K\.A\.)\s+/iu', $name)[0]);
+            $name = trim(preg_replace('/\s*\([^)]*\)$/', '', $name)); // a trailing nickname: “CEDARLANE ANTICIPATION (ANNIE)”
             $reg = preg_match('/[”"]\s+([A-Z]{0,3}\d{3,8}[A-Z]?)\b/u', $head, $r) ? $r[1] : null;
             $sex = AuctioneerSoftwareParser::sex($breedSex);
             $breed = trim(preg_replace('/\s+(Mares?|Geldings?|Stallion|Filly|Colt|Stud)$/', '', $breedSex));

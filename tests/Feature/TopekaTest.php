@@ -32,6 +32,8 @@ Lot 2 — “SAMPLE BLAZE (AKA BUDDY)”                                        
 Nice gelding.
                   Consigned by OTHER CONSIGNOR • Sample, IN                $____________
 Lot 3 — Pending                                                             Belgian Mare
+Lot 5 — “SAMPLE ANTICIPATION (ANNIE)” M22222                               Belgian Mare
+  Foaled: April 2, 2019. Bay.
 Lot 4 — “SAMPLE CAPTAIN “ACE”” S12345                                      Belgian Stallion
   Foaled: April 2, 2019. Bay.
 TXT;
@@ -40,8 +42,9 @@ TXT;
     public function test_catalog_lots_with_pedigree_and_no_people(): void
     {
         $lots = TopekaParser::catalog($this->catalogText());
-        $this->assertCount(3, $lots);
-        [$a, $b, $c] = $lots;
+        $this->assertCount(4, $lots);
+        [$a, $b, $d, $c] = $lots;
+        $this->assertSame('Sample Anticipation', $d['name']);
         $this->assertSame(['Sample Captain', 'S12345'], [$c['name'], $c['registration_number']]); // the nested nickname is dropped
         $this->assertSame(['1', 'Sample Acres Dolly', 'M123456', 'Belgian', 'mare', 2016, '2016-05-04', 'Blonde'],
             [$a['lot'], $a['name'], $a['registration_number'], $a['breed'], $a['sex'], $a['foal_year'], $a['birth_date'], $a['color']]);

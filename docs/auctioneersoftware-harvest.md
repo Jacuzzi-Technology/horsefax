@@ -35,8 +35,9 @@ rerun only reads new auctions. `--offline` re-reads the kept pages.
 - `sold`: bids were placed and the site shows its SOLD tag or the "Winning Bidder" label (the precedent Richard set for
   Platinum's winning bids, Oct 18 2026).
 - `high_bid`: bids were placed but the sale didn't mark it sold, or "Reserve not met".
-- `no_sale`: no bids. A price shown with no bids is a starting or buy-now price and is never kept.
-- `offered`: SOLD tag with no bids (sold privately; no price published).
+- `offered`: no bids recorded online (many of these sales sell in the ring, and the online page shows no ring result),
+  or a SOLD tag with no bids (no price published). A price shown with no bids is a starting or buy-now price and is never
+  kept. Nothing here is ever labelled "no sale".
 
 ## Facts only
 

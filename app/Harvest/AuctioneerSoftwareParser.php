@@ -37,7 +37,8 @@ class AuctioneerSoftwareParser
                 'lot_id' => $m[1], 'lot' => trim(html_entity_decode($m[2])), 'title' => $title,
                 'url' => preg_match('#<a class="enterLot" href="([^"]+)"#', $p, $u) ? html_entity_decode($u[1]) : null,
                 'fields' => $fields,
-                'state' => preg_match('#class="countdown (\w+)"#', $p, $s) ? $s[1] : null,
+                // Some finished lots carry no countdown, only "Bidding complete".
+                'state' => preg_match('#class="countdown (\w+)"#', $p, $s) ? $s[1] : (str_contains($p, '>Bidding complete<') ? 'completed' : null),
                 'bidder_label' => preg_match('#<strong class="winning-bidder-label">(.*?)</strong>#s', $p, $b) ? rtrim(self::clean($b[1]), ': ') : null,
                 'amount_cents' => $amount,
                 'bids' => preg_match('#<strong>Bids:</strong>\s*<span>(\d+)</span>#', $p, $n) ? (int) $n[1] : null,
@@ -58,11 +59,14 @@ class AuctioneerSoftwareParser
     }
 
     /** "Start Time: 10/8/2026 2:00:00 PM" on a lot page -> 2026-10-08. */
-    public static function startDate(string $html): ?string
+    public static function startDate(string $html, bool $dayFirst = false): ?string
     {
         $t = self::clean($html);
-        if (preg_match('#(?:Start|End|Closing) Time:\s*(\d{1,2})/(\d{1,2})/(\d{4})#', $t, $m) && checkdate((int) $m[1], (int) $m[2], (int) $m[3])) {
-            return sprintf('%04d-%02d-%02d', $m[3], $m[1], $m[2]);
+        if (preg_match('#(?:Start|End|Closing) Time:\s*(\d{1,2})/(\d{1,2})/(\d{4})#', $t, $m)) {
+            [$month, $day] = $dayFirst ? [(int) $m[2], (int) $m[1]] : [(int) $m[1], (int) $m[2]]; // Irish sites print 20/10/2026
+            if (checkdate($month, $day, (int) $m[3])) {
+                return sprintf('%04d-%02d-%02d', $m[3], $month, $day);
+            }
         }
 
         return null;
@@ -74,10 +78,10 @@ class AuctioneerSoftwareParser
     }
 
     /**
-     * sold / high_bid / no_sale / offered / catalog for a lot, and the price that goes with it. A high bid is never
+     * sold / high_bid / offered / catalog for a lot, and the price that goes with it. A high bid is never
      * upgraded to a sale: a sale needs the site's SOLD tag or its "Winning Bidder" label (the precedent Richard set for
      * Platinum's winning bids, Oct 18 2026), with bids placed. A price shown with no bids is a starting or buy-now price
-     * and is never kept.
+     * and is never kept, and no bids online never becomes "no sale" (the horse may have sold in the ring).
      *
      * @return array{0:string, 1:?int, 2:?string} [status, price_cents, note]
      */
@@ -100,7 +104,8 @@ class AuctioneerSoftwareParser
             return ['offered', null, 'Marked SOLD by the sale; no price published'];
         }
 
-        return ['no_sale', null, 'No bids'];
+        // No bids online is not "no sale": many of these sales sell in the ring, and the online page shows no ring result.
+        return ['offered', null, 'Offered; no bids recorded online and no result published'];
     }
 
     /**
@@ -123,13 +128,13 @@ class AuctioneerSoftwareParser
             return null;
         };
         $title = $lot['title'];
-        $segments = array_map('trim', preg_split('/\s+\|\s+/', $title));
-        $name = $get('horse name', 'name', 'registered name');
-        if ($name === null) {
-            $name = count($segments) > 1 ? $segments[0] : preg_split('/\s+-\s+|,\s+(?:a|an)\s+/i', $title)[0];
+        // "NAME | 2018 AQHA Mare", "NAME- 2015 APHA Gelding- Ranch Horse", "Crystal – 15 year old Mare", "Renegade, a team of…"
+        $segments = array_map('trim', preg_split('/\s+\|\s+|\s*[–—]\s*|\s*-\s+|\s*-\s*(?=\d)|,\s+|\s+&\s+(?=(?:filly|colt|foal)\b)/iu', $title));
+        $field = $get('horse name', 'name', 'registered name');
+        $name = self::nameOnly($field ?? $segments[0]);
+        if ($field === null && self::describes($name)) {
+            $name = ''; // the title describes the horse ("2022 Filly by …", "Appaloosa Mare 12 year old Roan"): no name to keep
         }
-        $name = trim(preg_replace('/^["“”\']+|["“”\']+$/u', '', trim($name)));
-        $name = trim(preg_replace('/\s*\((?:sold|ns|no sale|scratched|withdrawn)\)\s*$/i', '', $name));
         $desc = count($segments) > 1 ? implode(' ', array_slice($segments, 1)) : $title;
         $regText = trim(($get('breed', 'registry', 'registration') ?? '').' '.$desc);
 
@@ -185,6 +190,24 @@ class AuctioneerSoftwareParser
 
     private const BREEDS = ['AQHA' => 'Quarter Horse', 'APHA' => 'Paint Horse', 'ApHC' => 'Appaloosa', 'PtHA' => 'Pinto', 'PHBA' => 'Palomino', 'ABRA' => 'Buckskin', 'IBHA' => 'Buckskin',
         'AHA' => 'Arabian', 'AMHA' => 'Morgan', 'TWHBEA' => 'Tennessee Walking Horse', 'MFTHBA' => 'Missouri Fox Trotter', 'RMHA' => 'Rocky Mountain Horse', 'KFPS' => 'Friesian', 'GVHS' => 'Gypsy Vanner', 'JC' => 'Thoroughbred', 'USTA' => 'Standardbred'];
+
+    /** A name as printed, without quotes, a barn name ("Sandee Aka “Shorty”") or a sale note "(Sold)". */
+    public static function nameOnly(string $name): string
+    {
+        $name = trim(preg_replace('/^["“”\']+|["“”\']+$/u', '', trim($name)));
+        $name = trim(preg_split('/\s+(?:aka|a\.k\.a\.)\s+|\s+[“"]/iu', $name)[0]);
+        $name = trim(preg_replace('/\s*\([^)]*\)/', '', $name)); // "(Sold)", "(AKA …)", "(Sire x Dam by …)"
+        $name = trim(preg_replace('/\s+\d+\s*(?:yrs?|y\/o|years?(?: old)?)\.?$/i', '', $name)); // "Miss Skip N Ladd 23yr"
+        $name = trim(preg_replace('/(?:\s+(?:AQHA|APHA|ApHC|PtHA|grade|reg\.?))*\s+(?:stud|stallion|mare|gelding|colt|filly)$/i', '', $name)); // "Kings Oakie Star Stud"
+
+        return trim($name, " -–—:,");
+    }
+
+    /** Text that describes a horse rather than naming it: a year first, an age, or a sex word. */
+    public static function describes(string $name): bool
+    {
+        return (bool) preg_match('/^(19|20)\d\d\b|\b\d+\s*(?:yrs?|years?|y\/o)\b|\b(?:mares?|geldings?|stallions?|stud|fill(?:y|ies)|colts?)\b|\bteam of\b/i', $name);
+    }
 
     public static function registry(string $text): ?string
     {

@@ -49,7 +49,7 @@ class AuctioneerSoftwareTest extends TestCase
         $this->assertSame(['sold', 950000, 'Marked SOLD by the sale'], AuctioneerSoftwareParser::result($lots[1]));
         $this->assertSame(['high_bid', 600000, 'Reserve not met'], AuctioneerSoftwareParser::result($lots[2]));
         $this->assertSame('high_bid', AuctioneerSoftwareParser::result($lots[3])[0]); // a high bid, never upgraded to a sale
-        $this->assertSame(['no_sale', null, 'No bids'], AuctioneerSoftwareParser::result($lots[4])); // a price with no bids is an asking price: not kept
+        $this->assertSame(['offered', null, 'Offered; no bids recorded online and no result published'], AuctioneerSoftwareParser::result($lots[4])); // a price with no bids is an asking price: not kept, and not a "no sale"
         $this->assertStringNotContainsString('Sample Consignor', json_encode($lots));
         $this->assertStringNotContainsString('555-0100', json_encode($lots));
         $this->assertStringNotContainsString('prose', json_encode($lots));
@@ -63,6 +63,19 @@ class AuctioneerSoftwareTest extends TestCase
         $h = AuctioneerSoftwareParser::horse($lots[3], 2026);
         $this->assertSame(['Buck', 2018, false], [$h['name'], $h['foal_year'], $h['registered']]); // age 8 at a 2026 sale
         $this->assertTrue(AuctioneerSoftwareParser::notAHorse($lots[0], AuctioneerSoftwareParser::horse($lots[0], 2026)));
+        // Title styles: "NAME- 2015 APHA Gelding- …", an en dash with an age, a barn name, and a title with no name at all.
+        $t = fn ($title) => AuctioneerSoftwareParser::horse(['title' => $title, 'fields' => [], 'lot' => '9'], 2026);
+        $this->assertSame(['SAMPLE CASHIN ABE', 2015, 'gelding', 'APHA'], array_values(array_intersect_key($t('SAMPLE CASHIN ABE- 2015 APHA Gelding- Ranch Horse'), array_flip(['name', 'foal_year', 'registry', 'sex']))));
+        $this->assertSame(['Sample Crystal', 2011], array_values(array_intersect_key($t('Sample Crystal – 15 year old Standardbred Mare'), array_flip(['name', 'foal_year']))));
+        $this->assertSame('Sandee Sample', $t('Sandee Sample Aka “Shorty” – 8 year old Quarter Horse Mare')['name']);
+        $this->assertSame('', $t('2022 Filly by SAMPLE SIRE x a SAMPLE DAM daughter')['name']);
+        $this->assertSame('', $t('Appaloosa Mare 12 year old Roan')['name']);
+        foreach (['SE Sample Fire-2024 AQHA Mare' => 'SE Sample Fire', 'Sample Player-6yr-15.1hh-Gelding-AQHA' => 'Sample Player', 'Sample Top Revolver, reg 11 y/o Quarter Horse mare' => 'Sample Top Revolver',
+            'Miss Sample Ladd 23yr' => 'Miss Sample Ladd', 'Kings Sample Star Stud' => 'Kings Sample Star', 'KKA Sample Eyes & Filly' => 'KKA Sample Eyes', 'Sample Bar -14yr' => 'Sample Bar',
+            'Black and white stud. Registered AMHA pony.' => '', 'Polish Bred Weanling Colt on Application to AHA' => ''] as $title => $name) {
+            $this->assertSame($name, $t($title)['name'], $title);
+        }
+        $this->assertTrue(AuctioneerSoftwareParser::notAHorse(['title' => 'Appaloosa Mare 12 year old Roan', 'fields' => [], 'lot' => '9'], $t('Appaloosa Mare 12 year old Roan')));
         $this->assertTrue(AuctioneerSoftwareParser::notAHorse($lots[5], AuctioneerSoftwareParser::horse($lots[5], 2026)));
 
         // A mixed sale barn's vaguely titled auction counts as a horse sale when most lots describe horses.
@@ -97,7 +110,7 @@ class AuctioneerSoftwareTest extends TestCase
         $this->assertSame(0, $h->collect()['fetched']); // finished auctions are kept: a rerun fetches nothing new
 
         $loaded = $h->load();
-        $this->assertSame([4, 1, 2, 1], [$loaded['loaded'], $loaded['sold'], $loaded['high_bid'], $loaded['no_sale']]);
+        $this->assertSame([4, 1, 2, 1], [$loaded['loaded'], $loaded['sold'], $loaded['high_bid'], $loaded['offered']]);
         $lot = SaleLot::where('horse_name', 'Sample Smart Chex')->first();
         $this->assertSame(['sold', 950000, '2026-04-11', 'Big Sky Horse Sales: Spring Sample Sale'], [$lot->status, $lot->price_cents, $lot->sale_date->toDateString(), $lot->sale_name]);
         $this->assertSame('https://bid.bigskyhorsesales.com/auctions/7/lot/2-x', $lot->source_url);
