@@ -20,8 +20,9 @@ class AdvertisedRegisteredName
      *  - no record of that name, or every one contradicts the ad (a different horse): a new unverified record.
      * A registered name: the ad names a registry (or says registered) or gives sire and dam, the horse isn't listed as
      * grade, and the name has two or more words ("Trigger" is a barn name). Mules and donkeys are left out. Returns proposed, linked, created, queued or unmatched.
+     * $noun is what the source publishes ("ad" for classifieds, e.g. "catalog lot" for sale catalogs); it's only used in staff notes.
      */
-    public static function apply(SaleLot $lot, string $site): string
+    public static function apply(SaleLot $lot, string $site, string $noun = 'ad'): string
     {
         $words = count(preg_split('/\s+/', trim($lot->horse_name)));
         $registered = $lot->registry || $lot->registered === true || ($lot->sire_name && $lot->dam_name);
@@ -33,11 +34,11 @@ class AdvertisedRegisteredName
         if ($horse) {
             if (SaleLot::where('horse_id', $horse->id)->where('data_source_id', $lot->data_source_id)->where('match_tier', 'created')->exists()) {
                 $lot->forceFill(['horse_id' => $horse->id, 'match_tier' => $tier, 'matched_at' => now(), 'review_status' => 'held',
-                    'review_note' => 'Same horse as an earlier '.$site.' ad; advertised asking prices are not published yet'])->save();
+                    'review_note' => 'Same horse as an earlier '.$site.' '.$noun.($noun === 'ad' ? '; advertised asking prices are not published yet' : '; not published yet')])->save();
 
                 return 'linked';
             }
-            $summary = $site.' ad names '.$lot->horse_name.($lot->sire_name ? ' by '.$lot->sire_name : '').($lot->dam_name ? ' out of '.$lot->dam_name : '').', which agrees with '.$horse->horsefax_id.'. Proposed on name and parentage only; not attached.';
+            $summary = $site.' '.$noun.' names '.$lot->horse_name.($lot->sire_name ? ' by '.$lot->sire_name : '').($lot->dam_name ? ' out of '.$lot->dam_name : '').', which agrees with '.$horse->horsefax_id.'. Proposed on name and parentage only; not attached.';
             $lot->forceFill(['review_status' => 'queued', 'review_note' => mb_substr('Proposed: '.$horse->horsefax_id.' ('.$tier.')', 0, 255)])->save();
             ReviewSuggestion::firstOrCreate(['subject_type' => 'sale_lot', 'subject_id' => $lot->id], [
                 'suggestion' => 'lot_belongs', 'horse_id' => $horse->id, 'summary' => $summary,
