@@ -134,6 +134,31 @@ class CreateRecordsFromSaleLots
         }
     }
 
+    /**
+     * Richard, Oct 22 2026: an advertised horse (a classified ad, status asking) that names its registered name, sire
+     * and dam, and that no record matches, gets a new unverified record. The caller has already checked the ad and
+     * ruled out a match; $differentNote is MatchSaleLots' "same name, different horse" note when every same-name
+     * record contradicts the ad. The lot is tied to the record and held (asking prices aren't published).
+     */
+    public function createForAdvertised(SaleLot $lot, ?string $differentNote = null): Horse
+    {
+        $system = BuildRecordsFromResults::system();
+
+        return DB::transaction(function () use ($lot, $differentNote, $system) {
+            $horse = $this->create($lot, $system);
+            if ($differentNote) {
+                $this->markDifferent($horse, $differentNote, $lot, $system);
+            }
+            $this->identity($horse, $lot, $system);
+            $lot->forceFill(['horse_id' => $horse->id, 'match_tier' => 'created', 'matched_at' => now(),
+                'review_status' => $lot->publishable() ? null : 'held', 'review_note' => null])->save();
+            app(AddPublishedIdentity::class)($horse, $system, ['registry' => $lot->registry, 'registration_number' => $lot->registration_number,
+                'foal_year' => $lot->foal_year, 'pedigree' => $lot->pedigree ?: array_filter(['s' => $lot->sire_name, 'd' => $lot->dam_name, 'ds' => $lot->dam_sire_name])], 'sale lot '.$lot->id);
+
+            return $horse;
+        });
+    }
+
     /** The same-name records the lot contradicts are different horses: say so, so the pair isn't listed for staff. */
     private function markDifferent(Horse $new, string $note, SaleLot $lot, $system): void
     {
