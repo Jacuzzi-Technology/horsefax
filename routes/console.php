@@ -51,6 +51,14 @@ Artisan::command('hf:harvest-nrha {--years=} {--from=} {--to=1974} {--delay=3} {
     $this->info('Index now holds '.\App\Models\ShowRecord::count().' registered names, '.\App\Models\ShowAppearance::count().' results.');
 })->purpose('Harvest NRHA show results into the registered-name index');
 
+// Rider and owner for NRHA results stored before they were kept, read from the saved pages (no requests to NRHA).
+// php artisan hf:nrha-backfill-people [--limit=1000]
+Artisan::command('hf:nrha-backfill-people {--limit=}', function () {
+    [$pages, $filled] = (new \App\Harvest\NrhaHarvester(0, fn ($l) => $this->line(now()->format('H:i:s').' '.$l)))
+        ->backfillPeople($this->option('limit') ? (int) $this->option('limit') : null);
+    $this->info("NRHA backfill: $pages pages read, $filled results given rider and owner");
+})->purpose('Fill rider and owner on stored NRHA results from the saved pages');
+
 // Polite, resumable harvest of NRCHA's public results data files, newest year first (skips the current year).
 // php artisan hf:harvest-nrcha [--years=2025] --delay=3 [--max-shows=5]
 Artisan::command('hf:harvest-nrcha {--years=} {--delay=3} {--max-shows=}', function () {
@@ -86,7 +94,104 @@ Artisan::command('hf:harvest-equestrianlive {--delay=20} {--max-shows=}', functi
 Artisan::command('hf:build-records {--limit=}', function () {
     $out = app(\App\Actions\Record\BuildRecordsFromResults::class)($this->option('limit') ? (int) $this->option('limit') : null, fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
     $this->info(json_encode($out));
+    $this->info('Barn names: '.json_encode(app(\App\Actions\Record\LinkBarnNameRecords::class)()));
 })->purpose('Create unverified horse records from published show results and attach the results');
+
+// HOMD listings known only by a barn name, merged with the record made from the same name's results when every
+// check passes; the rest go to the name-review list (Oct 22 2026). hf:build-records runs this too.
+// php artisan hf:link-barn-names [--dry-run]
+Artisan::command('hf:link-barn-names {--dry-run}', function () {
+    $out = app(\App\Actions\Record\LinkBarnNameRecords::class)((bool) $this->option('dry-run'), fn ($l) => $this->line($l));
+    $this->info(json_encode($out));
+})->purpose('Merge results-made records into HOMD barn-name records of the same horse');
+
+// Sire and dam offspring earnings from harvested results (Richard, Oct 22 2026): staff only until they roughly match
+// NRHA's milestones. Cron runs it nightly after hf:build-records. --benchmark only prints the NRHA comparison.
+// php artisan hf:offspring-earnings [--benchmark]
+Artisan::command('hf:offspring-earnings {--benchmark}', function () {
+    if (! $this->option('benchmark')) {
+        $stats = app(\App\Actions\Record\OffspringEarnings::class)(fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+        $this->info(json_encode(\Illuminate\Support\Arr::except($stats, ['organizations', 'nrha_years', 'benchmark'])));
+    }
+    $rows = $stats['benchmark'] ?? \App\Actions\Record\OffspringEarnings::benchmark();
+    $this->table(['Horse', 'Role', 'NRHA passed', 'Ours (NRHA)', 'Share', 'NRHA earners', 'Foals', 'Records'], array_map(fn ($b) => [
+        $b['name'], $b['role'], '$'.$b['milestone_millions'].'M ('.$b['milestone_year'].')', '$'.number_format($b['nrha_cents'] / 100),
+        round(100 * $b['share_of_milestone'], 1).'%', $b['nrha_earners'], $b['offspring'], $b['records'],
+    ], $rows));
+})->purpose('Compute sire and dam offspring earnings (staff only) and compare with NRHA milestones');
+
+// Reining stallions' own pages (Richard, Oct 22 2026): each stallion's pedigree, and the offspring the page names as his
+// own get, linked by LinkPublishedOffspring's checks (the rest held for staff). A JSON list made by agents that fetched
+// only allowed pages (robots and terms checked, HorsefaxBot, 3 s a request). Each item: name, foal_year, registry,
+// registration_number, pedigree {s, d, ...}, source_url, offspring [{name, relation (only "get" is used), foal_year, dam, source_url}].
+// php artisan hf:import-offspring storage/app/private/imports/reining-stallion-pages.json [--dry-run]
+Artisan::command('hf:import-offspring {file} {--dry-run}', function () {
+    $items = json_decode((string) file_get_contents($this->argument('file')), true);
+    if (! is_array($items)) {
+        return $this->error('Not a JSON list.');
+    }
+    $display = fn ($n) => \App\Harvest\NrchaHarvester::display(trim((string) $n));
+    $source = \App\Models\DataSource::firstOrCreate(['key' => 'reining-stallion-pages'], [
+        'name' => 'Reining stallion pages (pedigrees and offspring)', 'url' => 'https://nrha.com/million-dollar-earners/', 'permission' => 'no_terms_posted',
+        'terms_note' => 'Oct 22 2026: NRHA\'s Million Dollar Earners sires and dams, and each stallion\'s own standing-farm or syndicate page; robots.txt and terms checked first, restricted or walled sites skipped. Names only (no earnings, owners or photos). Richard approved.',
+    ]);
+    $dry = (bool) $this->option('dry-run');
+    $dry && \Illuminate\Support\Facades\DB::beginTransaction();
+    $out = ['stallions' => [], 'offspring' => []];
+    $count = function (string $group, string $status) use (&$out) {
+        $out[$group][$status] = ($out[$group][$status] ?? 0) + 1;
+    };
+    foreach ($items as $h) {
+        $name = $display($h['name'] ?? '');
+        if ($name === '' || empty($h['source_url'])) {
+            $count('stallions', 'invalid');
+            continue;
+        }
+        $ped = collect($h['pedigree'] ?? [])->filter(fn ($n, $p) => preg_match('/^[sd]{1,5}$/', (string) $p) && trim((string) $n) !== '')->map($display)->all();
+        // A page's foal year that differs from the only record of the name would make ImportPublishedHorse start a second
+        // record: keep the record's year and leave the difference for staff.
+        $fy = ! empty($h['foal_year']) ? (int) $h['foal_year'] : null;
+        $same = \App\Models\Horse::named($name)->get();
+        if ($fy && $same->count() === 1 && $same->first()->birth_year && (int) $same->first()->birth_year !== $fy) {
+            $this->warn("$name: page says foaled $fy, the record says {$same->first()->birth_year}; kept the record's");
+            $fy = null;
+        }
+        if ($ped || ! empty($h['registration_number']) || $fy) {
+            $count('stallions', app(\App\Actions\Record\ImportPublishedHorse::class)([
+                'name' => $name, 'foal_year' => $fy,
+                'registry' => isset($h['registry']) ? \App\Harvest\SuperSiresParser::registry((string) $h['registry']) : null,
+                'registration_number' => $h['registration_number'] ?? null, 'color' => null,
+                'sex' => $h['sex'] ?? 'stallion', 'birth_date' => null, 'pedigree' => $ped, 'results' => [],
+            ], $h['source_url']));
+            \App\Models\HarvestPage::firstOrNew(['url' => $h['source_url']], ['data_source_id' => $source->id, 'kind' => 'stallion_site'])
+                ->fill(['status' => 'parsed', 'rows' => count($ped), 'fetched_at' => now()])->save();
+        }
+        $get = array_filter($h['offspring'] ?? [], fn ($o) => ($o['relation'] ?? '') === 'get' && trim((string) ($o['name'] ?? '')) !== '');
+        if (! $get) {
+            continue;
+        }
+        // Two records of the sire's name are a duplicate for staff to merge first: linking to either would split his foals.
+        $sires = \App\Models\Horse::named($name)->get();
+        if ($sires->count() !== 1) {
+            $count('stallions', $sires->isEmpty() ? 'sire_not_on_record' : 'sire_ambiguous');
+            $this->warn("$name: ".($sires->isEmpty() ? 'no record' : 'several records').', offspring not linked');
+            continue;
+        }
+        $sire = $sires->first();
+        foreach ($get as $o) {
+            $url = $o['source_url'] ?? $h['source_url'];
+            $status = app(\App\Actions\Record\LinkPublishedOffspring::class)($sire, ['name' => $o['name'], 'foal_year' => $o['foal_year'] ?? null, 'dam' => $o['dam'] ?? null, 'source_url' => $url]);
+            $count('offspring', $status);
+            \App\Models\HarvestPage::firstOrNew(['url' => $url], ['data_source_id' => $source->id, 'kind' => 'stallion_site'])
+                ->fill(['status' => 'parsed', 'fetched_at' => now()])->save();
+            if ($this->getOutput()->isVerbose()) {
+                $this->line("$name -> {$o['name']}: $status");
+            }
+        }
+    }
+    $dry && \Illuminate\Support\Facades\DB::rollBack();
+    $this->info(($dry ? 'DRY RUN (nothing saved) ' : '').json_encode($out));
+})->purpose('Link offspring named on reining stallions\' own pages to their records (checks in LinkPublishedOffspring)');
 
 // Super Sires stallion pedigrees and nominated foals (one page per 10 seconds, resumable).
 // php artisan hf:harvest-supersires [--delay=10] [--max-pages=5]
