@@ -53,6 +53,7 @@ class SaleCatalogImportTest extends TestCase
         $this->assertSame(250000, RobinGlennHarvester::price(['results' => 'Repurchased 2500', 'price_cents' => null]));
         $this->assertSame('withdrawn', RobinGlennHarvester::status(['results' => 'Out', 'price_cents' => null, 'name' => 'X'], '2025-04-12'));
         $this->assertSame('offered', RobinGlennHarvester::status(['results' => '', 'price_cents' => null, 'name' => 'X'], '2025-04-12'));
+        $this->assertSame('Purchased 5500', RobinGlennParser::parse($this->rgPage('Sample', $this->rgRow('2', 'Sample Two', 'Sample Sire', 'Purchased 5500; buyer Sample Person')))['rows'][0]['results']);
         $this->assertSame('private_order', RobinGlennHarvester::kind('PO-Sample Ranch-10292025'));
         $this->assertSame('test', RobinGlennHarvester::kind('TEST PARG CL SALE RG'));
     }

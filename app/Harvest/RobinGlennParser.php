@@ -66,7 +66,8 @@ class RobinGlennParser
             $name = preg_match('#<a\b[^>]*>(.*?)</a>#s', $c[1], $a) ? self::clean(strip_tags($a[1])) : $cell(1);
             $hid = preg_match('#[?&]hid=(\d+)#', $c[1], $h) ? $h[1] : null;
             $foal = $cell(2);
-            $results = $cell(14);
+            // The result only ("Purchased 5500"): anything after it ("; buyer <name>") is dropped, since names are never kept.
+            $results = ($r = $cell(14)) !== null ? (trim(preg_replace('/\s*[;,].*$|\s*\bbuyer\b.*$/i', '', $r)) ?: null) : null;
             $priceText = $cell(15);
             $rows[] = [
                 'hip' => $cell(0), 'name' => $name, 'rg_horse_id' => $hid,

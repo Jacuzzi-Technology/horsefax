@@ -95,6 +95,11 @@ commercial pedigree business and these catalogs are its product, which was flagg
   the sale is past, and `catalog` before it.
 - **Kinds:** `sale`, `private_order` ("PO-Name-date" pedigree orders) and `test` (Robin Glenn's "TEST …" and
   "Example Sale" catalogs). Only `sale` catalogs are loaded. All of them are in the inventory.
+- **Results text:** only the result is kept ("Purchased 5500"). Anything after it, such as "; buyer <name>", is
+  dropped.
+- **First full crawl (Oct 22 2026):** catIDs 1–3,138 in 2,515 requests, never blocked. That found 1,298 sale
+  catalogs with 105,839 lots, plus 318 sale catalogs cleared after the sale. Every price on the site is in a test or
+  example catalog, so real sales carry none.
 - **No registration numbers:** the web view doesn't print them, so lots go straight to the registered-name rule
   (sire and dam are given, so most qualify).
 

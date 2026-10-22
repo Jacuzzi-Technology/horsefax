@@ -187,7 +187,7 @@ class RobinGlennHarvester
 
         return match (true) {
             (bool) preg_match('/^PO[- ]/i', $n) => 'private_order',
-            (bool) preg_match('/\btest\b|^example sale$|\bdemo\b/i', $n) => 'test',
+            (bool) preg_match('/\btest\b|\bexample\b|\bdemo\b/i', $n) => 'test',
             default => 'sale',
         };
     }
