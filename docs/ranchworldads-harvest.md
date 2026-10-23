@@ -119,3 +119,15 @@ A first full run is about 33,000 ads at 3 s each, so about 28 hours plus about 5
 - A rerun leaves lots that are already matched or in review alone, so it creates nothing twice.
 - `hf:match-sales` and `hf:create-sale-records` skip `asking` lots. Records and matches from these ads come only
   from this loader.
+
+## First full run (Oct 22–23 2026)
+
+- Index: 912 pages, 31,906 horse ads, listing ids 44,256 to 216,467. Crawled at 3 s per request for about 26 hours. The
+  run stopped once when PHP hit its 128 MB limit at ~16,000 ads; it resumed without refetching.
+- On file: 31,909 ads (29,018 sold, 2,891 active, 15,469 for bid at auction). 12,603 have a horse name, 15,038 have sire
+  and dam (11,827 from the chart, 3,537 from the title), 300 have a 7-digit registration number, and 1,217 were posted by HorseBid.
+  6,588 ads (6,203 different names) qualify for a new record.
+- Posted stamp: on 15,691 ads, 2014–2026. Newer ads usually have none.
+- Probe: of 500 random ids not in the index, 294 were deleted, 205 were other categories and 1 was a horse ad. That's an
+  estimated ~280 horse ads outside the index, so a full id sweep isn't worth it.
+- One ad page failed after retries; there were no blocks.
