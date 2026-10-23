@@ -238,5 +238,15 @@ class AuctioneerSoftwareTest extends TestCase
             $this->assertStringNotContainsString('Premier Online', $page, $url);
         }
         $this->assertStringContainsString('Sample Smart Lena', $this->actingAs($staff)->get(route('horse.public', $horse))->getContent());
+        // Richard, Oct 23 2026 (option B): the history page and the admin page mask the past audit entries when shown.
+        $staff->forceFill(['two_factor_confirmed_at' => now()])->save();
+        foreach ([route('horses.audit', $horse), route('admin.horse', $horse)] as $url) {
+            $page = $this->actingAs($staff)->get($url)->assertOk()->getContent();
+            $this->assertStringNotContainsString('premieronlinesales', $page, $url);
+            $this->assertStringNotContainsString('Premier Online', $page, $url);
+            $this->assertStringNotContainsString($reg->id, $page, $url);
+            $this->assertStringContainsString(\App\Support\AuditMask::WITHDRAWN, html_entity_decode($page), $url);
+        }
+        $this->assertGreaterThan(0, \Illuminate\Support\Facades\DB::table('audit_log')->where('horse_id', $keptId)->where('after', 'like', '%premieronlinesales%')->count()); // stored rows unchanged
     }
 }
