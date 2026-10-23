@@ -311,7 +311,7 @@ class DreamHorseHarvester
     private function put(int $id, array $a): void
     {
         $this->ads[$id] = $a;
-        file_put_contents($this->dir.'/ads.jsonl', json_encode($a, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n", FILE_APPEND | LOCK_EX);
+        file_put_contents($this->dir.'/ads.jsonl', json_encode($a, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)."\n", FILE_APPEND | LOCK_EX);
     }
 
     private function touch(int $id): void
@@ -325,7 +325,7 @@ class DreamHorseHarvester
         $tmp = $this->dir.'/ads.jsonl.tmp';
         $fh = fopen($tmp, 'w');
         foreach ($this->ads as $a) {
-            fwrite($fh, json_encode($a, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+            fwrite($fh, json_encode($a, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)."\n");
         }
         fclose($fh);
         rename($tmp, $this->dir.'/ads.jsonl');
@@ -340,14 +340,14 @@ class DreamHorseHarvester
     public function export(): array
     {
         $ads = array_values(array_filter($this->ads, fn ($a) => in_array($a['status'], ['live', 'gone'], true) && isset($a['url'])));
-        file_put_contents($this->dir.'/dreamhorse-ads.json', json_encode($ads, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        file_put_contents($this->dir.'/dreamhorse-ads.json', json_encode($ads, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR));
         $fh = fopen($this->dir.'/dreamhorse-ads.csv', 'w');
-        fputcsv($fh, self::CSV);
+        fputcsv($fh, self::CSV, escape: '');
         foreach ($ads as $a) {
             $ped = $a['pedigree'] ?? [];
             $row = $a + ['sire' => $ped['s'] ?? null, 'dam' => $ped['d'] ?? null, 'dam_sire' => $ped['ds'] ?? null];
             $row['pedigree'] = $ped ? json_encode($ped, JSON_UNESCAPED_UNICODE) : null;
-            fputcsv($fh, array_map(fn ($k) => is_bool($row[$k] ?? null) ? ($row[$k] ? 'yes' : 'no') : ($row[$k] ?? null), self::CSV));
+            fputcsv($fh, array_map(fn ($k) => is_bool($row[$k] ?? null) ? ($row[$k] ? 'yes' : 'no') : ($row[$k] ?? null), self::CSV), escape: '');
         }
         fclose($fh);
 
