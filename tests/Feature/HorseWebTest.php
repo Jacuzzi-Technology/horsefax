@@ -40,6 +40,11 @@ class HorseWebTest extends TestCase
         $ad = HorseWebParser::ad($this->adPage('Sample Smart Lena', 'AQHA', '5512345'));
         $this->assertSame(['Sample Smart Lena', 'AQHA', '5512345', 2018, 4, 1250000], [$ad['name'], $ad['registry'], $ad['registration_number'], $ad['foal_year'], $ad['foal_month'], $ad['price_cents']]);
         $this->assertNull(HorseWebParser::ad($this->adPage('Dutton', 'NA', 'NA'))['registry']);
+        // With no name, the listing shows breed and sex in its place: that is not a name, and needs no ad page.
+        $this->assertNull(HorseWebHarvester::realName(['name' => 'Quarter Horse Stallion', 'breed' => 'Quarter Horse', 'sex' => 'Stallion']));
+        $this->assertNull(HorseWebHarvester::realName(['name' => 'Shetland Pony Mare', 'breed' => 'Shetland Pony', 'sex' => null]));
+        $this->assertSame('Plan A', HorseWebHarvester::realName(['name' => 'Plan A “Cutie”', 'breed' => 'Quarter Horse', 'sex' => 'Mare']));
+        $this->assertFalse(HorseWebHarvester::needsAdPage(['name' => 'Friesian Mare', 'breed' => 'Friesian', 'sex' => 'Mare']));
         foreach (['prose', '555-0100', 'Sample Town'] as $gone) {
             $this->assertStringNotContainsString($gone, json_encode([$rows, $ad]));
         }
@@ -62,7 +67,7 @@ class HorseWebTest extends TestCase
         });
         $h = new HorseWebHarvester(0, null, sys_get_temp_dir().'/hw-test-'.uniqid());
         $out = $h->run();
-        $this->assertSame([2, 3, 2], [$out['pages'], $out['listed'], $out['ad_pages']]); // Dutton (one word) needs no ad page
+        $this->assertSame([2, 3, 1], [$out['pages'], $out['listed'], $out['ad_pages']]); // Dutton (one word) and a 'Stud …' name need no ad page
         $loaded = $h->load();
         $this->assertSame([2, 1, 1], [$loaded['loaded'], $loaded['skipped_stud'], $loaded['created']]);
         $lot = SaleLot::where('horse_name', 'Sample Smart Lena')->first();

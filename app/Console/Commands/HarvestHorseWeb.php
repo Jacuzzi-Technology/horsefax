@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
  */
 class HarvestHorseWeb extends Command
 {
-    protected $signature = 'hf:harvest-horseweb {--delay=3} {--offline} {--no-load} {--max-pages=} {--max-ads=} {--dir=}';
+    protected $signature = 'hf:harvest-horseweb {--delay=3} {--offline} {--no-load} {--max-pages=} {--max-ads=} {--no-listing : fetch only the ad pages still needed} {--dir=}';
 
     protected $description = 'Collect HorseWeb.com horse ads (facts only) into the sale-lots index';
 
@@ -24,7 +24,7 @@ class HarvestHorseWeb extends Command
         $status = self::SUCCESS;
         if (! $this->option('offline')) {
             try {
-                $this->info('Collect: '.json_encode($h->run($this->option('max-pages') ? (int) $this->option('max-pages') : null, $this->option('max-ads') !== null ? (int) $this->option('max-ads') : null)));
+                $this->info('Collect: '.json_encode($h->run($this->option('max-pages') ? (int) $this->option('max-pages') : null, $this->option('max-ads') !== null ? (int) $this->option('max-ads') : null, ! $this->option('no-listing'))));
             } catch (HarvestBlocked $e) {
                 $this->error($e->getMessage());
                 $status = self::FAILURE;

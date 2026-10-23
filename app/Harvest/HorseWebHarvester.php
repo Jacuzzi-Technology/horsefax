@@ -70,18 +70,37 @@ class HorseWebHarvester
         return self::BASE.'/horses/'.($n > 1 ? $n.'/' : '');
     }
 
+    /**
+     * The horse's name, or null when the ad gives none: the listing then shows the breed and sex in its place
+     * ("Quarter Horse Stallion"). Nicknames and quote marks are dropped ("Plan A “Cutie”" -> "Plan A").
+     */
+    public static function realName(array $a): ?string
+    {
+        $n = trim((string) ($a['name'] ?? ''));
+        $breed = trim((string) ($a['breed'] ?? ''));
+        if ($n === '' || strcasecmp($n, trim($breed.' '.($a['sex'] ?? ''))) === 0
+            || ($breed !== '' && stripos($n, $breed) === 0 && preg_match('/\b(mares?|geldings?|stallions?|stud|fill(?:y|ies)|colts?)$/i', $n))) {
+            return null;
+        }
+        $n = AuctioneerSoftwareParser::nameOnly($n);
+
+        return $n === '' || AuctioneerSoftwareParser::describes($n) ? null : $n;
+    }
+
     public static function needsAdPage(array $a): bool
     {
-        return $a['name'] !== null && count(preg_split('/\s+/', trim($a['name']))) >= 2;
+        $n = self::realName($a);
+
+        return $n !== null && count(preg_split('/\s+/', $n)) >= 2;
     }
 
     /** Read the listing (newest first) and the ad pages it calls for. Returns counts. */
-    public function run(?int $maxPages = null, ?int $maxAds = null): array
+    public function run(?int $maxPages = null, ?int $maxAds = null, bool $listing = true): array
     {
         $out = ['pages' => 0, 'listed' => 0, 'new' => 0, 'ad_pages' => 0];
         $today = now()->toDateString();
         $prev = null;
-        for ($n = 1; $maxPages === null || $n <= $maxPages; $n++) {
+        for ($n = 1; $listing && ($maxPages === null || $n <= $maxPages); $n++) {
             $html = $this->get(self::pageUrl($n));
             $rows = $html ? HorseWebParser::listing($html) : [];
             $ids = array_column($rows, 'ad_id');
@@ -128,7 +147,7 @@ class HorseWebHarvester
                 $out['skipped_stud']++; // a stallion standing at stud: a breeding fee, not a horse for sale
                 continue;
             }
-            $name = $a['name'] ?? null;
+            $name = self::realName($a);
             if (! $name || preg_match('/\b(mule|donkey|burro|jenny|jack)s?\b/i', (string) $a['breed'])) {
                 $out['skipped_no_name']++;
                 continue;
