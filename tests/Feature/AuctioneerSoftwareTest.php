@@ -184,4 +184,59 @@ class AuctioneerSoftwareTest extends TestCase
         $this->artisan('hf:prune-orphan-ancestors')->expectsOutputToContain('"ancestors_removed":3')->assertSuccessful();
         $this->assertSame(0, \App\Models\Horse::whereIn('registered_name', ['Sample Orphan Sire', 'Sample Orphan Dam', 'Sample Orphan Grandsire'])->count());
     }
+
+    public function test_keep_registered_purge_keeps_registered_horses_without_any_trace_of_the_site(): void
+    {
+        $retired = \App\Models\DataSource::create(['key' => 'as-premieronline', 'name' => 'Premier Online Horse Sales (MM Auction Services)', 'url' => 'https://bid.premieronlinesales.com', 'permission' => 'terms_allow']);
+        $base = 'https://bid.premieronlinesales.com';
+        $mk = fn ($id, $name, array $extra) => SaleLot::record($retired->id, 'as:1:'.$id, $extra + ['sale_name' => 'Premier Online Horse Sales (MM Auction Services): June Sample Sale',
+            'sale_date' => '2025-06-01', 'lot' => $id, 'horse_name' => $name, 'status' => 'sold', 'price_cents' => 1250000, 'source_url' => $base.'/auctions/1/lot/'.$id]);
+        // A registered horse with sire and dam (AQHA); a grade horse with a two-word name, only "registered: yes".
+        $reg = $mk('1', 'Sample Smart Lena', ['registry' => 'AQHA', 'registered' => true, 'foal_year' => 2018, 'sex' => 'mare', 'color' => 'Bay', 'sire_name' => 'Sample Smart Sire', 'dam_name' => 'Sample Lena Dam']);
+        $grade = $mk('2', 'Sample Trail Buddy', ['registered' => true, 'sex' => 'gelding']);
+        foreach ([$reg, $grade] as $lot) {
+            \App\Harvest\AdvertisedRegisteredName::apply($lot, 'Premier Online Horse Sales (MM Auction Services)');
+        }
+        $keptId = $reg->fresh()->horse_id;
+        $gradeId = $grade->fresh()->horse_id;
+        $this->assertNotNull($keptId);
+        $this->assertNotNull($gradeId);
+        // The reported sale on the record's timeline, made the way the nightly match does it.
+        $event = app(\App\Actions\Record\AttachSaleLot::class)($reg->fresh(), \App\Models\Horse::find($keptId), \App\Actions\Record\BuildRecordsFromResults::system(), 'created');
+        $this->assertNotNull($event);
+        $staff = \App\Models\User::factory()->create(['is_staff' => true]);
+        $this->assertStringContainsString('Premier Online', $this->actingAs($staff)->get(route('horses.audit', \App\Models\Horse::find($keptId)))->getContent().
+            $this->actingAs($staff)->get(route('horses.show', \App\Models\Horse::find($keptId)))->getContent()); // the site shows before the purge
+
+        $dry = AuctioneerSoftwareHarvester::purgeKeepRegistered('premieronline', true);
+        $this->assertSame([2, 1, 1, 1, 0], [$dry['lots'], $dry['timeline_entries'], $dry['records_kept_registered'], $dry['records_removed_unregistered'], $dry['references_left']]);
+        $this->assertNotNull(\App\Models\Horse::find($gradeId)); // the dry run changed nothing
+        $this->assertSame(2, SaleLot::where('data_source_id', $retired->id)->count());
+
+        $out = AuctioneerSoftwareHarvester::purgeKeepRegistered('premieronline');
+        $this->assertSame(0, $out['references_left']);
+        $this->assertNull(\App\Models\Horse::find($gradeId)); // the unregistered horse is gone
+        $horse = \App\Models\Horse::find($keptId);
+        $this->assertSame(['Sample Smart Lena', 'unverified', 'mare'], [$horse->registered_name, $horse->identity_status, $horse->sex]);
+        $this->assertSame(2018, (int) $horse->birth_year);
+        $this->assertSame(['Sample Smart Sire', 'Sample Lena Dam'], [$horse->pedigree()->where('position', 's')->value('name'), $horse->pedigree()->where('position', 'd')->value('name')]);
+        $this->assertSame(0, SaleLot::where('data_source_id', $retired->id)->count());
+        $this->assertNull(\App\Models\HorseEvent::find($event->id));
+        $this->assertSame('not_allowed', $retired->fresh()->permission);
+        // No trace of the site anywhere on the kept record: facts, timeline, audit, nor its public page.
+        $this->assertGreaterThan(0, $out['audit_entries_naming_site']); // the append-only audit log keeps its past entries
+        $blob = json_encode([\Illuminate\Support\Facades\DB::table('horse_facts')->where('horse_id', $keptId)->get(), \Illuminate\Support\Facades\DB::table('horse_events')->where('horse_id', $keptId)->get(),
+            \Illuminate\Support\Facades\DB::table('horse_identifiers')->where('horse_id', $keptId)->get(),
+            \Illuminate\Support\Facades\DB::table('pedigree_entries')->where('horse_id', $keptId)->get()]);
+        foreach (['premieronlinesales', 'Premier Online', $reg->id] as $trace) {
+            $this->assertStringNotContainsString($trace, $blob);
+        }
+        // The public page and the signed-in record page show no trace (the private history page lists the audit log, which can't be edited).
+        foreach ([route('horse.public', $horse), route('horses.show', $horse)] as $url) {
+            $page = $this->actingAs($staff)->get($url)->assertOk()->getContent();
+            $this->assertStringNotContainsString('premieronlinesales', $page, $url);
+            $this->assertStringNotContainsString('Premier Online', $page, $url);
+        }
+        $this->assertStringContainsString('Sample Smart Lena', $this->actingAs($staff)->get(route('horse.public', $horse))->getContent());
+    }
 }

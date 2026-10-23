@@ -112,6 +112,134 @@ class AuctioneerSoftwareHarvester
         return ['lots' => count($lots), 'records_removed' => count($remove), 'records_kept' => $keep->count()] + $out;
     }
 
+    /**
+     * Richard, Oct 23 2026, for Premier Online: "separate the records and just keep the horses that are registered along
+     * with their pedigrees and delete the sale information". So:
+     *  - every sale lot of the retired site goes (prices, bids, dates, sale names, links, notes), with the timeline
+     *    entries made from those lots, their review suggestions and staff notes that quote them;
+     *  - a record the site created for a horse with no registration information (no registry, no number, not both sire
+     *    and dam on any of its lots) goes, with its orphaned ancestors;
+     *  - a record it created for a registered horse stays: registered name, registry, number, sex, color, foal year and
+     *    pedigree, identity unverified. Its facts, identifiers and pedigree are already stored as "historical" with no
+     *    link to a source. The audit log is append-only (a database trigger), so its past entries that name a lot or the
+     *    site's address stay as written; they are counted (audit_entries_naming_site), and one new entry records the
+     *    withdrawal;
+     *  - a record with other evidence (another source's lot, a show record, an owner...) stays as it was, losing only the
+     *    site's lots and the timeline entries made from them.
+     * $dryRun does it all in a transaction and rolls back. Returns counts, including any reference left (should be 0).
+     */
+    public static function purgeKeepRegistered(string $key, bool $dryRun = false): array
+    {
+        $out = ['dry_run' => $dryRun, 'lots' => 0, 'timeline_entries' => 0, 'records_kept_registered' => 0, 'records_kept_other_evidence' => 0,
+            'records_removed_unregistered' => 0, 'ancestors_removed' => 0, 'references_left' => 0, 'audit_entries_naming_site' => 0];
+        $src = DataSource::where('key', 'as-'.$key)->first();
+        if (! $src || ! isset(self::RETIRED[$key])) {
+            return $out;
+        }
+        $db = \Illuminate\Support\Facades\DB::class;
+        $lots = SaleLot::where('data_source_id', $src->id)->get();
+        $lotIds = $lots->pluck('id')->all();
+        $created = $lots->where('match_tier', 'created')->pluck('horse_id')->filter()->unique()->values();
+        $other = $created->filter(fn ($id) => SaleLot::where('horse_id', $id)->where('data_source_id', '<>', $src->id)->exists()
+            || $db::table('show_records')->where('horse_id', $id)->exists() || $db::table('stewardships')->where('horse_id', $id)->exists()
+            || $db::table('claim_codes')->where('horse_id', $id)->exists() || $db::table('documents')->where('horse_id', $id)->exists()
+            || $db::table('transfers')->where('horse_id', $id)->exists() || $db::table('pedigree_entries')->where('linked_horse_id', $id)->where('horse_id', '<>', $id)->exists())->values();
+        $registered = $created->diff($other)->filter(fn ($id) => $lots->where('horse_id', $id)->contains(fn ($l) => $l->registry || preg_match('/\d/', (string) $l->registration_number) || ($l->sire_name && $l->dam_name)))->values();
+        $remove = $created->diff($other)->diff($registered)->values()->all();
+        $kept = $registered->all();
+        $base = rtrim(self::RETIRED_BASE[$key] ?? '', '/');
+        $saleNames = $lots->pluck('sale_name')->unique()->filter()->values()->all();
+
+        $db::beginTransaction();
+        try {
+            // Timeline entries made from the lots (and any left on these records that quote the site).
+            $events = $lots->pluck('horse_event_id')->filter()->all();
+            $touched = $lots->pluck('horse_id')->filter()->unique()->all();
+            $quoting = $db::table('horse_events')->whereIn('horse_id', $touched)->where(fn ($q) => $q->where('details', 'like', '%'.$base.'%')->orWhereIn('sale_venue', $lots->map(fn ($l) => $l->sale_name.($l->lot ? ', lot '.$l->lot : ''))->all()))->pluck('id')->all();
+            $events = array_values(array_unique(array_merge($events, $quoting)));
+            SaleLot::whereIn('id', $lotIds)->update(['horse_event_id' => null]);
+            $out['timeline_entries'] = $db::table('horse_events')->whereIn('id', $events)->delete();
+            $db::table('review_suggestions')->where(fn ($q) => $q->whereIn('horse_id', $remove)->orWhere(fn ($w) => $w->where('subject_type', 'sale_lot')->whereIn('subject_id', $lotIds)))->delete();
+            $db::table('name_reviews')->where(fn ($q) => $q->whereIn('horse_a_id', $remove)->orWhereIn('horse_b_id', $remove)->orWhereIn('kept_horse_id', $remove))->delete();
+            foreach ($saleNames as $name) { // staff notes on kept records: "Automatic: the <sale> lot contradicts …"
+                $db::table('name_reviews')->where('note', 'like', '%'.$name.'%')->update(['note' => $db::raw("replace(note, 'the ".str_replace("'", "''", $name)." lot', 'a published lot')")]);
+            }
+            $out['lots'] = SaleLot::whereIn('id', $lotIds)->delete();
+            $ancestors = $db::table('pedigree_entries')->whereIn('horse_id', $remove)->whereNotNull('linked_horse_id')->pluck('linked_horse_id')->unique()->values()->all();
+            \App\Models\Horse::whereIn('id', $remove)->get()->each->delete();
+            $out['ancestors_removed'] = count(app(\App\Actions\Record\PruneOrphanAncestors::class)($ancestors));
+            foreach ($kept as $id) {
+                \App\Support\Audit::record('evidence.source_withdrawn', \App\Models\Horse::find($id), null, ['note' => 'References to a retired published source were removed (Oct 23 2026); the record keeps its identity facts as unattributed historical evidence.'], $id);
+            }
+            $out['records_kept_registered'] = count($kept);
+            $out['records_kept_other_evidence'] = $other->count();
+            $out['records_removed_unregistered'] = count($remove);
+            $out['references_left'] = self::references($kept, $lotIds, $base, $saleNames);
+            // The audit log is append-only (a database trigger), so its past entries can't be edited: counted, not changed.
+            $out['audit_entries_naming_site'] = self::auditReferences($kept, $lotIds, $base, $saleNames);
+            if (! $dryRun) {
+                $src->forceFill(['permission' => 'not_allowed', 'terms_note' => 'Retired Oct 23 2026: '.self::RETIRED[$key].' Terms of Service restrict the site to personal noncommercial use and forbid copying or republishing. Its sale information was removed; registered horses it introduced were kept as unattributed historical records (Richard, Oct 23 2026).'])->save();
+            }
+            $dryRun ? $db::rollBack() : $db::commit();
+        } catch (\Throwable $e) {
+            $db::rollBack();
+            throw $e;
+        }
+
+        return $out;
+    }
+
+    /** Retired sites' addresses, to find references to them in kept evidence. */
+    public const RETIRED_BASE = ['premieronline' => 'https://bid.premieronlinesales.com'];
+
+    /** Audit entries on kept records that name the site, a lot or a sale (the log is append-only: these stay). */
+    public static function auditReferences(array $horseIds, array $lotIds, string $base, array $saleNames): int
+    {
+        if (! $horseIds) {
+            return 0;
+        }
+        $db = \Illuminate\Support\Facades\DB::class;
+
+        return $db::table('audit_log')->whereIn('horse_id', $horseIds)->where(function ($w) use ($db, $base, $lotIds, $saleNames) {
+            foreach (['after', 'before'] as $c) {
+                $col = $db::raw("cast($c as text)");
+                $w->orWhere($col, 'like', '%'.$base.'%');
+                foreach ($saleNames as $sn) {
+                    $w->orWhere($col, 'like', '%'.$sn.'%');
+                }
+                foreach (array_slice($lotIds, 0, 2000) as $l) {
+                    $w->orWhere($col, 'like', '%'.$l.'%');
+                }
+            }
+        })->count();
+    }
+
+    /** References to the site still on kept records (their timeline, facts, staff notes); the audit log is counted apart. */
+    public static function references(array $horseIds, array $lotIds, string $base, array $saleNames): int
+    {
+        if (! $horseIds) {
+            return 0;
+        }
+        $db = \Illuminate\Support\Facades\DB::class;
+        $like = fn ($q, array $cols) => $q->where(function ($w) use ($cols, $base, $lotIds, $saleNames) {
+            foreach ($cols as $c) {
+                $w->orWhere($c, 'like', '%'.$base.'%');
+                foreach ($saleNames as $s) {
+                    $w->orWhere($c, 'like', '%'.$s.'%');
+                }
+                foreach (array_slice($lotIds, 0, 2000) as $l) {
+                    $w->orWhere($c, 'like', '%'.$l.'%');
+                }
+            }
+        });
+        $n = SaleLot::whereIn('horse_id', $horseIds)->whereIn('id', $lotIds)->count();
+        $n += $like($db::table('horse_events')->whereIn('horse_id', $horseIds), ['details', 'sale_venue', 'event_name', 'provider'])->count();
+        $n += $like($db::table('horse_facts')->whereIn('horse_id', $horseIds), ['value', $db::raw('cast(meta as text)')])->count();
+        $n += $like($db::table('name_reviews')->where(fn ($q) => $q->whereIn('horse_a_id', $horseIds)->orWhereIn('horse_b_id', $horseIds)), ['note'])->count();
+
+        return $n;
+    }
+
     public function source(): DataSource
     {
         return $this->source ??= DataSource::firstOrCreate(['key' => 'as-'.$this->key], [

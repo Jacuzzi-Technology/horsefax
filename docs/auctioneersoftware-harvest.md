@@ -26,6 +26,20 @@ are kept), and then the ancestor records made for those records' pedigrees that 
 (`PruneOrphanAncestors`, recursively). Add `--dry-run` to see the real counts: it does the work in a transaction and
 rolls back.
 
+**Keep the registered horses** (Richard, Oct 23 2026: "keep the horses that are registered along with their pedigrees
+and delete the sale information"): `--purge=premieronline --keep-registered [--dry-run]`.
+- Deleted: every sale lot of the site (prices, bids, dates, sale names, links, notes), the timeline entries made from
+  them, their review suggestions; staff notes that quoted a sale name now say "a published lot".
+- Deleted: records the site created for horses with no registration information (no registry, no number, and not
+  both sire and dam on any of its lots), with their orphaned ancestors.
+- Kept: records it created for registered horses, with registered name, registry, number, sex, color, foal year and
+  pedigree, identity unverified. Their facts, identifiers and pedigree lines are stored as "historical" with no link to
+  any source, so nothing else needs changing.
+- Kept unchanged: records with other evidence, minus the site's lots and their timeline entries.
+- The audit log is append-only (a database trigger), so its past entries that name the site or a lot stay as written;
+  the result counts them (`audit_entries_naming_site`) and a new `evidence.source_withdrawn` entry records the
+  withdrawal. They show only on the record's private history page and in admin, not on the public page.
+
 `php artisan hf:prune-orphan-ancestors [--dry-run]` does the ancestor clean-up on its own, for records removed
 earlier: it finds candidates through the audit trail (`pedigree.linked` entries of records that no longer exist).
 
