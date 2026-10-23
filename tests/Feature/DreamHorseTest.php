@@ -149,7 +149,7 @@ class DreamHorseTest extends TestCase
 
         $clean = app(\App\Actions\Record\CleanDreamHorsePedigrees::class);
         $dry = $clean(true);
-        $this->assertSame([1, 1, 1, 1], [$dry['lots_cleaned'], $dry['ancestors_relinked'], $dry['ancestors_renamed'], $dry['duplicates_proposed']]);
+        $this->assertSame([1, 1, 1, 1, 0], [$dry['lots_cleaned'], $dry['ancestors_relinked'], $dry['ancestors_renamed'], $dry['duplicates_proposed'], $dry['duplicates_already_in_review']]);
         $this->assertSame($before, Horse::count()); // rolled back
         $this->assertNotNull(Horse::find($junk->id));
 
@@ -167,5 +167,12 @@ class DreamHorseTest extends TestCase
         $this->assertEqualsCanonicalizing([$created->id, $other->id], [$review->horse_a_id, $review->horse_b_id]);
         $this->assertNull($created->fresh()->merged_into_id);
         $this->assertSame(0, $clean()['lots_cleaned']); // a second run finds nothing to do
+
+        // A pair staff already have (hf:find-name-variants lists same-name records) is noted and moved up, not added again.
+        $lot->fresh()->forceFill(['sire_name' => $ped['s'], 'pedigree' => $ped])->save();
+        $again = $clean();
+        $this->assertSame([0, 1], [$again['duplicates_proposed'], $again['duplicates_already_in_review']]);
+        $this->assertSame(1, \App\Models\NameReview::count());
+        $this->assertStringContainsString('DreamHorse cleanup', \App\Models\NameReview::first()->note);
     }
 }

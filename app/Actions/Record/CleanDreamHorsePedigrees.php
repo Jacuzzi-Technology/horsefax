@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  *  2. Pedigree lines written by the system under the junk name get the clean name (or go, if nothing's left).
  *  3. The lots' sire, dam and dam's sire, and their pedigree, are cleaned.
  *  4. A created record that another record of the same name now agrees with (clean sire and dam) is PROPOSED to staff as
- *     a duplicate pair (name_reviews, open). Never merged automatically.
+ *     a duplicate pair (name_reviews, open; a pair staff already have gets a note and top priority). Never merged automatically.
  *  5. Ancestor records left with nothing pointing at them go (PruneOrphanAncestors).
  * Everything runs in one transaction; a dry run rolls it back, so its counts are real.
  */
@@ -35,7 +35,7 @@ class CleanDreamHorsePedigrees
     public function __invoke(bool $dryRun = false, ?\Closure $log = null): array
     {
         $out = ['created_lots' => 0, 'lots_cleaned' => 0, 'junk_names' => 0, 'ancestors_renamed' => 0, 'ancestors_relinked' => 0,
-            'ancestors_unlinked' => 0, 'lines_renamed' => 0, 'lines_removed' => 0, 'duplicates_proposed' => 0, 'ancestors_pruned' => 0];
+            'ancestors_unlinked' => 0, 'lines_renamed' => 0, 'lines_removed' => 0, 'duplicates_proposed' => 0, 'duplicates_already_in_review' => 0, 'ancestors_pruned' => 0];
         $source = DataSource::where('key', 'dreamhorse')->first();
         if (! $source) {
             return $out;
@@ -138,6 +138,14 @@ class CleanDreamHorsePedigrees
                     continue;
                 }
                 [$a, $b] = strcmp($horse->id, $other->id) < 0 ? [$horse->id, $other->id] : [$other->id, $horse->id];
+                if ($existing = NameReview::where('horse_a_id', $a)->where('horse_b_id', $b)->first()) {
+                    // Already a staff pair (the nightly hf:find-name-variants lists same-name records): say why it matters.
+                    if ($existing->status === 'open') {
+                        $existing->forceFill(['priority' => 1, 'note' => mb_substr(trim(($existing->note ? $existing->note."\n" : '').'DreamHorse cleanup: same sire and dam once the seller\'s notes are taken out of '.$lot->source_url.'.'), 0, 1000)])->save();
+                    }
+                    $out['duplicates_already_in_review']++;
+                    continue;
+                }
                 $out['duplicates_proposed'] += NameReview::insertOrIgnore(['horse_a_id' => $a, 'horse_b_id' => $b, 'match' => 'same_letters', 'priority' => 1,
                     'status' => 'open', 'note' => mb_substr('DreamHorse cleanup: same name, and the same sire and dam once the seller\'s notes are taken out of the ad\'s chart ('
                         .$horse->horsefax_id.' from '.$lot->source_url.'). Proposed only; not merged.', 0, 1000), 'created_at' => now(), 'updated_at' => now()]);
