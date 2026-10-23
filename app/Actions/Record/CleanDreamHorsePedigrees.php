@@ -26,7 +26,8 @@ use Illuminate\Support\Facades\DB;
  *  2. Pedigree lines written by the system under the junk name get the clean name (or go, if nothing's left).
  *  3. The lots' sire, dam and dam's sire, and their pedigree, are cleaned.
  *  4. A created record that another record of the same name now agrees with (clean sire and dam) is PROPOSED to staff as
- *     a duplicate pair (name_reviews, open; a pair staff already have gets a note and top priority). Never merged automatically.
+ *     a duplicate pair (name_reviews, open; a pair staff already have gets a note and top priority; a pair the load itself
+ *     marked "different horses" on the junk name is reopened, never one a person decided). Never merged automatically.
  *  5. Ancestor records left with nothing pointing at them go (PruneOrphanAncestors).
  * Everything runs in one transaction; a dry run rolls it back, so its counts are real.
  */
@@ -35,7 +36,7 @@ class CleanDreamHorsePedigrees
     public function __invoke(bool $dryRun = false, ?\Closure $log = null): array
     {
         $out = ['created_lots' => 0, 'lots_cleaned' => 0, 'junk_names' => 0, 'ancestors_renamed' => 0, 'ancestors_relinked' => 0,
-            'ancestors_unlinked' => 0, 'lines_renamed' => 0, 'lines_removed' => 0, 'duplicates_proposed' => 0, 'duplicates_already_in_review' => 0, 'ancestors_pruned' => 0];
+            'ancestors_unlinked' => 0, 'lines_renamed' => 0, 'lines_removed' => 0, 'duplicates_proposed' => 0, 'duplicates_already_in_review' => 0, 'duplicates_reopened' => 0, 'ancestors_pruned' => 0];
         $source = DataSource::where('key', 'dreamhorse')->first();
         if (! $source) {
             return $out;
@@ -140,10 +141,17 @@ class CleanDreamHorsePedigrees
                 [$a, $b] = strcmp($horse->id, $other->id) < 0 ? [$horse->id, $other->id] : [$other->id, $horse->id];
                 if ($existing = NameReview::where('horse_a_id', $a)->where('horse_b_id', $b)->first()) {
                     // Already a staff pair (the nightly hf:find-name-variants lists same-name records): say why it matters.
+                    $note = mb_substr(trim(($existing->note ? $existing->note."\n" : '').'DreamHorse cleanup: same sire and dam once the seller\'s notes are taken out of '.$lot->source_url.'.'), 0, 1000);
                     if ($existing->status === 'open') {
-                        $existing->forceFill(['priority' => 1, 'note' => mb_substr(trim(($existing->note ? $existing->note."\n" : '').'DreamHorse cleanup: same sire and dam once the seller\'s notes are taken out of '.$lot->source_url.'.'), 0, 1000)])->save();
+                        $existing->forceFill(['priority' => 1, 'note' => $note])->save();
+                        $out['duplicates_already_in_review']++;
+                    } elseif ($existing->status === 'different_horses' && $existing->decided_by === null && str_starts_with((string) $existing->note, 'Automatic:')) {
+                        // createForAdvertised marked them different horses at load time, on the junk sire or dam. That
+                        // contradiction is gone (checked above on the clean names): back to staff. A person's decision is never reopened.
+                        $existing->forceFill(['status' => 'open', 'decided_at' => null, 'priority' => 1, 'note' => $note])->save();
+                        Audit::record('name_review.reopened_cleanup', $existing, ['status' => 'different_horses'], ['status' => 'open'], $horse->id, $system->id);
+                        $out['duplicates_reopened']++;
                     }
-                    $out['duplicates_already_in_review']++;
                     continue;
                 }
                 $out['duplicates_proposed'] += NameReview::insertOrIgnore(['horse_a_id' => $a, 'horse_b_id' => $b, 'match' => 'same_letters', 'priority' => 1,

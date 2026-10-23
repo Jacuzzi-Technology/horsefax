@@ -175,4 +175,34 @@ class DreamHorseTest extends TestCase
         $this->assertSame(1, \App\Models\NameReview::count());
         $this->assertStringContainsString('DreamHorse cleanup', \App\Models\NameReview::first()->note);
     }
+
+    public function test_cleanup_reopens_pairs_the_load_marked_different_on_a_junk_name_but_not_a_persons(): void
+    {
+        $other = $this->record('Kicked Up Diesel', ['s' => 'Kickoff Time', 'd' => 'Sample Diesel Mare']);
+        $twin = $this->record('Sample Grand Cash', ['s' => 'Instagrand', 'd' => 'Sample Cash Mare']);
+        $source = (new DreamHorseHarvester(0, null, sys_get_temp_dir().'/dh-clean-'.uniqid()))->source();
+        $make = function (string $id, string $name, array $ped) use ($source) {
+            $lot = SaleLot::record($source->id, $id, ['sale_name' => DreamHorseHarvester::SALE_NAME, 'horse_name' => $name, 'registry' => 'AQHA',
+                'sire_name' => $ped['s'], 'dam_name' => $ped['d'], 'pedigree' => $ped, 'status' => 'asking', 'source_url' => "https://www.dreamhorse.com/ad/$id.html"]);
+            // What the first load did: the junk sire contradicted the same-name record, so it was marked a different horse.
+            [, , $review, $note] = (new \App\Actions\Record\MatchSaleLots)->match($lot);
+            $this->assertStringStartsWith(\App\Actions\Record\MatchSaleLots::DIFFERENT, (string) $note);
+
+            return app(\App\Actions\Record\CreateRecordsFromSaleLots::class)->createForAdvertised($lot, $note);
+        };
+        $kicked = $make('901', 'Kicked Up Diesel', ['s' => 'Kickoff Time LTE 50k and 200 AQHA Points', 'd' => 'Sample Diesel Mare']);
+        $grand = $make('902', 'Sample Grand Cash', ['s' => 'Instagrand by Into Mischief', 'd' => 'Sample Cash Mare']);
+        $pair = fn (Horse $x, Horse $y) => \App\Models\NameReview::whereIn('horse_a_id', [$x->id, $y->id])->whereIn('horse_b_id', [$x->id, $y->id])->first();
+        $this->assertSame('different_horses', $pair($kicked, $other)->status);
+        // Staff looked at the second pair themselves and decided: never reopened.
+        $staff = \App\Models\User::factory()->create();
+        $pair($grand, $twin)->forceFill(['decided_by' => $staff->id, 'note' => 'Checked papers: different horses'])->save();
+
+        $out = app(\App\Actions\Record\CleanDreamHorsePedigrees::class)();
+        $this->assertSame([1, 0], [$out['duplicates_reopened'], $out['duplicates_proposed']]);
+        $this->assertSame(['open', null], [$pair($kicked, $other)->status, $pair($kicked, $other)->decided_at]);
+        $this->assertStringContainsString('DreamHorse cleanup', $pair($kicked, $other)->note);
+        $this->assertSame(['different_horses', 'Checked papers: different horses'], [$pair($grand, $twin)->status, $pair($grand, $twin)->note]);
+        $this->assertNull($kicked->fresh()->merged_into_id);
+    }
 }
