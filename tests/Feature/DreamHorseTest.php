@@ -118,4 +118,54 @@ class DreamHorseTest extends TestCase
         $again->load();
         $this->assertStringContainsString('no longer on DreamHorse', SaleLot::where('external_id', '200')->value('note'));
     }
+
+    private function record(string $name, array $parents = []): Horse
+    {
+        $system = BuildRecordsFromResults::system();
+        $h = new Horse(['registered_name' => $name, 'birth_precision' => 'unknown']);
+        $h->horsefax_id = \App\Actions\Record\CreateHorse::newId();
+        $h->created_by = $system->id;
+        $h->forceFill(['source' => 'results', 'listed' => true, 'public_summary' => true, 'identity_status' => 'unverified'])->save();
+        foreach ($parents as $pos => $n) {
+            \App\Models\PedigreeEntry::create(['horse_id' => $h->id, 'position' => $pos, 'name' => $n, 'visibility' => 'public', 'added_by' => $system->id, 'source_type' => 'historical']);
+        }
+
+        return $h;
+    }
+
+    public function test_cleanup_fixes_junk_pedigree_names_from_the_first_load(): void
+    {
+        $other = $this->record('Kicked Up Diesel', ['s' => 'Kickoff Time', 'd' => 'Sample Diesel Mare']); // e.g. from RanchWorldAds
+        $kickoff = $this->record('Kickoff Time');
+        $source = (new DreamHorseHarvester(0, null, sys_get_temp_dir().'/dh-clean-'.uniqid()))->source();
+        // What the first load did: the seller's notes kept in the chart, and a record created from them.
+        $ped = ['s' => 'Kickoff Time LTE 50k and 200 AQHA Points', 'd' => 'Sample Diesel Mare', 'ss' => 'Sample Grandsire AQHA #1234567'];
+        $lot = SaleLot::record($source->id, '900', ['sale_name' => DreamHorseHarvester::SALE_NAME, 'horse_name' => 'Kicked Up Diesel', 'registry' => 'AQHA',
+            'sire_name' => $ped['s'], 'dam_name' => $ped['d'], 'pedigree' => $ped, 'status' => 'asking', 'source_url' => 'https://www.dreamhorse.com/ad/900.html']);
+        $created = app(\App\Actions\Record\CreateRecordsFromSaleLots::class)->createForAdvertised($lot);
+        $junk = Horse::where('registered_name', $ped['s'])->first();
+        $this->assertNotNull($junk);
+        $before = Horse::count();
+
+        $clean = app(\App\Actions\Record\CleanDreamHorsePedigrees::class);
+        $dry = $clean(true);
+        $this->assertSame([1, 1, 1, 1], [$dry['lots_cleaned'], $dry['ancestors_relinked'], $dry['ancestors_renamed'], $dry['duplicates_proposed']]);
+        $this->assertSame($before, Horse::count()); // rolled back
+        $this->assertNotNull(Horse::find($junk->id));
+
+        $out = $clean();
+        $this->assertSame($dry, $out); // the dry run's counts were real
+        $this->assertNull(Horse::find($junk->id)); // pruned: its link moved to the existing Kickoff Time
+        $sire = \App\Models\PedigreeEntry::where('horse_id', $created->id)->where('position', 's')->first();
+        $this->assertSame(['Kickoff Time', $kickoff->id], [$sire->name, $sire->linked_horse_id]);
+        $this->assertTrue(Horse::where('source', 'pedigree')->where('registered_name', 'Sample Grandsire')->exists()); // renamed, no clean record to move to
+        $this->assertFalse(\App\Models\PedigreeEntry::where('name', 'like', '%AQHA%')->exists());
+        $this->assertSame(['Kickoff Time', 'Sample Grandsire'], [$lot->fresh()->sire_name, $lot->fresh()->pedigree['ss']]);
+        // The two Kicked Up Diesel records are proposed to staff, never merged.
+        $review = \App\Models\NameReview::first();
+        $this->assertSame('open', $review->status);
+        $this->assertEqualsCanonicalizing([$created->id, $other->id], [$review->horse_a_id, $review->horse_b_id]);
+        $this->assertNull($created->fresh()->merged_into_id);
+        $this->assertSame(0, $clean()['lots_cleaned']); // a second run finds nothing to do
+    }
 }
