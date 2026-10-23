@@ -68,6 +68,13 @@ Expect a first full run to take about a day and a half: roughly 5,000 list pages
 Reruns take far less ad time, because each ad is fetched once and then only refreshed. The lists are always read in
 full, since that's how ads that have gone are noticed.
 
+## Schedule
+
+Weekly on production (since Oct 23 2026), in the `horsefax` user's crontab on trusted-core-01: Tuesdays 05:00 UTC,
+under `flock /tmp/hf-dreamhorse.lock`, logging to `storage/logs/harvest-dreamhorse.log`. The crontab from before the
+change is in /root/horsefax-crontab.bak-2026-10-23. A weekly run takes about 3 to 4 hours (the full listing plus new
+ads). Every few weeks it runs longer, when ads read more than 30 days ago come due for a refresh.
+
 ## Files (in `--dir`)
 
 - `ads.jsonl`: the state, one JSON line per ad. Lines are appended as the run goes and compacted at the end, so a
