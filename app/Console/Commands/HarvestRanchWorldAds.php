@@ -23,6 +23,7 @@ class HarvestRanchWorldAds extends Command
 
     public function handle(): int
     {
+        ini_set('memory_limit', '1G'); // the whole raw file is held in memory: 128 MB ran out at ~16,000 ads (Oct 23 2026)
         $h = new RanchWorldAdsHarvester(max(3.0, (float) $this->option('delay')), // house rule: at least 3 s between requests
             fn ($l) => $this->line(now()->format('H:i:s').' '.$l), $this->option('dir') ?: null);
         if ($this->option('reparse')) {
