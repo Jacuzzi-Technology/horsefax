@@ -299,10 +299,16 @@ class RanchWorldAdsParser
 
     private static function date(array $m): ?string
     {
+        // The site's own stamp at the end of the ad ("Posted 10-20-26"). Some older pages print years since 1900
+        // ("07-07-118"); any date before the ads begin (2014) or after today is a misprint and is dropped.
         $y = (int) $m[3];
-        $y = $y < 100 ? 2000 + $y : $y;
+        $y = $y < 100 ? 2000 + $y : ($y < 1000 ? 1900 + $y : $y);
+        if (! checkdate((int) $m[1], (int) $m[2], $y)) {
+            return null;
+        }
+        $d = sprintf('%04d-%02d-%02d', $y, $m[1], $m[2]);
 
-        return checkdate((int) $m[1], (int) $m[2], $y) ? sprintf('%04d-%02d-%02d', $y, $m[1], $m[2]) : null;
+        return $d >= '2014-01-01' && $d <= date('Y-m-d') ? $d : null;
     }
 
     private static function text(string $html): string
