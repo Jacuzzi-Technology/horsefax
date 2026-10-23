@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Http;
  * approval ("continue to search for allowable sites ... scraping the available data and adding the sites"). Every site
  * below was checked that day: the platform's robots.txt allows everything but /admin/, /api/ and /asset/ (the JSON
  * /api/ is never used: lot lists are read from the server-rendered pages), no bot wall, and neither the platform's
- * terms nor the sale company's terms page has a scraping, crawling or database clause.
+ * terms nor the sale company's terms page has a scraping, crawling or database clause. Each site's Privacy Policy page
+ * is read too: Premier Online's carries Terms of Service that forbid reuse, so it was retired (RETIRED, purge()).
  *
  * Per site: /sitemap/past-auctions lists the finished auctions; /sitemap/auction/{id} lists every lot in one; the lot
  * list is read 125 at a time (?pageSize=125&page=N); one lot page gives the sale day ("Start Time"). Finished auctions
@@ -31,7 +32,6 @@ class AuctioneerSoftwareHarvester
     /** key => [name, base, horse-only site?, currency (USD unless given), day-first dates?] */
     public const SITES = [
         'bigsky' => ['name' => 'Big Sky Horse Sales', 'base' => 'https://bid.bigskyhorsesales.com', 'horses_only' => true],
-        'premieronline' => ['name' => 'Premier Online Horse Sales (MM Auction Services)', 'base' => 'https://bid.premieronlinesales.com', 'horses_only' => true],
         'montanaselect' => ['name' => 'Montana Select Horse Sales', 'base' => 'https://www.montanaselectsales.com', 'horses_only' => true],
         'eugene' => ['name' => 'Eugene Horse Auction', 'base' => 'https://www.eugenehorseauction.com', 'horses_only' => true],
         'waverly' => ['name' => 'Waverly Sales Company (Midwest Horse Sale)', 'base' => 'https://www.waverlysales.bid', 'horses_only' => false],
@@ -39,6 +39,13 @@ class AuctioneerSoftwareHarvester
         'cavan' => ['name' => 'Cavan Equestrian (Cavan Horse & Pony Sales, Ireland)', 'base' => 'https://bid.cavanequestrian.com', 'horses_only' => true, 'currency' => 'EUR', 'day_first' => true],
         'goresbridge' => ['name' => 'Goresbridge Horse Sales (Ireland)', 'base' => 'https://www.goresbridgeonlineauctions.com', 'horses_only' => true, 'currency' => 'EUR', 'day_first' => true],
     ];
+
+    /**
+     * Sites collected once and then found not allowed: never collected again; purge() removes what was loaded.
+     * premieronline: its Terms of Service (posted under bid.premieronlinesales.com/privacy) restrict the site to
+     * personal noncommercial use and forbid copying or republishing its materials (found Oct 23 2026).
+     */
+    public const RETIRED = ['premieronline' => 'Premier Online Horse Sales (MM Auction Services)'];
 
     /** Auctions that aren't horse sales even on a horse-sale site. */
     public const NOT_HORSES = '/equipment|\btack\b|carriage|furniture|stock ?dog|stallion[- ](?:service|auction|breeding)|breeding|semen|fundraiser|relief|custom-(auction|event)|host-your|\btest\b|machinery|antique|steam|produce|hay-|cattle|dairy|herd-dispersal|sheep|goat|pig|consignment-form|alternative-animal|exotic|bird|giraffe|zebra|camel/';
@@ -60,6 +67,36 @@ class AuctioneerSoftwareHarvester
         }
         $this->dir = ($dir ?? storage_path('app/private/auctioneersoftware')).'/'.$key;
         @mkdir($this->dir.'/pages', 0775, true);
+    }
+
+    /**
+     * Remove everything loaded from a retired site: its sale lots, and the records they created when nothing else
+     * (another source's lot, a show record, an owner, a claim, a document, a transfer, a pedigree link) refers to them.
+     * Records with other evidence are kept; only the retired site's lots go. Returns counts.
+     */
+    public static function purge(string $key): array
+    {
+        $src = DataSource::where('key', 'as-'.$key)->first();
+        if (! $src || ! isset(self::RETIRED[$key])) {
+            return ['lots' => 0, 'records_removed' => 0, 'records_kept' => 0];
+        }
+        $db = \Illuminate\Support\Facades\DB::class;
+        $created = SaleLot::where('data_source_id', $src->id)->where('match_tier', 'created')->whereNotNull('horse_id')->pluck('horse_id')->unique()->values();
+        $keep = $created->filter(fn ($id) => SaleLot::where('horse_id', $id)->where('data_source_id', '<>', $src->id)->exists()
+            || $db::table('show_records')->where('horse_id', $id)->exists() || $db::table('stewardships')->where('horse_id', $id)->exists()
+            || $db::table('claim_codes')->where('horse_id', $id)->exists() || $db::table('documents')->where('horse_id', $id)->exists()
+            || $db::table('transfers')->where('horse_id', $id)->exists() || $db::table('pedigree_entries')->where('linked_horse_id', $id)->exists());
+        $remove = $created->diff($keep)->values()->all();
+        $lots = SaleLot::where('data_source_id', $src->id)->pluck('id')->all();
+        $db::transaction(function () use ($db, $remove, $lots) {
+            $db::table('review_suggestions')->where(fn ($q) => $q->whereIn('horse_id', $remove)->orWhere(fn ($w) => $w->where('subject_type', 'sale_lot')->whereIn('subject_id', $lots)))->delete();
+            $db::table('name_reviews')->where(fn ($q) => $q->whereIn('horse_a_id', $remove)->orWhereIn('horse_b_id', $remove)->orWhereIn('kept_horse_id', $remove))->delete();
+            SaleLot::whereIn('id', $lots)->delete();
+            \App\Models\Horse::whereIn('id', $remove)->get()->each->delete();
+        });
+        $src->forceFill(['permission' => 'not_allowed', 'terms_note' => 'Retired Oct 23 2026: '.self::RETIRED[$key].' Terms of Service restrict the site to personal noncommercial use and forbid copying or republishing; everything loaded from it was removed.'])->save();
+
+        return ['lots' => count($lots), 'records_removed' => count($remove), 'records_kept' => $keep->count()];
     }
 
     public function source(): DataSource

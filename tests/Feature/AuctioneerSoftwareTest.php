@@ -130,4 +130,22 @@ class AuctioneerSoftwareTest extends TestCase
         $this->expectException(HarvestBlocked::class);
         (new AuctioneerSoftwareHarvester('eugene', 0, null, sys_get_temp_dir().'/as-test-'.uniqid()))->collect();
     }
+
+    public function test_purge_removes_a_retired_site_but_keeps_records_with_other_evidence(): void
+    {
+        $retired = \App\Models\DataSource::create(['key' => 'as-premieronline', 'name' => 'Retired site', 'url' => 'https://example.com', 'permission' => 'terms_allow']);
+        $other = \App\Models\DataSource::create(['key' => 'other', 'name' => 'Other', 'url' => 'https://example.org', 'permission' => 'terms_allow']);
+        $mk = fn ($src, $id, $name) => SaleLot::record($src->id, $id, ['sale_name' => 'S', 'sale_date' => '2025-06-01', 'horse_name' => $name, 'registry' => 'AQHA', 'status' => 'sold', 'source_url' => 'https://example.com/'.$id]);
+        foreach (['Sample Only Here', 'Sample Also Elsewhere'] as $i => $name) {
+            \App\Harvest\AdvertisedRegisteredName::apply($mk($retired, 'r'.$i, $name), 'Retired site');
+        }
+        $kept = SaleLot::where('horse_name', 'Sample Also Elsewhere')->first()->horse_id;
+        $mk($other, 'o1', 'Sample Also Elsewhere')->forceFill(['horse_id' => $kept])->save();
+        $out = AuctioneerSoftwareHarvester::purge('premieronline');
+        $this->assertSame(['lots' => 2, 'records_removed' => 1, 'records_kept' => 1], $out);
+        $this->assertSame(0, SaleLot::where('data_source_id', $retired->id)->count());
+        $this->assertNotNull(\App\Models\Horse::find($kept));
+        $this->assertSame('not_allowed', $retired->fresh()->permission);
+        $this->assertArrayNotHasKey('premieronline', AuctioneerSoftwareHarvester::SITES); // never collected again
+    }
 }

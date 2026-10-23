@@ -7,7 +7,6 @@ Richard's standing approval to find and collect allowed horse-data sites. One ha
 | Key | Sale company | Notes |
 |---|---|---|
 | `bigsky` | Big Sky Horse Sales (MT) | Titles carry name, foal year, registry and sex ("NAME \| 2018 AQHA Mare \| …") |
-| `premieronline` | Premier Online Horse Sales (MM Auction Services) | Year, breed, sex, color, sire, dam fields |
 | `montanaselect` | Montana Select Horse Sales | |
 | `eugene` | Eugene Horse Auction (OR) | Ring sale; mostly grade horses and ponies |
 | `waverly` | Waverly Sales Co. Midwest Horse Sale (IA) | Draft and light horses; "Winning Bidder" prices |
@@ -17,6 +16,13 @@ Richard's standing approval to find and collect allowed horse-data sites. One ha
 
 Checked Oct 22 2026 for every site: the platform robots.txt allows everything but `/admin/`, `/api/` and `/asset/`; no
 bot wall; neither the platform's nor the sale company's terms page has a scraping, crawling, database or reuse clause.
+Each site's Privacy Policy page is checked as well: some sale companies post their Terms of Service there.
+
+**Retired:** Premier Online Horse Sales (MM Auction Services, `premieronline`). Its Terms of Service, posted under
+`/privacy`, restrict the site to personal noncommercial use and forbid copying or republishing its materials (found
+Oct 23 2026, after it had been loaded). It is listed in `AuctioneerSoftwareHarvester::RETIRED`, is never collected
+again, and `--purge=premieronline` removes its lots and the records only they created (records with other evidence
+are kept).
 
 ## How it reads a site
 
@@ -59,4 +65,8 @@ php artisan hf:harvest-auctioneersoftware bigsky waverly
 
 ```bash
 php artisan hf:harvest-auctioneersoftware --offline
+```
+
+```bash
+php artisan hf:harvest-auctioneersoftware --purge=premieronline
 ```
