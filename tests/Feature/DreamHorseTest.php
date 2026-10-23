@@ -49,6 +49,13 @@ class DreamHorseTest extends TestCase
         $this->assertSame(['2026-10-21', '2027-04-19'], [$a['ad_renewed'], $a['ad_expires']]);
         $this->assertStringNotContainsString('description', json_encode($a));
         $this->assertArrayNotHasKey('temperament', $a);
+        // Sellers' notes in the chart are cut back to names; names that only look like notes stay.
+        foreach (['Kickoff Time LTE 50k and 200 AQHA Points' => 'Kickoff Time', 'Instagrand by Into Mischief' => 'Instagrand',
+            'Frenchy Baby AQHA #5609162' => 'Frenchy Baby', 'Easy Jet SI 100' => 'Easy Jet', 'Hickory Sugar Tine Black 6 Panel N/N 15HH' => 'Hickory Sugar Tine',
+            'Zipped By Chocolate' => 'Zipped By Chocolate', 'IMPRESSED BY MY HEART' => 'IMPRESSED BY MY HEART', 'Miss Winner' => 'Miss Winner',
+            'A Grand In Cash' => 'A Grand In Cash', 'Black Gold' => 'Black Gold', 'Driza 190101002408885' => 'Driza'] as $raw => $name) {
+            $this->assertSame($name, DreamHorseParser::pedigreeName($raw), $raw);
+        }
         $this->assertTrue(DreamHorseParser::gone('<p>Ad Not Found.  No Longer available on DreamHorse.</p>'));
         $list = DreamHorseParser::listPage('<!-- total_rows: 81--><a href="/ad/5/x.html"></a><a href="/ad/5.html"></a><a href="/ad/6.html"></a>');
         $this->assertSame(['total' => 81, 'ids' => [5, 6]], $list);

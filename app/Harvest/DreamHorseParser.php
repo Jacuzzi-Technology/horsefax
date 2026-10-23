@@ -102,6 +102,40 @@ class DreamHorseParser
         ];
     }
 
+    /**
+     * A pedigree name as a seller typed it, cut back to the horse's name. Sellers add achievements, registration
+     * numbers and notes to the chart cells: "Kickoff Time LTE 50k and 200 AQHA Points" -> "Kickoff Time",
+     * "Instagrand by Into Mischief" -> "Instagrand", "Frenchy Baby AQHA #5609162" -> "Frenchy Baby". A lowercase " by "
+     * is a seller's note; "Zipped By Chocolate" and "IMPRESSED BY MY HEART" are names and stay. Null when nothing
+     * name-like is left. The raw file keeps the cell as published; this is applied when lots are loaded.
+     */
+    public static function pedigreeName(?string $s): ?string
+    {
+        $s = trim(preg_replace('/\s+/u', ' ', (string) $s));
+        $s = preg_replace('/^(sire|dam|by)\s*:?\s+/i', '', $s);
+        $s = preg_split('/\s+by\s+(?=[A-Z])|[(),;:!•|\/]|\s[-–—]\s|\$|#/u', $s)[0]; // case-sensitive "by": see above
+        // Cut at the first word where a note starts: a registry or title followed by more, earnings, a year, a
+        // registration number, or a color followed by test results. A single trailing word ("Miss Winner",
+        // "Black Gold", "A Grand In Cash") is part of the name.
+        $note = '/^(?:(?:AQHA|APHA|ApHC|AHR|AHA|NRHA|NCHA|NRCHA|NSHA|NSBA|PtHA|ABRA|PHBA|AMHR|AMHA|TWHBEA|KWPN|PE|LTE|ROM|HOF|FEI)\b'
+            .'|SI\s*\d|CCI\d|(?:19|20)\d\d\b|[A-Z]{0,4}\d{4,}|\d+(?:\.\d+)?\s*k\b|\d+(?:,\d{3})+|6\s*Panel|N\/N'
+            .'|(?:World|Champion\S*|Champ|Reserve|Winner|Earner|Earnings?|Money|Points?|pts|Producer|Offspring|Sire|Son|Daughter|Stakes|Multi\S*|Futurity|Derby|Superior|Pending|Hall|Proven|Stb|Ster|Pref\S*)\s+\S'
+            .'|(?:Black|Grey|Gray|Bay|Sorrel|Chestnut|Palomino|Buckskin|Dun|Roan|Overo|Tobiano|Pinto)\b.*(?:\d|N\/N|Panel|\bpref|\bster))/iu';
+        $words = explode(' ', $s);
+        for ($k = 1; $k < count($words); $k++) {
+            if (preg_match($note, implode(' ', array_slice($words, $k)))) {
+                $s = implode(' ', array_slice($words, 0, $k));
+                break;
+            }
+        }
+        $s = trim($s, " .-*'\"");
+        if ($s === '' || preg_match('/\d{4,}|^\W+$/u', $s) || mb_strlen($s) > 40 || count(explode(' ', $s)) > 6) {
+            return null;
+        }
+
+        return $s;
+    }
+
     /** "BELL'S MILLIE OF THE RIDGE (Lady)" -> ["BELL'S MILLIE OF THE RIDGE", "Lady"]. */
     public static function names(string $title): array
     {

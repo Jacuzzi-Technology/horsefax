@@ -375,7 +375,8 @@ class DreamHorseHarvester
                 $out['skipped_not_for_sale']++;
                 continue;
             }
-            $ped = $a['pedigree'] ?? [];
+            // Sellers type notes into the chart ("Kickoff Time LTE 50k ..."): names only, or a same horse fails to match.
+            $ped = array_filter(array_map(fn ($n) => DreamHorseParser::pedigreeName($n), $a['pedigree'] ?? []));
             $name = $a['name'] ?: $a['barn_name'] ?: $a['title'];
             $lot = SaleLot::record($source->id, (string) $a['ad_id'], [
                 'sale_name' => self::SALE_NAME, 'sale_date' => $a['ad_created'] ?? $a['ad_renewed'] ?? $a['first_seen'], 'date_precision' => 'day',
