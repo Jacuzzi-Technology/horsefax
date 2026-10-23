@@ -89,7 +89,8 @@ class RanchWorldAdsParser
             $label = strtolower(trim($r[1]));
             if (isset(self::FIELDS[$label])) {
                 $v = self::text(preg_replace('#<a [^>]*class="small".*?</a>#s', '', $r[2]));
-                $f[self::FIELDS[$label]] = $v === '' ? null : $v;
+                // Some sellers type their phone number into a field ("Registered With: 417-555-0100"): never kept.
+                $f[self::FIELDS[$label]] = $v === '' || preg_match('/\d{3}\D{0,2}\d{3}\D?\d{4}/', $v) ? null : $v;
             }
         }
 

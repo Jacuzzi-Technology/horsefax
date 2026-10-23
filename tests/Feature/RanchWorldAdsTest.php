@@ -65,6 +65,9 @@ class RanchWorldAdsTest extends TestCase
         $this->assertSame(['s' => 'Sample Sire', 'ss' => 'Sample GS', 'd' => 'Sample Dam', 'ds' => 'Sample DS'], $t['pedigree']);
         $this->assertSame('title', $t['pedigree_from']);
 
+        $phone = RanchWorldAdsParser::ad(str_replace('<b>Registered With:</b> AQHA', '<b>Registered With:</b> 417-555-0100', $this->adPage(102, 'Sample Phone Field')), 102);
+        $this->assertNull($phone['registry_text']);
+        $this->assertStringNotContainsString('555', json_encode($phone));
         $this->assertNull(RanchWorldAdsParser::name('2021 AQHA RANCH/ROPE GELDING'));
         $this->assertNull(RanchWorldAdsParser::name('Great Moving Big 3 Year Old Gelding'));
         $this->assertSame('Top Swing Sample', RanchWorldAdsParser::name('Top Swing Sample'));
