@@ -44,4 +44,54 @@ class TriangleTest extends TestCase
         $this->assertFalse(TriangleHarvester::inRobinGlenn(['sale_date' => '2025-10-25', 'hip' => '13', 'name' => 'Sample Smart Cat']));
         $this->assertFalse(TriangleHarvester::inRobinGlenn(['sale_date' => '2026-10-30', 'hip' => '12', 'name' => 'Sample Smart Cat']));
     }
+
+    private function tsv(array $lines): string
+    {
+        $rows = ["level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext"];
+        foreach ($lines as $i => $words) {
+            foreach ($words as $j => [$w, $conf]) {
+                $rows[] = implode("\t", [5, 1, 1, 1, $i + 1, $j + 1, 10 * $j, 20 * $i, 9, 9, $conf, $w]);
+            }
+        }
+
+        return implode("\n", $rows);
+    }
+
+    public function test_ocr_names_compare_through_marks_and_one_slip(): void
+    {
+        $this->assertTrue(TriangleHarvester::sameOcrName('Somemoredelta', 'Somemoredelta (P)'));
+        $this->assertTrue(TriangleHarvester::sameOcrName('Blue Duck (Grade)', 'Blue Duck'));
+        $this->assertTrue(TriangleHarvester::sameOcrName('lfwhizscouldtalk', 'Ifwhizscouldtalk'));
+        $this->assertFalse(TriangleHarvester::sameOcrName('TSU Hot N Cold', 'Chino Hickory'));
+        $this->assertFalse(TriangleHarvester::sameOcrName('Name Pending', 'Pending/Anna Frame'));
+        $this->assertFalse(TriangleHarvester::sameOcrName('Duke', 'Dike')); // short names must match exactly
+    }
+
+    public function test_ocr_numbers_are_checked_before_use(): void
+    {
+        $years = [2021 => [6100000, 6125972, 6150000, 6200000]];
+        $h = fn ($name, $n, $y = 2021, $reg = 'AQHA') => ['name' => $name, 'registration_number' => $n, 'foal_year' => $y, 'registry' => $reg];
+        $this->assertSame(['AQHA', '6125000'], TriangleHarvester::checkedNumber($h('Sample Bug', '6125000'), 'Sample Bug', $years));
+        $this->assertSame(['APHA', '1111022'], TriangleHarvester::checkedNumber($h('Sample Diamond', '1111022'), 'Sample Diamond (P)', $years)); // a Paint number
+        $this->assertSame(['AQHA', null], TriangleHarvester::checkedNumber($h('Sample Diamond', '1111022'), 'Sample Diamond', $years)); // AQHA can't be that low
+        $this->assertSame(['AQHA', null], TriangleHarvester::checkedNumber($h('Dutchess (Grade)', '6179256'), 'Dutchess', $years)); // grade: no number
+        $this->assertSame(['AQHA', null], TriangleHarvester::checkedNumber($h('Sample Far', '5500000'), 'Sample Far', $years)); // far from its year
+    }
+
+    public function test_ocr_reads_the_hip_header_and_only_a_confident_number(): void
+    {
+        $w = fn (string $line, float $conf = 96) => array_map(fn ($x) => [$x, $conf], explode(' ', $line));
+        $page = $this->tsv([$w('Hip No. Consigned by Sample Consignor Hip No.'), $w('9 Sample Lassie Doc 9'), $w('2011 Chestnut Mare'),
+            $w('Sample Brow Cat'), $w('Sample Lassie Doc Tari Sugar'), [['5423101', 95.5]], $w('NOTES: never kept')]);
+        $h = TriangleHarvester::ocrHip(TriangleHarvester::ocrLines($page));
+        $this->assertSame(['9', 'Sample Lassie Doc', 2011, 'Chestnut', 'mare', '5423101', 'AQHA'],
+            [$h['hip'], $h['name'], $h['foal_year'], $h['color'], $h['sex'], $h['registration_number'], $h['registry']]);
+        // A number the OCR isn't sure of is not kept; "(P)" marks a Paint.
+        $page = $this->tsv([$w('12 Sample Paint Lady (P) 12'), $w('2019 Bay Filly'), [['3301234', 71.0]]]);
+        $h = TriangleHarvester::ocrHip(TriangleHarvester::ocrLines($page));
+        $this->assertSame(['Sample Paint Lady', null, 'APHA'], [$h['name'], $h['registration_number'], $h['registry']]);
+        $h = TriangleHarvester::ocrHip(TriangleHarvester::ocrLines($this->tsv([$w('1 Sample Ruby Shoes 1'), $w('January 14, 2021 Red Roan Filly')])));
+        $this->assertSame([2021, '2021-01-14', 'Red roan', 'filly'], [$h['foal_year'], $h['birth_date'], $h['color'], $h['sex']]);
+        $this->assertNull(TriangleHarvester::ocrHip(TriangleHarvester::ocrLines($this->tsv([$w('Index to Sires'), $w('Sample Sire 1, 2, 3')]))));
+    }
 }
