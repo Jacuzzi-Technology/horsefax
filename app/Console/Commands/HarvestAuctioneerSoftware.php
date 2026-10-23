@@ -16,14 +16,14 @@ use Illuminate\Console\Command;
  */
 class HarvestAuctioneerSoftware extends Command
 {
-    protected $signature = 'hf:harvest-auctioneersoftware {sites?*} {--purge= : remove everything loaded from a retired site (e.g. premieronline)} {--delay=3} {--offline} {--no-load} {--max-auctions=} {--dir=}';
+    protected $signature = 'hf:harvest-auctioneersoftware {sites?*} {--purge= : remove everything loaded from a retired site (e.g. premieronline)} {--dry-run : with --purge, count what would go and change nothing} {--delay=3} {--offline} {--no-load} {--max-auctions=} {--dir=}';
 
     protected $description = 'Collect finished horse auctions (facts only) from AuctioneerSoftware sale sites into the sale-lots index';
 
     public function handle(): int
     {
         if ($key = $this->option('purge')) {
-            $this->info('Purged '.$key.': '.json_encode(AuctioneerSoftwareHarvester::purge($key)));
+            $this->info('Purged '.$key.': '.json_encode(AuctioneerSoftwareHarvester::purge($key, (bool) $this->option('dry-run'))));
 
             return self::SUCCESS;
         }

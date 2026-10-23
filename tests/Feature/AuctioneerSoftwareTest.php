@@ -131,21 +131,57 @@ class AuctioneerSoftwareTest extends TestCase
         (new AuctioneerSoftwareHarvester('eugene', 0, null, sys_get_temp_dir().'/as-test-'.uniqid()))->collect();
     }
 
-    public function test_purge_removes_a_retired_site_but_keeps_records_with_other_evidence(): void
+    public function test_purge_removes_a_retired_site_its_records_and_their_orphaned_ancestors(): void
     {
         $retired = \App\Models\DataSource::create(['key' => 'as-premieronline', 'name' => 'Retired site', 'url' => 'https://example.com', 'permission' => 'terms_allow']);
         $other = \App\Models\DataSource::create(['key' => 'other', 'name' => 'Other', 'url' => 'https://example.org', 'permission' => 'terms_allow']);
-        $mk = fn ($src, $id, $name) => SaleLot::record($src->id, $id, ['sale_name' => 'S', 'sale_date' => '2025-06-01', 'horse_name' => $name, 'registry' => 'AQHA', 'status' => 'sold', 'source_url' => 'https://example.com/'.$id]);
-        foreach (['Sample Only Here', 'Sample Also Elsewhere'] as $i => $name) {
-            \App\Harvest\AdvertisedRegisteredName::apply($mk($retired, 'r'.$i, $name), 'Retired site');
-        }
+        $mk = fn ($src, $id, $name, $sire, $dam) => SaleLot::record($src->id, $id, ['sale_name' => 'S', 'sale_date' => '2025-06-01', 'horse_name' => $name, 'registry' => 'AQHA',
+            'sire_name' => $sire, 'dam_name' => $dam, 'status' => 'sold', 'source_url' => 'https://example.com/'.$id]);
+        // Only on the retired site, with ancestors nobody else has.
+        \App\Harvest\AdvertisedRegisteredName::apply($mk($retired, 'r1', 'Sample Only Here', 'Sample Lone Sire', 'Sample Lone Dam'), 'Retired site');
+        // A horse from another source whose sire is also the sire of a retired-site horse.
+        \App\Harvest\AdvertisedRegisteredName::apply($mk($other, 'o1', 'Sample Other Horse', 'Sample Shared Sire', 'Sample Other Dam'), 'Other');
+        \App\Harvest\AdvertisedRegisteredName::apply($mk($retired, 'r2', 'Sample Second Here', 'Sample Shared Sire', 'Sample Second Dam'), 'Retired site');
+        // A retired-site record that also has another source's lot is kept.
+        \App\Harvest\AdvertisedRegisteredName::apply($mk($retired, 'r3', 'Sample Also Elsewhere', null, null), 'Retired site');
         $kept = SaleLot::where('horse_name', 'Sample Also Elsewhere')->first()->horse_id;
-        $mk($other, 'o1', 'Sample Also Elsewhere')->forceFill(['horse_id' => $kept])->save();
+        $mk($other, 'o2', 'Sample Also Elsewhere', null, null)->forceFill(['horse_id' => $kept])->save();
+        $names = fn () => \App\Models\Horse::pluck('registered_name')->sort()->values()->all();
+        $before = $names();
+        $this->assertContains('Sample Lone Sire', $before);
+
+        $dry = AuctioneerSoftwareHarvester::purge('premieronline', true);
+        $this->assertSame([true, 3, 2, 1, 3], [$dry['dry_run'], $dry['lots'], $dry['records_removed'], $dry['records_kept'], $dry['ancestors_removed']]);
+        $this->assertSame($before, $names()); // a dry run changes nothing
+        $this->assertSame('terms_allow', $retired->fresh()->permission);
+
         $out = AuctioneerSoftwareHarvester::purge('premieronline');
-        $this->assertSame(['lots' => 2, 'records_removed' => 1, 'records_kept' => 1], $out);
+        $this->assertSame([3, 2, 1, 3], [$out['lots'], $out['records_removed'], $out['records_kept'], $out['ancestors_removed']]);
+        $after = $names();
+        foreach (['Sample Only Here', 'Sample Second Here', 'Sample Lone Sire', 'Sample Lone Dam', 'Sample Second Dam'] as $gone) {
+            $this->assertNotContains($gone, $after);
+        }
+        foreach (['Sample Also Elsewhere', 'Sample Other Horse', 'Sample Shared Sire', 'Sample Other Dam'] as $stays) {
+            $this->assertContains($stays, $after);
+        }
         $this->assertSame(0, SaleLot::where('data_source_id', $retired->id)->count());
-        $this->assertNotNull(\App\Models\Horse::find($kept));
         $this->assertSame('not_allowed', $retired->fresh()->permission);
         $this->assertArrayNotHasKey('premieronline', AuctioneerSoftwareHarvester::SITES); // never collected again
+    }
+
+    public function test_prune_command_finds_orphans_of_removed_records_through_the_audit_trail(): void
+    {
+        $src = \App\Models\DataSource::create(['key' => 'other', 'name' => 'Other', 'url' => 'https://example.org', 'permission' => 'terms_allow']);
+        // A 3-generation chart: the grandsire is linked both from the removed horse's chart and from the sire's own
+        // lines, so it only becomes an orphan once the sire is gone (a later round).
+        $lot = SaleLot::record($src->id, 'x1', ['sale_name' => 'S', 'sale_date' => '2025-06-01', 'horse_name' => 'Sample Removed Horse', 'registry' => 'AQHA',
+            'sire_name' => 'Sample Orphan Sire', 'dam_name' => 'Sample Orphan Dam', 'pedigree' => ['s' => 'Sample Orphan Sire', 'd' => 'Sample Orphan Dam', 'ss' => 'Sample Orphan Grandsire'],
+            'status' => 'sold', 'source_url' => 'https://example.com/x1']);
+        \App\Harvest\AdvertisedRegisteredName::apply($lot, 'Other');
+        $lot->refresh()->horse->delete(); // removed earlier without its ancestors
+        $this->artisan('hf:prune-orphan-ancestors', ['--dry-run' => true])->expectsOutputToContain('"ancestors_removed":3')->assertSuccessful();
+        $this->assertSame(1, \App\Models\Horse::where('registered_name', 'Sample Orphan Sire')->count());
+        $this->artisan('hf:prune-orphan-ancestors')->expectsOutputToContain('"ancestors_removed":3')->assertSuccessful();
+        $this->assertSame(0, \App\Models\Horse::whereIn('registered_name', ['Sample Orphan Sire', 'Sample Orphan Dam', 'Sample Orphan Grandsire'])->count());
     }
 }

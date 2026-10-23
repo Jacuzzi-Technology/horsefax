@@ -21,8 +21,13 @@ Each site's Privacy Policy page is checked as well: some sale companies post the
 **Retired:** Premier Online Horse Sales (MM Auction Services, `premieronline`). Its Terms of Service, posted under
 `/privacy`, restrict the site to personal noncommercial use and forbid copying or republishing its materials (found
 Oct 23 2026, after it had been loaded). It is listed in `AuctioneerSoftwareHarvester::RETIRED`, is never collected
-again, and `--purge=premieronline` removes its lots and the records only they created (records with other evidence
-are kept).
+again, and `--purge=premieronline` removes its lots, the records only they created (records with other evidence
+are kept), and then the ancestor records made for those records' pedigrees that nothing refers to any more
+(`PruneOrphanAncestors`, recursively). Add `--dry-run` to see the real counts: it does the work in a transaction and
+rolls back.
+
+`php artisan hf:prune-orphan-ancestors [--dry-run]` does the ancestor clean-up on its own, for records removed
+earlier: it finds candidates through the audit trail (`pedigree.linked` entries of records that no longer exist).
 
 ## How it reads a site
 
@@ -65,6 +70,10 @@ php artisan hf:harvest-auctioneersoftware bigsky waverly
 
 ```bash
 php artisan hf:harvest-auctioneersoftware --offline
+```
+
+```bash
+php artisan hf:harvest-auctioneersoftware --purge=premieronline --dry-run
 ```
 
 ```bash

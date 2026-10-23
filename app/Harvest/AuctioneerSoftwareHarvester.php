@@ -70,15 +70,18 @@ class AuctioneerSoftwareHarvester
     }
 
     /**
-     * Remove everything loaded from a retired site: its sale lots, and the records they created when nothing else
-     * (another source's lot, a show record, an owner, a claim, a document, a transfer, a pedigree link) refers to them.
-     * Records with other evidence are kept; only the retired site's lots go. Returns counts.
+     * Remove everything loaded from a retired site: its sale lots, the records they created when nothing else
+     * (another source's lot, a show record, an owner, a claim, a document, a transfer, a pedigree link) refers to them,
+     * and then the ancestor records made for those records' pedigrees that are left unreferenced
+     * (PruneOrphanAncestors, recursively). Records with other evidence are kept; only the retired site's lots go.
+     * $dryRun does all of it inside a transaction and rolls back, so the counts are the real ones. Returns counts.
      */
-    public static function purge(string $key): array
+    public static function purge(string $key, bool $dryRun = false): array
     {
         $src = DataSource::where('key', 'as-'.$key)->first();
+        $out = ['dry_run' => $dryRun, 'lots' => 0, 'records_removed' => 0, 'records_kept' => 0, 'ancestors_removed' => 0];
         if (! $src || ! isset(self::RETIRED[$key])) {
-            return ['lots' => 0, 'records_removed' => 0, 'records_kept' => 0];
+            return $out;
         }
         $db = \Illuminate\Support\Facades\DB::class;
         $created = SaleLot::where('data_source_id', $src->id)->where('match_tier', 'created')->whereNotNull('horse_id')->pluck('horse_id')->unique()->values();
@@ -88,15 +91,25 @@ class AuctioneerSoftwareHarvester
             || $db::table('transfers')->where('horse_id', $id)->exists() || $db::table('pedigree_entries')->where('linked_horse_id', $id)->exists());
         $remove = $created->diff($keep)->values()->all();
         $lots = SaleLot::where('data_source_id', $src->id)->pluck('id')->all();
-        $db::transaction(function () use ($db, $remove, $lots) {
+        $db::beginTransaction();
+        try {
+            // The ancestors their charts linked to, looked up before the lines go with the records.
+            $ancestors = $db::table('pedigree_entries')->whereIn('horse_id', $remove)->whereNotNull('linked_horse_id')->pluck('linked_horse_id')->unique()->values()->all();
             $db::table('review_suggestions')->where(fn ($q) => $q->whereIn('horse_id', $remove)->orWhere(fn ($w) => $w->where('subject_type', 'sale_lot')->whereIn('subject_id', $lots)))->delete();
             $db::table('name_reviews')->where(fn ($q) => $q->whereIn('horse_a_id', $remove)->orWhereIn('horse_b_id', $remove)->orWhereIn('kept_horse_id', $remove))->delete();
             SaleLot::whereIn('id', $lots)->delete();
             \App\Models\Horse::whereIn('id', $remove)->get()->each->delete();
-        });
-        $src->forceFill(['permission' => 'not_allowed', 'terms_note' => 'Retired Oct 23 2026: '.self::RETIRED[$key].' Terms of Service restrict the site to personal noncommercial use and forbid copying or republishing; everything loaded from it was removed.'])->save();
+            $out['ancestors_removed'] = count(app(\App\Actions\Record\PruneOrphanAncestors::class)($ancestors));
+            if (! $dryRun) {
+                $src->forceFill(['permission' => 'not_allowed', 'terms_note' => 'Retired Oct 23 2026: '.self::RETIRED[$key].' Terms of Service restrict the site to personal noncommercial use and forbid copying or republishing; everything loaded from it was removed.'])->save();
+            }
+            $dryRun ? $db::rollBack() : $db::commit();
+        } catch (\Throwable $e) {
+            $db::rollBack();
+            throw $e;
+        }
 
-        return ['lots' => count($lots), 'records_removed' => count($remove), 'records_kept' => $keep->count()];
+        return ['lots' => count($lots), 'records_removed' => count($remove), 'records_kept' => $keep->count()] + $out;
     }
 
     public function source(): DataSource
