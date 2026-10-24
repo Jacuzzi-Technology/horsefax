@@ -24,6 +24,7 @@ DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
 [ "$DIRTY" -gt 0 ] && echo "Note: $DIRTY uncommitted change(s) in this folder are NOT deployed."
 
 W=$(mktemp -d "${TMPDIR:-/tmp}/horsefax-deploy.XXXXXX")
+chmod 755 "$W" # mktemp makes it 700, and rsync copies that onto $APP: nginx then can't read the site (Oct 24 2026)
 trap 'cd "$REPO" && git worktree remove --force "$W" >/dev/null 2>&1 || rm -rf "$W"' EXIT
 git worktree add -q --detach "$W" "origin/$BRANCH"
 ln -s "$REPO/node_modules" "$W/node_modules"
