@@ -39,10 +39,14 @@ class RanchWorldAdsHarvester
     private array $listed = [];
     private string $dir;
 
-    public function __construct(private float $delay = 3.0, private ?\Closure $log = null, ?string $dir = null)
+    /**
+     * $keepPages false (--no-cache): pages are parsed in memory and never written to disk. Used on the server, where
+     * RanchWorldAds' licensed ad text must not be stored; only the facts in ads.jsonl are kept.
+     */
+    public function __construct(private float $delay = 3.0, private ?\Closure $log = null, ?string $dir = null, private bool $keepPages = true)
     {
         $this->dir = $dir ?? storage_path('app/private/ranchworldads');
-        @mkdir($this->dir.'/html', 0775, true);
+        @mkdir($keepPages ? $this->dir.'/html' : $this->dir, 0775, true);
         $this->readState();
     }
 
@@ -130,7 +134,7 @@ class RanchWorldAdsHarvester
                 $summary[$pg] = null;
                 continue;
             }
-            file_put_contents($this->dir.'/html/index-'.$pg.'.html.gz', gzencode($html, 6));
+            $this->keep($cached, $html);
             $p = RanchWorldAdsParser::listPage($html);
             $last = max($last ?? 1, $p['last_page'] ?? $pg);
             foreach ($p['rows'] as $r) {
@@ -193,8 +197,7 @@ class RanchWorldAdsHarvester
             $html = $this->get(self::adUrl($id));
             $fetched = true;
             if ($html !== null && ! RanchWorldAdsParser::gone($html)) {
-                @mkdir(dirname($cache), 0775, true);
-                file_put_contents($cache, gzencode($html, 6));
+                $this->keep($cache, $html);
             }
         }
         $this->record($id, $html, $out, $prev);
@@ -274,9 +277,7 @@ class RanchWorldAdsHarvester
             }
             $res['horse']++;
             $res['horse_ids'][] = $id;
-            $cache = $this->cachePath($id);
-            @mkdir(dirname($cache), 0775, true);
-            file_put_contents($cache, gzencode($html, 6));
+            $this->keep($this->cachePath($id), $html);
             $this->record($id, $html, $out, null, ['off_index' => true]);
         }
         $span = $hi - $lo + 1 - count($this->listed);
@@ -343,6 +344,15 @@ class RanchWorldAdsHarvester
             }
             $this->say("HTTP $status at $url; waiting {$backoff}s");
             sleep($backoff);
+        }
+    }
+
+    /** Keep a page in the local cache (unless --no-cache). */
+    private function keep(string $path, string $html): void
+    {
+        if ($this->keepPages) {
+            @mkdir(dirname($path), 0775, true);
+            file_put_contents($path, gzencode($html, 6));
         }
     }
 

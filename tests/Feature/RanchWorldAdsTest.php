@@ -152,6 +152,18 @@ class RanchWorldAdsTest extends TestCase
         $this->assertStringContainsString('no longer on RanchWorldAds', SaleLot::where('external_id', '250')->value('note'));
     }
 
+    public function test_no_cache_writes_no_pages(): void
+    {
+        Http::fake(fn ($r) => Http::response(str_contains($r->url(), 'listing=')
+            ? $this->adPage(100, 'Sample Dun It Right ~ Ranch Gelding')
+            : $this->indexPage([[100, 'Sample Dun It Right ~ Ranch Gelding', false]])));
+        $dir = sys_get_temp_dir().'/rwa-nocache-'.uniqid();
+        $out = (new RanchWorldAdsHarvester(0, null, $dir, keepPages: false))->run();
+        $this->assertSame(2, $out['live']); // ad 100 and the featured ad 300
+        $this->assertDirectoryDoesNotExist($dir.'/html');
+        $this->assertStringNotContainsString('never be kept', file_get_contents($dir.'/ads.jsonl'));
+    }
+
     public function test_a_block_stops_the_run(): void
     {
         Http::fake(fn () => Http::response('Forbidden', 403));

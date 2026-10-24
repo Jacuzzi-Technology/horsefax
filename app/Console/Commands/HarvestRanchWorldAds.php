@@ -17,7 +17,7 @@ use Illuminate\Console\Command;
 class HarvestRanchWorldAds extends Command
 {
     protected $signature = 'hf:harvest-ranchworldads {--delay=3} {--max-ads=} {--max-pages=} {--probe=0} {--refresh-days=60}
-        {--no-index} {--no-load} {--reparse} {--load-only} {--dir=}';
+        {--no-index} {--no-load} {--reparse} {--load-only} {--no-cache : never write pages to disk (the server)} {--dir=}';
 
     protected $description = 'Collect RanchWorldAds.com horse ads (facts only, active and sold) into the raw file and the sale-lots index';
 
@@ -25,7 +25,7 @@ class HarvestRanchWorldAds extends Command
     {
         ini_set('memory_limit', '1G'); // the whole raw file is held in memory: 128 MB ran out at ~16,000 ads (Oct 23 2026)
         $h = new RanchWorldAdsHarvester(max(3.0, (float) $this->option('delay')), // house rule: at least 3 s between requests
-            fn ($l) => $this->line(now()->format('H:i:s').' '.$l), $this->option('dir') ?: null);
+            fn ($l) => $this->line(now()->format('H:i:s').' '.$l), $this->option('dir') ?: null, ! $this->option('no-cache'));
         if ($this->option('reparse')) {
             $this->info('Reparsed: '.json_encode($h->reparse()));
         } elseif (! $this->option('load-only')) {
