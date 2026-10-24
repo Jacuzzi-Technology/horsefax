@@ -132,18 +132,25 @@ A first full run is about 33,000 ads at 3 s each, so about 28 hours plus about 5
   estimated ~280 horse ads outside the index, so a full id sweep isn't worth it.
 - One ad page failed after retries; there were no blocks.
 
-## Weekly rerun (set up Oct 23 2026)
+## Weekly rerun (on the server since Oct 24 2026)
 
-`bin/ranchworldads-weekly` runs every Sunday at 2:00 AM on Richard's Mac. It's driven by launchd
-(`~/Library/LaunchAgents/com.horsefax.ranchworldads-weekly.plist`); if the Mac is asleep then, launchd runs it on wake.
+The rerun runs every Sunday at 07:00 UTC (2 AM Central) in the `horsefax` user's crontab on trusted-core-01. Its log
+is `storage/logs/harvest-ranchworldads.log`:
 
-1. It crawls on the Mac: the full index (~50 min), new ads, ads whose SOLD flag changed, and unsold ads older than
-   60 days. Ads that dropped out of the index are re-checked and marked gone. Same rules as above: 3 s per request,
-   HorsefaxBot, stop on a block.
-2. When the crawl succeeds, it copies **only `ads.jsonl`** to trusted-core-01 and runs `--load-only` there. New
-   registered names create unverified records; everything already matched or in review is left alone.
-3. When the crawl fails or is blocked, nothing is loaded.
+```bash
+php artisan hf:harvest-ranchworldads --delay=3 --no-cache
+```
 
-Results go in `~/horsefax-harvest/ranchworldads/weekly-summary.log`, one line per run, with full logs in
-`weekly-YYYY-MM-DD.log`. Run it now with `launchctl kickstart gui/$(id -u)/com.horsefax.ranchworldads-weekly`.
-Stop it with `launchctl bootout gui/$(id -u)/com.horsefax.ranchworldads-weekly`.
+The job holds `flock /tmp/hf-ranchworldads.lock`, plus the shared `hf-match` lock.
+
+- **`--no-cache`:** pages are parsed in memory and never written to disk. RanchWorldAds' licensed ad text is never
+  stored on the server; only the facts in `storage/app/private/ranchworldads/ads.jsonl` are kept.
+- **What each run does:** reads the full index (~50 min), then fetches new ads, ads whose SOLD flag changed, and unsold
+  ads older than 60 days. Ads that dropped out of the index are re-checked and marked gone. Then it loads `sale_lots`:
+  new registered names create unverified records, and anything already matched or in review is left alone.
+- **Blocks:** a block stops the run before the load.
+- **Old history:** the first full crawl's page cache stays on Richard's Mac (`~/horsefax-harvest/ranchworldads/html`),
+  so a parser fix can still be re-run there (`--reparse`) and the new `ads.jsonl` copied up.
+- **The earlier Mac job:** it ran under launchd (Oct 23) and is retired. Its plist is kept, unloaded, in
+  `~/horsefax-harvest/ranchworldads/`. The crontab from before the server change is in
+  /root/horsefax-crontab.bak-2026-10-24b.
