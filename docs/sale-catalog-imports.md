@@ -145,8 +145,14 @@ production without re-crawling:
 3. As `horsefax`, run `php artisan hf:harvest-heritage --offline` and `php artisan hf:harvest-robinglenn --offline`.
 4. The nightly `hf:match-sales` then puts reported prices on the matched records.
 
-Possible weekly cron, not set up yet:
+## Weekly rerun (set up Oct 24 2026)
 
-```bash
-php artisan hf:harvest-heritage --no-archive && php artisan hf:harvest-robinglenn --refresh-from=<recent catID>
-```
+Wednesdays at 05:00 UTC, in the `horsefax` user's crontab on trusted-core-01. It runs
+`/usr/local/bin/horsefax-catalogs-weekly` (a copy is in `bin/catalogs-weekly`) under `flock /tmp/hf-catalogs.lock`
+and the shared `hf-match` lock. Output goes to `storage/logs/harvest-catalogs.log`.
+
+1. `hf:harvest-heritage --no-archive --delay=3`: new catalog and results PDFs from the sitemap.
+2. `hf:harvest-robinglenn --delay=3 --refresh-from=<highest catalog catID − 300>`: new catIDs past the end, plus the
+   last 300 re-read so results posted after a sale are picked up.
+
+Both runs load `sale_lots`. The crontab from before the change is in /root/horsefax-crontab.bak-2026-10-24.
