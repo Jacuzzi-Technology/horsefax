@@ -324,6 +324,35 @@ class PitzerParser
         return (bool) preg_match('/\s[xX]\s|^pending\b|^unnamed\b|^tba?d?$|^["“].*["”]$/iu', trim($name));
     }
 
+    /**
+     * The sales page: "2027 Spring Sale – April 24th", "2027 Fall Sale – September 10th & 11th" and the catalog PDFs it
+     * links ("Fall-26-Web-Catalog.pdf", "S26-full-pdf-Catalog.pdf"), each keyed "fall-2027".
+     *
+     * @return array{dates: array<string, array{from:string, to:string}>, pdfs: array<string, string>}
+     */
+    public static function salesPage(string $html): array
+    {
+        $text = html_entity_decode(preg_replace('/<[^>]*>/', ' ', preg_replace('#<(script|style)\b.*?</\1>#is', ' ', $html)), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $text = preg_replace('/[\s\x{00A0}]+/u', ' ', $text);
+        $dates = [];
+        preg_match_all('/\b(20\d\d)\s+(Spring|Fall)\s+Sale\s*[–—-]\s*('.self::MONTHS.')\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*(?:&|-|–|and)\s*(\d{1,2})(?:st|nd|rd|th)?)?/iu', $text, $mm, PREG_SET_ORDER);
+        foreach ($mm as $m) {
+            $from = date('Y-m-d', strtotime("$m[3] $m[4] $m[1]"));
+            $dates[strtolower($m[2]).'-'.$m[1]] = ['from' => $from, 'to' => ! empty($m[5]) ? date('Y-m-d', strtotime("$m[3] $m[5] $m[1]")) : $from];
+        }
+        $pdfs = [];
+        preg_match_all('#https?://(?:www\.)?pitzerranch\.net/wp-content/uploads/(\d{4})/\d\d/([^"\'\s<>]+?\.pdf)#i', $html, $pm, PREG_SET_ORDER);
+        foreach ($pm as $p) {
+            // The sale from the file name: "Fall-26", "FALL-25", "S26", "F24", "List-F22", "fall16".
+            if (preg_match('/(?:^|[^a-z])(fall|spring|f|s)[-_ ]?(?:20)?(\d\d)(?!\d)/i', $p[2], $f)) {
+                $season = in_array(strtolower($f[1]), ['fall', 'f'], true) ? 'fall' : 'spring';
+                $pdfs[$season.'-20'.$f[2]] ??= $p[0];
+            }
+        }
+
+        return ['dates' => $dates, 'pdfs' => $pdfs];
+    }
+
     /** Which sale: season, year, first and last day from the cover ("Friday SEPTEMBER 5 & Saturday SEPTEMBER 6, 2025"). */
     public static function sale(array $pages, ?string $season = null, ?int $year = null): array
     {

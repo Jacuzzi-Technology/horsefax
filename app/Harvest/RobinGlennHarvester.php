@@ -59,11 +59,12 @@ class RobinGlennHarvester
 
     /**
      * Fetch every catID not yet kept: 1 .. the highest real one (probing past it). $refreshFrom re-reads catIDs at or
-     * above that number (recent catalogs that may have gained results). Returns counts.
+     * above that number (recent catalogs that may have gained results); $refresh re-reads just those catIDs (the sale
+     * calendar's picks, see SaleWatch). Returns counts.
      *
      * @return array<string, int>
      */
-    public function crawl(int $from = 1, ?int $to = null, ?int $maxRequests = null, ?int $refreshFrom = null): array
+    public function crawl(int $from = 1, ?int $to = null, ?int $maxRequests = null, ?int $refreshFrom = null, array $refresh = []): array
     {
         $out = ['requests' => 0, 'catalogs' => 0, 'empty' => 0, 'missing' => 0, 'highest' => 0];
         $gap = 0;
@@ -74,9 +75,9 @@ class RobinGlennHarvester
                     break;
                 }
                 $kept = $this->state[$id]['state'] ?? null;
-                $refresh = $refreshFrom !== null && $id >= $refreshFrom && $kept !== 'missing';
+                $again = ($refreshFrom !== null && $id >= $refreshFrom && $kept !== 'missing') || in_array($id, $refresh, true);
                 // Numbers past the last real catalog are probed again on every run: new catalogs appear there.
-                if ($kept === null || $kept === 'error' || $refresh || ($kept === 'missing' && $id > $this->highest())) {
+                if ($kept === null || $kept === 'error' || $again || ($kept === 'missing' && $id > $this->highest())) {
                     $this->fetchCatalog($id);
                 }
                 $kept = $this->state[$id]['state'] ?? 'error';

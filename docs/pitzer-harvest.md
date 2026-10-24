@@ -61,6 +61,10 @@ staff, 53 queued, 1,363 unmatched. A rerun changes nothing.
 
 Never kept: consignor names, phone numbers, NOTES text, agents and photos (the cached PDFs still print them).
 
+Each run first reads the sales page (`/sales-2/`) for the next sales' dates and any new catalog PDF, kept in
+`calendar.json`; a sale Robin Glenn already loaded is skipped. `hf:sale-watch` uses those dates to run this harvester
+only around Pitzer's sales (see docs/sale-watch.md).
+
 PDFs are cached in `storage/app/private/pitzer/pdf/`. One request at a time, at least 3 s apart, as HorsefaxBot; a
 403/429 or a bot check stops the run. An archived PDF must end with `%%EOF` (first captures are often cut at 1 MB).
 

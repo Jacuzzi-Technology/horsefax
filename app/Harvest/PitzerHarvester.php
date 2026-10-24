@@ -61,11 +61,69 @@ class PitzerHarvester
         ]);
     }
 
-    /** Download every PDF not already kept. */
+    public const SALES_PAGE = '/sales-2/';
+
+    /**
+     * Read the sales page: the coming sales' dates ("2027 Fall Sale – September 10th & 11th") and the catalog PDFs it
+     * links. Kept in calendar.json and merged, so dates stay known after the page moves on to the next sale.
+     */
+    public function discover(): array
+    {
+        $html = $this->get(self::BASE.self::SALES_PAGE);
+        if ($html === null) {
+            return ['sales' => 0, 'pdfs' => 0];
+        }
+        $found = PitzerParser::salesPage($html);
+        $cal = $this->calendar();
+        $cal['dates'] = $found['dates'] + $cal['dates'];
+        $cal['pdfs'] = $found['pdfs'] + $cal['pdfs'];
+        file_put_contents($this->dir.'/calendar.json', json_encode($cal, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+
+        return ['sales' => count($found['dates']), 'pdfs' => count($found['pdfs'])];
+    }
+
+    /** @return array{dates: array<string, array{from:string, to:string}>, pdfs: array<string, string>} keyed by "fall-2027" */
+    public function calendar(): array
+    {
+        $cal = is_file($this->dir.'/calendar.json') ? json_decode(file_get_contents($this->dir.'/calendar.json'), true) : [];
+
+        return ['dates' => $cal['dates'] ?? [], 'pdfs' => $cal['pdfs'] ?? []];
+    }
+
+    /**
+     * Every sale to read: the fixed list plus catalogs found on the sales page. A sale whose catalog Robin Glenn already
+     * has (with lots) is left to the Robin Glenn harvester, so the same horses aren't loaded twice.
+     */
+    public function sales(): array
+    {
+        $cal = $this->calendar();
+        $sales = self::SALES;
+        foreach ($cal['pdfs'] as $key => $url) {
+            if (isset($sales[$key]) || ! preg_match('/^(spring|fall)-(20\d\d)$/', $key, $m)) {
+                continue;
+            }
+            $dates = $cal['dates'][$key] ?? null;
+            $sales[$key] = ['season' => ucfirst($m[1]), 'year' => (int) $m[2], 'from' => $dates['from'] ?? null, 'to' => $dates['to'] ?? null,
+                'kind' => preg_match('/list/i', basename($url)) ? 'lineup' : 'catalog', 'file' => "pitzer-$key.pdf", 'url' => $url];
+        }
+
+        return array_filter($sales, fn ($s) => ! self::onRobinGlenn($s['season'], $s['year']));
+    }
+
+    /** Whether Robin Glenn's crawl already loaded lots for this Pitzer sale. */
+    public static function onRobinGlenn(string $season, int $year): bool
+    {
+        $rg = DataSource::where('key', 'robinglenn')->value('id');
+
+        return $rg && SaleLot::where('data_source_id', $rg)->where('sale_name', 'ilike', '%pitzer%')->where('sale_year', $year)
+            ->whereRaw($season === 'Fall' ? 'extract(month from sale_date) >= 7' : 'extract(month from sale_date) < 7')->exists();
+    }
+
+    /** Download every PDF not already kept (after reading the sales page for new ones). */
     public function collect(): array
     {
-        $out = ['downloaded' => 0, 'cached' => 0, 'unavailable' => 0];
-        foreach (self::SALES as $sale) {
+        $out = ['downloaded' => 0, 'cached' => 0, 'unavailable' => 0] + $this->discover();
+        foreach ($this->sales() as $sale) {
             $path = $this->pdfPath($sale['file']);
             if (is_file($path) && filesize($path) > 0) {
                 $out['cached']++;
@@ -93,7 +151,7 @@ class PitzerHarvester
     public function lots(): array
     {
         $out = [];
-        foreach (self::SALES as $key => $sale) {
+        foreach ($this->sales() as $key => $sale) {
             $path = $this->pdfPath($sale['file']);
             if (! is_file($path)) {
                 continue;
@@ -111,8 +169,17 @@ class PitzerHarvester
         $src = $this->source();
         $out = ['loaded' => 0, 'offered' => 0, 'catalog' => 0, 'with_pedigree' => 0, 'with_reg_number' => 0, 'scanned_page' => 0, 'not_a_registered_name' => 0,
             'matched' => 0, 'conflict' => 0, 'proposed' => 0, 'linked' => 0, 'created' => 0, 'queued' => 0, 'unmatched' => 0, 'already' => 0, 'by_sale' => []];
+        $sales = $this->sales();
         foreach ($lots ?? $this->lots() as $key => $rows) {
-            $sale = self::SALES[$key];
+            $sale = $sales[$key] ?? self::SALES[$key];
+            if (! $sale['from']) {
+                // A catalog found on the sales page before its dates were: the cover gives them.
+                $cover = PitzerParser::sale(array_slice(PitzerParser::pagesFromPdf($this->pdfPath($sale['file'])), 0, 2));
+                [$sale['from'], $sale['to']] = [$cover['from'], $cover['to']];
+                if (! $sale['from']) {
+                    continue;
+                }
+            }
             $name = 'Pitzer Ranch '.$sale['season'].' Sale '.$sale['year']; // Robin Glenn's naming for the other Pitzer sales
             $status = $sale['to'] < now()->subDays(3)->toDateString() ? 'offered' : 'catalog';
             $out['by_sale'][$key] = 0;
