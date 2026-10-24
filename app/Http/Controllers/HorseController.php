@@ -244,6 +244,7 @@ class HorseController extends Controller
         abort_unless($horse->canBeViewedPrivatelyBy($request->user()), 403);
         $entries = DB::table('audit_log')->where('horse_id', $horse->id)->leftJoin('users', 'users.id', '=', 'audit_log.actor_id')
             ->orderByDesc('audit_log.id')->select('audit_log.*', 'users.name as actor_name')->paginate(50);
+        (new \App\Support\AuditMask)->rows($entries->items());
 
         return view('horses.audit', ['horse' => $horse, 'entries' => $entries]);
     }

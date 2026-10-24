@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\DB;
  * same name and no conflicting foal year) or creates one (source "published", identity unverified, no owner). Fills
  * only what's missing and never touches a record someone owns. Every horse in the chart gets a record too.
  *
+ * Optional extras (registration papers, Oct 20 2026): a pedigree line may be an array (name, registration_number,
+ * foal_year, color, registry) so ancestors link by number; 'previous_names' are former registered names: a record still
+ * under one of them is renamed to the official name and the old one kept as a previous name (ShowNameRule flags it
+ * if the horse has results under the old name); a foal year already on the record upgrades to the full date.
+ *
  * @return string created, updated, unchanged or skipped_owned / skipped_ambiguous
  */
 class ImportPublishedHorse
@@ -34,13 +39,18 @@ class ImportPublishedHorse
                 }
                 $horse = $ids->count() ? Horse::find($ids->first()) : null;
             }
-            if (! $horse) {
-                $same = Horse::named($h['name'])->get()
+            $formerly = null;
+            foreach (array_merge([$h['name']], $h['previous_names'] ?? []) as $i => $name) {
+                if ($horse) {
+                    break;
+                }
+                $same = Horse::named($name)->get()
                     ->filter(fn ($x) => ! $h['foal_year'] || ! $x->birth_year || (int) $x->birth_year === (int) $h['foal_year']);
                 if ($same->count() > 1) {
                     return 'skipped_ambiguous';
                 }
                 $horse = $same->first();
+                $formerly = $horse && $i > 0 ? $name : null;
             }
             if ($horse && $horse->activeStewards()->exists()) {
                 return 'skipped_owned'; // the owner's record: they or staff decide what to add
@@ -64,7 +74,8 @@ class ImportPublishedHorse
             if (! $horse->color && $h['color']) {
                 $fill['color'] = $h['color'];
             }
-            if (($horse->birth_precision ?? 'unknown') === 'unknown' && ($h['birth_date'] || $h['foal_year'])) {
+            $sameYear = $h['birth_date'] && $horse->birth_precision === 'year' && (int) $horse->birth_year === (int) $h['foal_year'];
+            if ((($horse->birth_precision ?? 'unknown') === 'unknown' && ($h['birth_date'] || $h['foal_year'])) || $sameYear) {
                 $fill += $h['birth_date'] ? ['birth_precision' => 'day', 'birth_date' => $h['birth_date'], 'birth_year' => $h['foal_year']] : ['birth_precision' => 'year', 'birth_year' => $h['foal_year']];
             }
             if (! $horse->breed && $h['registry'] === 'AQHA') {
@@ -80,12 +91,37 @@ class ImportPublishedHorse
                 $status = $status === 'created' ? 'created' : 'updated';
             }
 
+            // Former registered names: the official name becomes the record's name, the old ones previous names.
+            $names = array_values(array_filter(array_merge($h['previous_names'] ?? [], $formerly ? [$horse->registered_name] : []),
+                fn ($n) => \App\Models\ShowRecord::key($n) !== \App\Models\ShowRecord::key($h['name'])));
+            if ($formerly) {
+                $old = $horse->registered_name;
+                $horse->forceFill(['registered_name' => $h['name']])->save();
+                app(RecordFacts::class)($horse, $system, RecordFacts::fromColumns(['registered_name' => $h['name']]), 'historical');
+                Audit::record('horse.renamed_from_published', $horse, ['registered_name' => $old], ['registered_name' => $h['name'], 'source_url' => $sourceUrl], $horse->id, $system->id);
+                $status = $status === 'created' ? 'created' : 'updated';
+            }
+            $known = $horse->names()->pluck('name')->map(fn ($n) => \App\Models\ShowRecord::key($n))->all();
+            foreach (array_unique($names) as $old) {
+                if (! in_array(\App\Models\ShowRecord::key($old), $known, true)) {
+                    \App\Models\HorseName::create(['horse_id' => $horse->id, 'name' => $old, 'kind' => 'previous', 'visibility' => 'shared', 'added_by' => $system->id]);
+                    $known[] = \App\Models\ShowRecord::key($old);
+                    if ($shown = ShowNameRule::shownAs($horse, $old)) {
+                        ShowNameRule::flagRename($horse, $old, $h['name'], $shown);
+                    }
+                    $status = $status === 'created' ? 'created' : 'updated';
+                }
+            }
+
             // Pedigree lines the record doesn't have yet; then records for every horse in the chart.
             $have = $horse->pedigree()->pluck('position')->flip();
             $added = 0;
-            foreach ($h['pedigree'] as $pos => $name) {
-                if (! isset($have[$pos]) && trim($name) !== '') {
-                    PedigreeEntry::create(['horse_id' => $horse->id, 'position' => $pos, 'name' => trim($name), 'visibility' => 'public',
+            foreach ($h['pedigree'] as $pos => $line) {
+                $line = is_array($line) ? $line : ['name' => $line];
+                if (! isset($have[$pos]) && trim((string) ($line['name'] ?? '')) !== '') {
+                    PedigreeEntry::create(['horse_id' => $horse->id, 'position' => $pos, 'name' => trim($line['name']), 'visibility' => 'public',
+                        'registry' => $line['registry'] ?? null, 'registration_number' => $line['registration_number'] ?? null,
+                        'foal_year' => $line['foal_year'] ?? null, 'color' => $line['color'] ?? null,
                         'added_by' => $system->id, 'source_type' => 'historical', 'status' => 'unverified']);
                     $added++;
                 }

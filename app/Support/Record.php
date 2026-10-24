@@ -287,10 +287,13 @@ final class Record
 
     /**
      * A stand-in printed where a horse has no name yet ("Pending", "AQHA Pending", "Name pending", "Unnamed", "Foal"),
-     * not a name: never matched, paired or made into a record by it.
+     * not a name: never matched, paired or made into a record by it. Also the unnamed-foal labels sale catalogs print as
+     * "Pending/<dam>", "Pending A/<dam>", "PendingB/<dam>", "Pending (P)/<dam>", "Pending - <dam>", "AQHA Name Pending/<dam>"
+     * or "Pending 3" (the name after the label is the dam's, not the foal's). A name followed by "(pending)" is a name.
      */
     public static function placeholderName(?string $name): bool
     {
-        return (bool) preg_match('/^\s*(horse name:\s*)?((aqha|apha|reg(istration)?|name)\s+)?(pending( registration)?|unnamed( (colt|filly|foal))?|foal|no name|none|n\/?a|tba|tbd)\s*$/i', (string) $name);
+        return (bool) preg_match('/^\s*(horse name:\s*)?((aqha|apha|reg(istration|istered)?|name)\s+)*(pending( registration)?|unnamed( (colt|filly|foal))?|foal|no name|none|n\/?a|tba|tbd)\s*$/i', (string) $name)
+            || (bool) preg_match('/^\s*((aqha|apha|reg(istration|istered)?|name)\s+)*pending\s*([a-z]{1,2}|\d{1,2})?(\s*\([^)]*\))?\s*([\/:\-–—]|$)/iu', (string) $name);
     }
 }

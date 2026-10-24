@@ -111,6 +111,7 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::post('/users/{user}/credentials', [AdminController::class, 'credentials'])->name('credentials');
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');
     Route::get('/show-records', [AdminController::class, 'showRecords'])->name('show-records');
+    Route::get('/offspring', [\App\Http\Controllers\Admin\OffspringController::class, 'index'])->name('offspring');
     Route::post('/show-records/{record}/attach', [AdminController::class, 'attachResults'])->name('show-records.attach');
     Route::post('/horses/{horse}/claim-codes', [\App\Http\Controllers\ClaimCodeController::class, 'issue'])->name('claim-codes.issue');
     Route::get('/claim-codes/{code}', [\App\Http\Controllers\ClaimCodeController::class, 'certificate'])->name('claim-codes.certificate');

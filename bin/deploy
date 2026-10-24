@@ -1,17 +1,43 @@
 #!/usr/bin/env bash
-# Deploys this working copy to horsefax.com on trusted-core-01 and migrates. Usage: bin/deploy
+# Deploys the pushed `launch` branch (origin/launch) to horsefax.com on trusted-core-01 and migrates.
+# Usage: bin/deploy [branch]
+#
+# It builds and uploads from a clean, temporary checkout of origin/<branch>, never from this folder: sessions share
+# this folder and often leave uncommitted work in it (Oct 24 2026: an unapproved migration nearly shipped), so only
+# what is committed AND pushed can reach production. Unpushed commits on the branch stop the deploy.
 set -euo pipefail
 
 HOST="root@146.190.128.6"
 APP="/var/www/horsefax"
+BRANCH="${1:-launch}"
 
 cd "$(dirname "$0")/.."
+REPO="$PWD"
+
+git fetch -q origin "$BRANCH"
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ] && [ -n "$(git log --oneline "origin/$BRANCH..$BRANCH")" ]; then
+  echo "Unpushed commits on $BRANCH; push them first (git push origin $BRANCH):" >&2
+  git log --oneline "origin/$BRANCH..$BRANCH" >&2
+  exit 1
+fi
+DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
+[ "$DIRTY" -gt 0 ] && echo "Note: $DIRTY uncommitted change(s) in this folder are NOT deployed."
+
+W=$(mktemp -d "${TMPDIR:-/tmp}/horsefax-deploy.XXXXXX")
+chmod 755 "$W" # mktemp makes it 700, and rsync copies that onto $APP: nginx then can't read the site (Oct 24 2026)
+trap 'cd "$REPO" && git worktree remove --force "$W" >/dev/null 2>&1 || rm -rf "$W"' EXIT
+git worktree add -q --detach "$W" "origin/$BRANCH"
+ln -s "$REPO/node_modules" "$W/node_modules"
+cd "$W"
+echo "Deploying origin/$BRANCH at $(git log --oneline -1)"
 
 echo "Building assets…"
 npm run build >/dev/null
 
 echo "Uploading…"
-rsync -az --delete \
+# The server side runs as horsefax, so files land owned by horsefax: running jobs (harvests) never meet a file they
+# can't read mid-deploy (Oct 24 2026 the NRHA harvest crashed in that window). macOS's openrsync has no --chown.
+rsync -az --delete --rsync-path="sudo -u horsefax rsync" \
   --exclude .git --exclude node_modules --exclude vendor --exclude .env --exclude .env.testing --exclude '.env.bak*' --exclude tests \
   --exclude 'storage/logs/*' --exclude 'storage/app/*' --exclude 'storage/framework/cache/*' \
   --exclude 'storage/framework/sessions/*' --exclude 'storage/framework/views/*' \

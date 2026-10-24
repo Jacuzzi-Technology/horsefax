@@ -126,8 +126,8 @@ class AdminController extends Controller
             'events' => $horse->events()->orderByDesc('created_at')->get(),
             'documents' => $horse->documents()->orderByDesc('created_at')->get(),
             'stewardships' => $horse->stewardships()->with('user')->orderBy('created_at')->get(),
-            'audit' => DB::table('audit_log')->where('horse_id', $horse->id)->leftJoin('users', 'users.id', '=', 'audit_log.actor_id')
-                ->orderByDesc('audit_log.id')->limit(200)->get(['audit_log.*', 'users.name as actor_name']),
+            'audit' => (new \App\Support\AuditMask)->rows(DB::table('audit_log')->where('horse_id', $horse->id)->leftJoin('users', 'users.id', '=', 'audit_log.actor_id')
+                ->orderByDesc('audit_log.id')->limit(200)->get(['audit_log.*', 'users.name as actor_name'])),
         ]);
     }
 
