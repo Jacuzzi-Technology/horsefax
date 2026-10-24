@@ -131,3 +131,19 @@ A first full run is about 33,000 ads at 3 s each, so about 28 hours plus about 5
 - Probe: of 500 random ids not in the index, 294 were deleted, 205 were other categories and 1 was a horse ad. That's an
   estimated ~280 horse ads outside the index, so a full id sweep isn't worth it.
 - One ad page failed after retries; there were no blocks.
+
+## Weekly rerun (set up Oct 23 2026)
+
+`bin/ranchworldads-weekly` runs every Sunday at 2:00 AM on Richard's Mac. It's driven by launchd
+(`~/Library/LaunchAgents/com.horsefax.ranchworldads-weekly.plist`); if the Mac is asleep then, launchd runs it on wake.
+
+1. It crawls on the Mac: the full index (~50 min), new ads, ads whose SOLD flag changed, and unsold ads older than
+   60 days. Ads that dropped out of the index are re-checked and marked gone. Same rules as above: 3 s per request,
+   HorsefaxBot, stop on a block.
+2. When the crawl succeeds, it copies **only `ads.jsonl`** to trusted-core-01 and runs `--load-only` there. New
+   registered names create unverified records; everything already matched or in review is left alone.
+3. When the crawl fails or is blocked, nothing is loaded.
+
+Results go in `~/horsefax-harvest/ranchworldads/weekly-summary.log`, one line per run, with full logs in
+`weekly-YYYY-MM-DD.log`. Run it now with `launchctl kickstart gui/$(id -u)/com.horsefax.ranchworldads-weekly`.
+Stop it with `launchctl bootout gui/$(id -u)/com.horsefax.ranchworldads-weekly`.
