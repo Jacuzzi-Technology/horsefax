@@ -57,5 +57,7 @@ php artisan hf:sale-watch
 `--source=pitzer` limits a run to one source. The last discovery run per source is kept in
 `storage/app/private/sale-watch.json`; delete a source's entry to force a discovery run.
 
-Production (planned, not switched on yet): one daily cron line at 05:00 UTC, as `horsefax`, under the matching lock. It
-would replace the Wednesday Heritage + Robin Glenn script and take Billings out of the Monday sales bundle.
+Production (live Oct 24 2026): one daily cron line at 05:00 UTC in the `horsefax` crontab, under the matching lock,
+logging to `storage/logs/sale-watch.log`. It replaced the Wednesday Heritage + Robin Glenn script
+(`/usr/local/bin/horsefax-catalogs-weekly`, no longer called) and took Billings out of the Monday sales bundle. Crontab
+backup: `/root/horsefax-crontab.bak-2026-10-24-salewatch`.
