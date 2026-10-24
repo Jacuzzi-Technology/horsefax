@@ -35,7 +35,9 @@ echo "Building assets…"
 npm run build >/dev/null
 
 echo "Uploading…"
-rsync -az --delete \
+# The server side runs as horsefax, so files land owned by horsefax: running jobs (harvests) never meet a file they
+# can't read mid-deploy (Oct 24 2026 the NRHA harvest crashed in that window). macOS's openrsync has no --chown.
+rsync -az --delete --rsync-path="sudo -u horsefax rsync" \
   --exclude .git --exclude node_modules --exclude vendor --exclude .env --exclude .env.testing --exclude '.env.bak*' --exclude tests \
   --exclude 'storage/logs/*' --exclude 'storage/app/*' --exclude 'storage/framework/cache/*' \
   --exclude 'storage/framework/sessions/*' --exclude 'storage/framework/views/*' \
