@@ -1,11 +1,34 @@
 #!/usr/bin/env bash
-# Deploys this working copy to horsefax.com on trusted-core-01 and migrates. Usage: bin/deploy
+# Deploys the pushed `launch` branch (origin/launch) to horsefax.com on trusted-core-01 and migrates.
+# Usage: bin/deploy [branch]
+#
+# It builds and uploads from a clean, temporary checkout of origin/<branch>, never from this folder: sessions share
+# this folder and often leave uncommitted work in it (Oct 24 2026: an unapproved migration nearly shipped), so only
+# what is committed AND pushed can reach production. Unpushed commits on the branch stop the deploy.
 set -euo pipefail
 
 HOST="root@146.190.128.6"
 APP="/var/www/horsefax"
+BRANCH="${1:-launch}"
 
 cd "$(dirname "$0")/.."
+REPO="$PWD"
+
+git fetch -q origin "$BRANCH"
+if [ "$(git rev-parse --abbrev-ref HEAD)" = "$BRANCH" ] && [ -n "$(git log --oneline "origin/$BRANCH..$BRANCH")" ]; then
+  echo "Unpushed commits on $BRANCH; push them first (git push origin $BRANCH):" >&2
+  git log --oneline "origin/$BRANCH..$BRANCH" >&2
+  exit 1
+fi
+DIRTY=$(git status --porcelain | wc -l | tr -d ' ')
+[ "$DIRTY" -gt 0 ] && echo "Note: $DIRTY uncommitted change(s) in this folder are NOT deployed."
+
+W=$(mktemp -d "${TMPDIR:-/tmp}/horsefax-deploy.XXXXXX")
+trap 'cd "$REPO" && git worktree remove --force "$W" >/dev/null 2>&1 || rm -rf "$W"' EXIT
+git worktree add -q --detach "$W" "origin/$BRANCH"
+ln -s "$REPO/node_modules" "$W/node_modules"
+cd "$W"
+echo "Deploying origin/$BRANCH at $(git log --oneline -1)"
 
 echo "Building assets…"
 npm run build >/dev/null
