@@ -158,6 +158,46 @@ class LegacySaleTest extends TestCase
         $this->assertSame($horse->id, $r1->fresh()->horse_id);
     }
 
+    public function test_a_reported_sale_replaces_the_robin_glenn_offered_entry(): void
+    {
+        $system = BuildRecordsFromResults::system();
+        $rg = DataSource::firstOrCreate(['key' => 'robinglenn'], ['name' => 'Robin Glenn QData catalogs', 'url' => 'https://example.test', 'permission' => 'no_terms_posted']);
+        $horse = fn ($name) => tap(new Horse(['registered_name' => $name, 'birth_precision' => 'unknown']), function ($h) use ($system) {
+            $h->horsefax_id = CreateHorse::newId();
+            $h->created_by = $system->id;
+            $h->forceFill(['source' => 'results', 'listed' => true, 'public_summary' => true, 'identity_status' => 'unverified'])->save();
+        });
+        $sold = $horse('SL Sample Smartya');
+        $passed = $horse('Sample Gold Is Electric');
+        $rgLot = fn ($id, $lot, $h) => SaleLot::record($rg->id, $id, ['sale_name' => 'Legacy Reining Breeders Sale', 'sale_date' => '2025-09-20', 'lot' => $lot,
+            'horse_name' => $h->registered_name, 'date_precision' => 'day', 'status' => 'offered', 'source_url' => 'https://example.test/rg', 'horse_id' => $h->id]);
+        $rg1 = $rgLot('2650:1', '1', $sold);
+        $rg3 = $rgLot('2650:3', '3', $passed);
+        foreach ([$rg1, $rg3] as $l) {
+            app(\App\Actions\Record\AttachSaleLot::class)($l->fresh(), $l->horse, $system, 'created'); // what the nightly matcher did on production
+        }
+        $offered1 = $rg1->fresh()->horse_event_id;
+        $this->assertNotNull($offered1);
+
+        $dir = sys_get_temp_dir().'/legacy-'.uniqid();
+        $out = (new LegacySaleHarvester(0, null, $dir))->load(['2025' => LegacySaleParser::rows($this->newPage())]);
+        $this->assertSame([1, 1], [$out['replaced_offered_entry'], $out['robin_glenn_lot_left_for_staff']]);
+
+        // Sold: the "offered" entry is gone, the reported sale with its price is on the record now, the RG lot is same_sale.
+        $this->assertNull(\App\Models\HorseEvent::find($offered1));
+        $r1 = SaleLot::where('external_id', 'legacy:2025:1')->first();
+        $this->assertSame(['reported_sale', 1550000], [\App\Models\HorseEvent::find($r1->horse_event_id)->result, \App\Models\HorseEvent::find($r1->horse_event_id)->amount_cents]);
+        $this->assertSame(1, \App\Models\HorseEvent::where('horse_id', $sold->id)->where('category', 'ownership')->count());
+        $this->assertSame([null, LegacySaleHarvester::SAME_SALE], [$rg1->fresh()->horse_event_id, $rg1->fresh()->review_status]);
+        $this->assertFileExists($dir.'/replaced-entries.jsonl');
+        // Passed out: "offered" is still true, so it stays.
+        $this->assertNotNull(\App\Models\HorseEvent::find($rg3->fresh()->horse_event_id));
+
+        $again = (new LegacySaleHarvester(0, null, $dir))->load(['2025' => LegacySaleParser::rows($this->newPage())]);
+        $this->assertSame(0, $again['replaced_offered_entry']);
+        $this->assertSame(1, \App\Models\HorseEvent::where('horse_id', $sold->id)->where('category', 'ownership')->count());
+    }
+
     public function test_collect_reads_robots_keeps_pages_gzipped_and_stops_on_a_block(): void
     {
         $dir = sys_get_temp_dir().'/legacy-'.uniqid();

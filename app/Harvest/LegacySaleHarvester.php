@@ -3,9 +3,13 @@
 namespace App\Harvest;
 
 use App\Actions\Record\AddPublishedIdentity;
+use App\Actions\Record\AttachSaleLot;
 use App\Actions\Record\BuildRecordsFromResults;
 use App\Models\DataSource;
+use App\Models\HorseEvent;
 use App\Models\SaleLot;
+use App\Support\Audit;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -126,7 +130,7 @@ class LegacySaleHarvester
         $src = $this->source();
         $rg = DataSource::where('key', 'robinglenn')->first();
         $out = ['loaded' => 0, 'sold' => 0, 'no_sale' => 0, 'offered' => 0, 'withdrawn_skipped' => 0, 'unnamed' => 0, 'with_pedigree' => 0,
-            'same_horse_as_robin_glenn_lot' => 0, 'robin_glenn_lot_left_for_staff' => 0, 'robin_glenn_lot_neither_placed' => 0,
+            'same_horse_as_robin_glenn_lot' => 0, 'replaced_offered_entry' => 0, 'robin_glenn_lot_left_for_staff' => 0, 'robin_glenn_lot_neither_placed' => 0,
             'matched' => 0, 'conflict' => 0, 'proposed' => 0, 'linked' => 0, 'created' => 0, 'queued' => 0, 'unmatched' => 0, 'already' => 0, 'by_sale' => []];
         $sales = self::sales();
         foreach ($rows ?? $this->rows() as $key => $list) {
@@ -173,7 +177,9 @@ class LegacySaleHarvester
                     $out[RegistrationOnlyMatch::place($lot, self::SALE)]++;
                 }
                 if ($rgLot && $lot->horse_id && $rgLot->review_status !== self::SAME_SALE) {
-                    $out[self::pairWithRobinGlennLot($lot, $rgLot) ? 'same_horse_as_robin_glenn_lot' : 'robin_glenn_lot_left_for_staff']++;
+                    $paired = $this->pairWithRobinGlennLot($lot, $rgLot);
+                    $out[$paired ? 'same_horse_as_robin_glenn_lot' : 'robin_glenn_lot_left_for_staff']++;
+                    $out['replaced_offered_entry'] += $paired === 'replaced' ? 1 : 0;
                 } elseif ($rgLot && ! $lot->horse_id) {
                     $out['robin_glenn_lot_neither_placed']++; // same horse, but neither lot is on a record yet
                 }
@@ -187,10 +193,15 @@ class LegacySaleHarvester
      * The results row and the Robin Glenn catalog lot (same year, hip and name) are one horse at one sale. The results
      * row carries the result into the history; the Robin Glenn lot keeps the identity (pedigree, foal date) and is
      * marked same_sale so the nightly matcher never adds an "offered" entry beside the reported sale. A Robin Glenn lot
-     * still waiting for a match goes onto the record the results row found. False when the Robin Glenn lot already has
-     * a history entry of its own or sits on another record: both are left for staff to see.
+     * still waiting for a match goes onto the record the results row found.
+     *
+     * When the Robin Glenn lot already put "Offered at auction" on the record (production, Oct 2026) and the results
+     * row reports a sale, that entry is replaced by the reported sale (Richard, Oct 23 2026): the removed entry is
+     * written to replaced-entries.jsonl beside the pages and to the audit log. A passed-out horse keeps its "offered"
+     * entry, which is still true. Returns 'paired', 'replaced', or null when both are left for staff (the Robin Glenn
+     * lot sits on another record, or its entry is something else).
      */
-    private static function pairWithRobinGlennLot(SaleLot $lot, SaleLot $rgLot): bool
+    private function pairWithRobinGlennLot(SaleLot $lot, SaleLot $rgLot): ?string
     {
         if (! $rgLot->horse_id && in_array($rgLot->review_status, [null, RegistrationOnlyMatch::UNMATCHED], true)) {
             $rgLot->forceFill(['horse_id' => $lot->horse_id, 'match_tier' => 'same_lot', 'matched_at' => now()])->save();
@@ -199,12 +210,31 @@ class LegacySaleHarvester
                 'registry' => $rgLot->registry, 'registration_number' => $rgLot->registration_number, 'foal_year' => $rgLot->foal_year, 'pedigree' => $pedigree,
             ], 'sale lot '.$rgLot->id);
         }
-        if ($rgLot->horse_id !== $lot->horse_id || $rgLot->horse_event_id) {
-            return false;
+        if ($rgLot->horse_id !== $lot->horse_id) {
+            return null;
         }
-        $rgLot->forceFill(['review_status' => self::SAME_SALE, 'review_note' => 'Same sale and hip as Legacy results hip '.$lot->lot.' (that lot carries the result)'])->save();
+        $same = ['review_status' => self::SAME_SALE, 'review_note' => 'Same sale and hip as Legacy results hip '.$lot->lot.' (that lot carries the result)'];
+        if (! $rgLot->horse_event_id) {
+            $rgLot->forceFill($same)->save();
 
-        return true;
+            return 'paired';
+        }
+        $event = HorseEvent::find($rgLot->horse_event_id);
+        $replaceable = $event && $event->horse_id === $lot->horse_id && $event->result === 'offered' && $event->status === 'unverified'
+            && $event->source_type === 'historical' && $lot->status === 'sold' && $lot->publishable() && ! $lot->horse_event_id;
+        if (! $replaceable) {
+            return null;
+        }
+        DB::transaction(function () use ($lot, $rgLot, $event, $same) {
+            $system = BuildRecordsFromResults::system();
+            file_put_contents($this->dir.'/replaced-entries.jsonl', json_encode(['at' => now()->toIso8601String(), 'sale_lot' => $rgLot->id, 'replaced_by_sale_lot' => $lot->id, 'event' => $event->getAttributes()], JSON_UNESCAPED_SLASHES)."\n", FILE_APPEND);
+            Audit::record('sale_lot.offered_entry_replaced', $event, $event->getAttributes(), ['by_sale_lot' => $lot->id, 'sale' => $lot->sale_name, 'lot' => $lot->lot], $event->horse_id, $system->id);
+            $event->delete();
+            $rgLot->forceFill(['horse_event_id' => null] + $same)->save();
+            app(AttachSaleLot::class)($lot->fresh(), $lot->horse, $system, 'same_lot'); // the reported sale goes on now, not at the nightly match
+        });
+
+        return 'replaced';
     }
 
     private function get(string $url): ?string

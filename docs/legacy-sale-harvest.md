@@ -68,10 +68,15 @@ its sale name starts with "Legacy Reining Breeders Sale", and the names agree (o
   `AddPublishedIdentity`.
 - Either way, the Robin Glenn lot is marked `review_status = same_sale` so the matcher never adds an "Offered at
   auction" entry beside the reported sale.
-- If the Robin Glenn lot already has a history entry of its own, or sits on another record, both lots are left as
-  they are and counted in `robin_glenn_lot_left_for_staff`. On production, the nightly matcher may already have put
-  an "offered" entry on some of those records. **TODO (deploy session):** check `robin_glenn_lot_left_for_staff` after
-  the production load and decide whether to remove those "offered" entries.
+- If the Robin Glenn lot already put "Offered at auction" on the record (production: the nightly matcher had done it
+  for all 178 matched Legacy catalog lots) and the results row reports a sale, that entry is **replaced** by the
+  reported sale (Richard, Oct 23 2026). The "offered" entry is deleted, the reported sale is attached at once, and the
+  Robin Glenn lot is marked `same_sale`. Each removed entry is written to `replaced-entries.jsonl` beside the pages
+  and to the audit log (`sale_lot.offered_entry_replaced`). Counted in `replaced_offered_entry`. Only unverified,
+  historical "offered" entries on the same record are replaced. A passed-out horse keeps its "offered" entry, which
+  is still true.
+- If the Robin Glenn lot sits on another record, or its entry is anything else, both lots are left as they are and
+  counted in `robin_glenn_lot_left_for_staff`.
 - "Pending/..." rows are never paired, even on the same hip. Robin Glenn stored those catalog lots under names such
   as "Pending/Exit 21" and made records from them. That is a separate cleanup.
 
