@@ -85,11 +85,51 @@ class WaverlyHarvester
         return (str_starts_with($u, '/wp-content/') ? self::BASE : 'https://www.waverlysales.com').$u;
     }
 
-    /** List the PDFs from the Archive and download any not already kept. */
+    public const CURRENT = '/midwest-horse-sale/current-auction/';
+    public const INFO = '/midwest-horse-sale/horse-sale-info/';
+
+    /**
+     * The live site: the current catalog linked from the "Current Auction" page (the Archive only has it later) and the
+     * coming sale's dates ("Fall HORSE SALE October 6-10, 2026" on the sale-info page, "Our Next Auction Begins On
+     * October 6, 2026"). Dates are kept in calendar.json (merged) for hf:sale-watch. Returns the catalog URLs found.
+     */
+    public function discover(): array
+    {
+        $urls = [];
+        $cal = $this->calendar();
+        foreach ([self::CURRENT, self::INFO] as $page) {
+            $html = $this->get(self::BASE.$page);
+            if ($html === null) {
+                continue;
+            }
+            $found = WaverlyParser::salePage($html);
+            $cal = $found['dates'] + $cal;
+            foreach ($found['pdfs'] as $u) {
+                if (self::candidate($u)) {
+                    $urls[] = $u;
+                }
+            }
+        }
+        file_put_contents($this->dir.'/calendar.json', json_encode($cal, JSON_PRETTY_PRINT));
+
+        return array_values(array_unique($urls));
+    }
+
+    /** @return array<string, array{from:string, to:string}> keyed "fall-2026" */
+    public function calendar(): array
+    {
+        return is_file($this->dir.'/calendar.json') ? (json_decode(file_get_contents($this->dir.'/calendar.json'), true) ?: []) : [];
+    }
+
+    /** List the PDFs from the live site and the Archive, and download any not already kept. */
     public function collect(): array
     {
         $out = ['pdfs_found' => 0, 'downloaded' => 0, 'from_archive' => 0, 'cached' => 0, 'unavailable' => 0];
         $index = $this->index();
+        foreach ($this->discover() as $u) {
+            $file = self::fileName($u);
+            $index[$file] ??= ['file' => $file, 'url' => $u, 'archived' => null];
+        }
         $cdx = $this->get(self::CDX);
         $biggest = [];
         foreach (array_slice(json_decode((string) $cdx, true) ?: [], 1) as [$original, $ts, $length]) {

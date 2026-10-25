@@ -45,7 +45,7 @@ class SaleWatchTest extends TestCase
 
     private function watch(?\Closure $runner = null): SaleWatch
     {
-        return new SaleWatch(null, $runner, $this->dir.'/state.json', $this->dir.'/robinglenn');
+        return new SaleWatch(null, $runner, $this->dir.'/state.json', $this->dir);
     }
 
     public function test_check_dates_follow_the_sale(): void
@@ -100,6 +100,67 @@ class SaleWatchTest extends TestCase
             return 0;
         })->run();
         $this->assertSame([], $runs);
+    }
+
+    public function test_legacy_and_waverly_dates_from_their_sites_and_waverly_runs_results_then_catalog(): void
+    {
+        // Legacy Reining: results pages and the schedule from the homepage.
+        $home = '<a href="https://legacysale.com/2027-designer-sale-results/">2027 Designer</a><a href="https://legacysale.com/2027-sale-results/">2027</a>'
+            .'<a href="https://legacysale.com/2027-sale-consignments/">Consign</a><p>The Original &amp; Still The Best September 17 &amp; 18, 2027</p>';
+        $h = \App\Harvest\LegacySaleHarvester::homepage($home);
+        $this->assertSame(['2027' => ['from' => '2027-09-17', 'to' => '2027-09-18']], $h['dates']);
+        $sales = \App\Harvest\LegacySaleHarvester::sales($h);
+        $this->assertSame(['2027-designer-sale-results', '2027-09-17'], [$sales['2027-designer']['slug'], $sales['2027-designer']['date']]);
+        $this->assertSame(['2027-sale-results', '2027-09-18'], [$sales['2027']['slug'], $sales['2027']['date']]);
+        $this->assertArrayNotHasKey('2027-sale-consignments', $sales);
+        // Waverly: the current catalog and the coming sale's dates from the live site.
+        $page = \App\Harvest\WaverlyParser::salePage('<p>Our Next Auction Begins On March 23, 2027</p><p>Spring HORSE SALE March 23-27, 2027</p>'
+            .'<a href="https://waverlysales.com/wp-content/uploads/2027/02/WAV-S27-FINAL.pdf">Catalog</a>');
+        $this->assertSame(['spring-2027' => ['from' => '2027-03-23', 'to' => '2027-03-27']], $page['dates']);
+        $this->assertSame(['https://waverlysales.com/wp-content/uploads/2027/02/WAV-S27-FINAL.pdf'], $page['pdfs']);
+        @mkdir($this->dir.'/legacysale', 0775, true);
+        @mkdir($this->dir.'/waverly', 0775, true);
+        file_put_contents($this->dir.'/legacysale/calendar.json', json_encode($h));
+        file_put_contents($this->dir.'/waverly/calendar.json', json_encode(['fall-2026' => ['from' => '2026-10-06', 'to' => '2026-10-10']]));
+        $runs = [];
+        $this->watch(function ($argv) use (&$runs) {
+            $runs[] = implode(' ', $argv);
+
+            return 0;
+        })->run(false, 'waverly');
+        // Fall 2026 ended Oct 10: 14 days after is today. Results first, then the catalog that pairs with them.
+        $this->assertSame(['hf:harvest-auctioneersoftware waverly --delay=3', 'hf:harvest-waverly --delay=3'], $runs);
+        $this->assertSame('2026-11-09', SaleEvent::where('source', 'waverly')->value('next_check_at')->toDateString());
+        $this->assertSame('2027-09-19', SaleEvent::where('source', 'legacysale')->value('next_check_at')->toDateString()); // the day after the sale
+    }
+
+    public function test_waverly_fall_2026_layout_reads_parents_from_the_left_edge(): void
+    {
+        $text = "Lot 708 - Sample Norman                                  Registered Quarter Horse\n"
+            ."Consignor: Sample Consignor, Sample, WI                                   Gelding\n"
+            ."          Age: 5 Years            Foaled:                              Height: 15.1 hands\n"
+            ."Buckskin\n"
+            ."                                                            Sample SSS\n"
+            ."                             Sample SS\n"
+            ."                                                            Sample SSD\n"
+            ."  Sample Sire\n"
+            ."                                                            Sample SDS\n"
+            ."                             Sample SD\n"
+            ."                                                            Sample SDD\n"
+            ."                                                            Sample DSS\n"
+            ."                             Sample DS\n"
+            ."                                                            Sample DSD\n"
+            ."  Sample Dam\n"
+            ."                                                            Sample DDS\n"
+            ."                             Sample DD\n"
+            ."                                                            Sample DDD\n"
+            ."Green broke to ride, ninety days of riding by sale time. Nice, gentle horse.\n"
+            ."____________________________________________________________________\n"
+            ."Lot 709 - Sample Other                                   Registered Belgian Mare\n";
+        $lot = \App\Harvest\WaverlyParser::catalog2026($text)[0];
+        $this->assertSame(['Sample Norman', 'Sample Sire', 'Sample Dam', 'Sample DS', 'Sample DDD', 'Buckskin', 5],
+            [$lot['name'], $lot['pedigree']['s'], $lot['pedigree']['d'], $lot['pedigree']['ds'], $lot['pedigree']['ddd'], $lot['color'], $lot['age']]);
+        $this->assertStringNotContainsString('Consignor', json_encode($lot));
     }
 
     public function test_pitzer_sales_page_dates_and_catalog_links(): void

@@ -110,3 +110,11 @@ php artisan hf:harvest-legacysale --offline
 
 `--no-load` only fetches. A kept page is never fetched again; delete its `.html.gz` to refresh it. For production,
 rsync `storage/app/private/legacysale/` first and run `--offline`.
+
+## Later sales and the sale calendar (Oct 24 2026)
+
+Each run also reads the homepage: new results pages it links ("2027-sale-results", "2027-designer-sale-results"; the
+consignments page is skipped) are added to the fixed list, dated from the homepage schedule ("September 18 & 19, 2026":
+the Designer Sale on the first day, the Legacy Sale on the last). Slugs and dates are kept in `calendar.json`. A results
+page is fetched again for 40 days after its sale, while it fills in. `hf:sale-watch` runs this harvester 1, 3, 7, 14 and
+30 days after each sale (see docs/sale-watch.md).

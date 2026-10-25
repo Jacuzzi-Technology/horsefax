@@ -26,6 +26,8 @@ New sales still have to be found, so each source also gets a discovery run every
 | Topeka | catalog lots | market reports | 14 days | 45 days |
 | Triangle | catalog lots | no (results are on CCI.live, not collected) | 30 days | 45 days |
 | Billings | catalog lots | top-20/40 lists | 14 days | 45 days |
+| Legacy Reining | the homepage schedule ("September 18 & 19, 2026"), kept in `calendar.json` | results pages | 30 days | none (its catalog is a Robin Glenn catalog) |
+| Waverly | the live site ("Fall HORSE SALE October 6-10, 2026"), kept in `calendar.json` | waverlysales.bid | 14 days | 45 days |
 
 Robin Glenn's checks re-read only the catalogs that are due (`hf:harvest-robinglenn --cats=3068,3100`) instead of the
 last 300 catIDs each week; its discovery run still probes past the highest catID for new catalogs. Robin Glenn entries
@@ -35,10 +37,14 @@ days (a ranch's standing list, "2021-01-01 – 2031-01-01").
 Pitzer's harvester now reads the sales page for new catalog PDFs, as well as its fixed list. A Pitzer sale that Robin
 Glenn already loaded (Spring 2024 through Spring 2026) is left to Robin Glenn, so the same horses aren't loaded twice.
 
-Not on the calendar: the online-auction sources (LiveAg, Platinum, AuctioneerSoftware sites, Premier) post results the
-moment a sale closes and keep their own sweeps; the ad sites (DreamHorse, RanchWorldAds) aren't sales. Legacy Reining's
-results pages are a hard-coded list per year, and Waverly's catalogs come from the Internet Archive; both still need a
-person to add the next sale.
+Legacy Reining's harvester reads the homepage for new results pages ("2027-sale-results") and the schedule, and
+re-fetches a results page for 40 days after its sale while it fills in. Waverly runs two commands: the waverlysales.bid
+results (`hf:harvest-auctioneersoftware waverly`), then the catalogs, which pair their lots with the .bid lots. The
+Waverly catalog harvester now also reads the live "Current Auction" page, so a new catalog is picked up before the
+Internet Archive has a copy (the Fall 2026 catalog, missing until Oct 24 2026, came in this way).
+
+Not on the calendar: the online-auction sources (LiveAg, Platinum, the other AuctioneerSoftware sites, Premier) post
+results the moment a sale closes and keep their own sweeps; the ad sites (DreamHorse, RanchWorldAds) aren't sales.
 
 ## Running it
 

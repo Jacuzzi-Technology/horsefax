@@ -54,7 +54,7 @@ class LegacySaleHarvester
      * site's schedule (Designer Sale Friday Sept 18, Legacy Sale Saturday Sept 19). The other years print no date:
      * September, month precision.
      */
-    public static function sales(): array
+    public static function sales(array $found = []): array
     {
         $out = [];
         foreach (range(2014, 2025) as $y) {
@@ -63,7 +63,68 @@ class LegacySaleHarvester
         $out['2026-designer'] = ['year' => 2026, 'slug' => '2026-designer-sale-results', 'name' => self::SALE.' 2026 (Designer Sale)', 'date' => '2026-09-18'];
         $out['2026'] = ['year' => 2026, 'slug' => '2026-legacy-sale', 'name' => self::SALE.' 2026', 'date' => '2026-09-19'];
 
+        // Later sales: results pages linked from the homepage (discover()), dated from its schedule.
+        foreach ($found['pages'] ?? [] as $slug) {
+            if (! preg_match('/^(20\d\d)-(?!.*consign)[a-z-]*(?:sale-results|legacy-sale|designer-sale)[a-z-]*$/', $slug, $m)) {
+                continue;
+            }
+            $designer = str_contains($slug, 'designer');
+            $key = $m[1].($designer ? '-designer' : '');
+            if (isset($out[$key])) {
+                continue;
+            }
+            $d = $found['dates'][$m[1]] ?? null;
+            $out[$key] = ['year' => (int) $m[1], 'slug' => $slug, 'name' => self::SALE.' '.$m[1].($designer ? ' (Designer Sale)' : ''),
+                'date' => $d ? ($designer ? $d['from'] : $d['to']) : null]; // the Designer Sale opens the weekend (2026)
+        }
+
         return $out;
+    }
+
+    /** The fixed list plus what the homepage linked. */
+    public function allSales(): array
+    {
+        return self::sales($this->found());
+    }
+
+    /** Results-page slugs and sale dates read from the homepage, kept in calendar.json (merged, never dropped). */
+    public function found(): array
+    {
+        $f = is_file($this->dir.'/calendar.json') ? json_decode(file_get_contents($this->dir.'/calendar.json'), true) : [];
+
+        return ['pages' => $f['pages'] ?? [], 'dates' => $f['dates'] ?? []];
+    }
+
+    /** Read the homepage: links to results pages ("2027-sale-results") and the coming sale's dates ("September 18 & 19, 2026"). */
+    public function discover(): array
+    {
+        $html = $this->get(self::BASE.'/');
+        if ($html === null) {
+            return ['pages' => 0, 'dates' => 0];
+        }
+        $page = self::homepage($html);
+        $f = $this->found();
+        $f['pages'] = array_values(array_unique(array_merge($f['pages'], $page['pages'])));
+        $f['dates'] = $page['dates'] + $f['dates'];
+        file_put_contents($this->dir.'/calendar.json', json_encode($f, JSON_PRETTY_PRINT));
+
+        return ['pages' => count($page['pages']), 'dates' => count($page['dates'])];
+    }
+
+    /** @return array{pages: list<string>, dates: array<string, array{from:string, to:string}>} */
+    public static function homepage(string $html): array
+    {
+        preg_match_all('#https?://(?:www\.)?legacysale\.com/(20\d\d-[a-z0-9-]+)/#', $html, $m);
+        $text = preg_replace('/[\s\x{00A0}]+/u', ' ', html_entity_decode(preg_replace('/<[^>]*>/', ' ', $html), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $dates = [];
+        if (preg_match_all('/\b(September|October|August)\s+(\d{1,2})(?:\s*(?:&|-|–|and)\s*(\d{1,2}))?,?\s+(20\d\d)\b/u', $text, $dd, PREG_SET_ORDER)) {
+            foreach ($dd as $d) {
+                $from = date('Y-m-d', strtotime("$d[1] $d[2] $d[4]"));
+                $dates[$d[4]] ??= ['from' => $from, 'to' => ! empty($d[3]) ? date('Y-m-d', strtotime("$d[1] $d[3] $d[4]")) : $from];
+            }
+        }
+
+        return ['pages' => array_values(array_unique($m[1])), 'dates' => $dates];
     }
 
     public function source(): DataSource
@@ -84,7 +145,10 @@ class LegacySaleHarvester
         return $this->dir.'/pages/'.$sale['slug'].'.html.gz';
     }
 
-    /** Read robots.txt, then fetch every results page not already kept (gzipped). */
+    /**
+     * Read robots.txt and the homepage, then fetch every results page not already kept (gzipped). A sale in the last
+     * 40 days is fetched again: its results page fills in after the sale.
+     */
     public function collect(): array
     {
         $out = ['fetched' => 0, 'cached' => 0, 'unavailable' => 0];
@@ -92,8 +156,10 @@ class LegacySaleHarvester
         if (preg_match('#^\s*Disallow:\s*/\s*$#mi', $robots) || preg_match('#^\s*Disallow:\s*/20#mi', $robots)) {
             throw new HarvestBlocked('robots.txt now disallows the results pages: stopping.');
         }
-        foreach (self::sales() as $sale) {
-            if (is_file($this->pagePath($sale))) {
+        $out += $this->discover();
+        foreach ($this->allSales() as $sale) {
+            $recent = $sale['date'] && $sale['date'] <= now()->toDateString() && $sale['date'] >= now()->subDays(40)->toDateString();
+            if (is_file($this->pagePath($sale)) && ! $recent) {
                 $out['cached']++;
                 continue;
             }
@@ -113,7 +179,7 @@ class LegacySaleHarvester
     public function rows(): array
     {
         $out = [];
-        foreach (self::sales() as $key => $sale) {
+        foreach ($this->allSales() as $key => $sale) {
             if (is_file($this->pagePath($sale))) {
                 $out[$key] = LegacySaleParser::rows(gzdecode(file_get_contents($this->pagePath($sale))));
             }
@@ -132,7 +198,7 @@ class LegacySaleHarvester
         $out = ['loaded' => 0, 'sold' => 0, 'no_sale' => 0, 'offered' => 0, 'withdrawn_skipped' => 0, 'unnamed' => 0, 'with_pedigree' => 0,
             'same_horse_as_robin_glenn_lot' => 0, 'replaced_offered_entry' => 0, 'robin_glenn_lot_left_for_staff' => 0, 'robin_glenn_lot_neither_placed' => 0,
             'matched' => 0, 'conflict' => 0, 'proposed' => 0, 'linked' => 0, 'created' => 0, 'queued' => 0, 'unmatched' => 0, 'already' => 0, 'by_sale' => []];
-        $sales = self::sales();
+        $sales = $this->allSales();
         foreach ($rows ?? $this->rows() as $key => $list) {
             $sale = $sales[$key];
             $out['by_sale'][$key] = 0;

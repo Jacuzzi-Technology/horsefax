@@ -29,6 +29,36 @@ class WaverlyParser
     private const REG = '(?:[A-Z]{1,2}-?\d{2,7}(?:-[A-Z])?|\d{3,7}(?:-[A-Z])?|[A-Z]-\d{3,6}(?:-[A-Z])?)';
 
     /**
+     * A page of the live site: catalog PDFs it links, and sale dates, "Fall HORSE SALE October 6-10, 2026" or "Our Next
+     * Auction Begins On October 6, 2026" (a start only), keyed "fall-2026".
+     *
+     * @return array{pdfs: list<string>, dates: array<string, array{from:string, to:string}>}
+     */
+    public static function salePage(string $html): array
+    {
+        preg_match_all('#https?://(?:www\.)?waverlysales\.com/wp-content/uploads/[^"\'\s<>]+?\.pdf#i', $html, $p);
+        $text = preg_replace('/[\s\x{00A0}]+/u', ' ', html_entity_decode(preg_replace('/<[^>]*>/', ' ', preg_replace('#<(script|style)\b.*?</\1>#is', ' ', $html)), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $dates = [];
+        $add = function (string $month, string $d1, ?string $d2, string $year) use (&$dates) {
+            $from = date('Y-m-d', strtotime("$month $d1 $year"));
+            $key = ((int) substr($from, 5, 2) <= 6 ? 'spring' : 'fall').'-'.$year;
+            if (! isset($dates[$key]) || $d2) {
+                $dates[$key] = ['from' => $from, 'to' => $d2 ? date('Y-m-d', strtotime("$month $d2 $year")) : $from];
+            }
+        };
+        preg_match_all('/\b(?:Spring|Fall)\s+HORSE\s+SALE\s+('.self::MONTHS.')\s+(\d{1,2})\s*[-–]\s*(\d{1,2}),?\s+(20\d\d)/iu', $text, $r, PREG_SET_ORDER);
+        foreach ($r as $m) {
+            $add($m[1], $m[2], $m[3], $m[4]);
+        }
+        preg_match_all('/Next Auction Begins On\s+('.self::MONTHS.')\s+(\d{1,2}),?\s+(20\d\d)/iu', $text, $r, PREG_SET_ORDER);
+        foreach ($r as $m) {
+            $add($m[1], $m[2], null, $m[3]);
+        }
+
+        return ['pdfs' => array_values(array_unique($p[0])), 'dates' => $dates];
+    }
+
+    /**
      * Season, year and first sale day, from the file name and the cover. A cover with no year ("Thursday, October 8",
      * 2015) takes the year, at or before $hintYear (when the Archive saw the file), whose calendar puts that date on
      * that weekday.
@@ -159,7 +189,14 @@ class WaverlyParser
             } else {
                 [$foalYear, $birth] = self::foaled($all);
             }
-            $age = preg_match('/\ba (\d{1,2}) (?:year|yr)s?[ -]old\b/i', $all, $a) ? (int) $a[1] : null;
+            $age = preg_match('/\ba (\d{1,2}) (?:year|yr)s?[ -]old\b/i', $all, $a) || preg_match('/\bAge:\s*(\d{1,2})\s*(?:Years?|Yrs?)\b/i', $all, $a) ? (int) $a[1] : null;
+            // The fall 2026 layout: the color alone on the line after "Age: … Height: …".
+            foreach (array_slice($block, 0, 6) as $i => $line) {
+                if (! $color && preg_match('/^\s*Age:.*Height:/', $line) && preg_match('/^\s*([A-Z][a-z]+(?: [A-Z][a-z]+)?)\s*$/', $block[$i + 1] ?? '', $c)
+                    && ! AuctioneerSoftwareParser::sex($c[1])) {
+                    $color = $c[1];
+                }
+            }
             $lots[] = ['lot' => $no, 'name' => $name, 'registered' => $kind === null ? ($reg ? true : null) : $kind === 'Registered', 'registration_number' => $reg,
                 'registry' => self::registry($breed, $reg), 'breed' => $breed, 'sex' => $sex, 'foal_year' => $foalYear, 'birth_date' => $birth,
                 'age' => $foalYear ? null : $age, 'color' => $color, 'pedigree' => $kind === 'Grade' ? [] : self::chart($block)];
@@ -411,11 +448,16 @@ class WaverlyParser
         return isset($p['s']) || isset($p['d']) ? $p : [];
     }
 
-    /** The 2026 chart: the horse's own name, breed and number print at the far left; drop them, then read the columns. */
+    /**
+     * The 2026 chart: in the spring catalog the horse's own name, breed and number print at the far left; drop them, then
+     * read the columns. The fall catalog (an "Age: … Height: …" line under the heading) prints the sire and dam at the
+     * left edge instead, so nothing is dropped there.
+     */
     private static function chart(array $block): array
     {
         $lines = [];
         $started = false;
+        $parentsAtLeft = (bool) preg_grep('/^\s*Age:.*Height:/', array_slice($block, 0, 6));
         foreach ($block as $line) {
             if (! $started && (trim($line) === '' || strlen($line) - strlen(ltrim($line)) < 15)) {
                 continue; // consignor and "Fitted by" lines
@@ -425,7 +467,7 @@ class WaverlyParser
                 break; // the description begins (six or more words in a run from the left edge)
             }
             // The horse's own name, breed and "Reg. #" print from the left edge, sometimes past the sire/dam column's start.
-            $lines[] = preg_replace_callback('/^\s{0,3}\S.*?(?=\s{2,}|$)/u', fn ($m) => str_repeat(' ', mb_strlen($m[0])), $line);
+            $lines[] = $parentsAtLeft ? $line : preg_replace_callback('/^\s{0,3}\S.*?(?=\s{2,}|$)/u', fn ($m) => str_repeat(' ', mb_strlen($m[0])), $line);
         }
 
         return TopekaParser::chart($lines);

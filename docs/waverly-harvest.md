@@ -87,3 +87,14 @@ php artisan hf:harvest-waverly --offline
 ```
 
 `--no-load` downloads only. For production, rsync `storage/app/private/waverly/` first and run `--offline`.
+
+## Live site and the sale calendar (Oct 24 2026)
+
+Each run also reads the live "Current Auction" page (`/midwest-horse-sale/current-auction/`) for the current catalog,
+so a new catalog is collected before the Internet Archive has it, and the sale-info page for the coming sale's dates
+(kept in `calendar.json` for `hf:sale-watch`, see docs/sale-watch.md). The Fall 2026 catalog (`WAV-F26-revised.pdf`,
+573 lots) came in this way. Its layout prints "Age: 5 Years … Height: …" under the heading, the color on the next line,
+and the sire and dam at the left edge of the chart (the spring layout prints the horse's own name there), so
+`WaverlyParser::chart` keeps the left column for that layout. Registered lots in that catalog print no registration
+numbers.
+
