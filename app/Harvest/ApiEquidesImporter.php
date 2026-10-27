@@ -68,28 +68,43 @@ class ApiEquidesImporter
         DB::statement('CREATE INDEX IF NOT EXISTS ae_rows_key ON ae_rows (k, y, s)');
         DB::statement('ANALYZE ae_rows');
 
+        // Set-based steps over millions of rows: small indexed lookup tables first, and room to hash in memory (the first
+        // production run's single UPDATE joining a GROUP BY over 4.3M horses ran for hours).
+        DB::statement("SET work_mem = '256MB'");
         // A record that already carries the IFCE id (from an earlier extraction).
         $out['matched_by_id'] = DB::affectingStatement('UPDATE ae_rows a SET horse_id = h.id FROM horses h WHERE h.ifce_id = a.api_id AND h.merged_into_id IS NULL');
+        $this->say('matched by id '.$out['matched_by_id']);
+        DB::statement('DROP TABLE IF EXISTS ae_ifce');
+        DB::statement(<<<'SQL'
+            CREATE TEMPORARY TABLE ae_ifce AS
+            SELECT lower(registered_name) k, coalesce(birth_year, 0) y, coalesce(sex, '') s, count(*) n,
+                   min(id::text) FILTER (WHERE ifce_id IS NULL) free_id, count(*) FILTER (WHERE ifce_id IS NULL) free
+            FROM horses WHERE source = 'ifce' AND merged_into_id IS NULL GROUP BY 1, 2, 3
+            SQL);
+        DB::statement('CREATE INDEX ae_ifce_key ON ae_ifce (k, s, y)');
+        DB::statement('ANALYZE ae_ifce');
+        DB::statement('DROP TABLE IF EXISTS ae_keys');
+        DB::statement('CREATE TEMPORARY TABLE ae_keys AS SELECT k, y, s, count(*) n FROM ae_rows WHERE horse_id IS NULL GROUP BY 1, 2, 3');
+        DB::statement('CREATE INDEX ae_keys_key ON ae_keys (k, s, y)');
+        DB::statement('ANALYZE ae_keys');
+        $this->say('lookup tables ready');
         // Otherwise one record and one row per (name, foal year, sex).
         $out['matched'] = DB::affectingStatement(<<<'SQL'
-            UPDATE ae_rows a SET horse_id = m.id
-            FROM (SELECT lower(registered_name) k, coalesce(birth_year, 0) y, coalesce(sex, '') s, min(id::text)::uuid id
-                  FROM horses WHERE source = 'ifce' AND merged_into_id IS NULL AND ifce_id IS NULL GROUP BY 1, 2, 3 HAVING count(*) = 1) m,
-                 (SELECT k, y, s FROM ae_rows WHERE horse_id IS NULL GROUP BY 1, 2, 3 HAVING count(*) = 1) u
-            WHERE a.horse_id IS NULL AND a.k = m.k AND a.y = m.y AND a.s = m.s AND u.k = a.k AND u.y = a.y AND u.s = a.s
+            UPDATE ae_rows a SET horse_id = i.free_id::uuid
+            FROM ae_ifce i JOIN ae_keys u ON u.k = i.k AND u.s = i.s AND u.y = i.y
+            WHERE a.horse_id IS NULL AND a.k = i.k AND a.s = i.s AND a.y = i.y AND i.n = 1 AND i.free = 1 AND u.n = 1
             SQL);
         // New to Horsefax: no French record of that name and sex, with the same foal year or one of them unknown.
         $new = DB::affectingStatement(<<<'SQL'
             UPDATE ae_rows a SET make_new = true
-            WHERE a.horse_id IS NULL AND NOT EXISTS (SELECT 1 FROM horses h WHERE h.source = 'ifce' AND lower(h.registered_name) = a.k
-                AND coalesce(h.sex, '') = a.s AND (coalesce(h.birth_year, 0) = a.y OR h.birth_year IS NULL OR a.y = 0))
+            WHERE a.horse_id IS NULL AND NOT EXISTS (SELECT 1 FROM ae_ifce h WHERE h.k = a.k AND h.s = a.s AND (h.y = a.y OR h.y = 0 OR a.y = 0))
             SQL);
         $this->say('matched '.($out['matched_by_id'] + $out['matched']).', new '.$new);
         if ($dryRun) {
             $out['created'] = $new;
             $out['left_alone'] = $out['rows'] - $out['matched_by_id'] - $out['matched'] - $new;
             $out['breeders'] = (int) DB::scalar('SELECT count(*) FROM ae_rows a JOIN horses h ON h.id = a.horse_id WHERE a.breeder IS NOT NULL AND h.breeder IS NULL');
-            DB::statement('DROP TABLE ae_rows');
+            DB::statement('DROP TABLE IF EXISTS ae_rows, ae_ifce, ae_keys');
 
             return $out + ['dry_run' => true];
         }
@@ -118,7 +133,7 @@ class ApiEquidesImporter
         });
         $out['linked_lines'] = (int) DB::scalar("SELECT count(*) FROM pedigree_entries WHERE added_by = ? AND source_type = 'historical' AND linked_horse_id IS NOT NULL
             AND horse_id IN (SELECT horse_id FROM ae_rows WHERE horse_id IS NOT NULL)", [$system->id]);
-        DB::statement('DROP TABLE ae_rows');
+        DB::statement('DROP TABLE IF EXISTS ae_rows, ae_ifce, ae_keys');
 
         $source = DataSource::firstOrCreate(['key' => 'apiequides'], [
             'name' => 'API Équidés (mirror of IFCE infochevaux public pages)', 'url' => 'https://www.data.gouv.fr/dataservices/api-equides', 'permission' => 'granted',
