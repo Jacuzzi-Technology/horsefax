@@ -7,8 +7,8 @@ use App\Harvest\MloszHarvester;
 use Illuminate\Console\Command;
 
 /**
- * MLOSZ (Hungarian horse breeding database) stud-book search: American Quarter Horses, Paints and Appaloosas registered
- * in Hungary, with pedigrees and breeders (Oct 27 2026, Richard's standing approval; Kate found it).
+ * MLOSZ (Hungarian horse breeding database) stud-book search: every horse breed, with pedigrees, breeders, UELN and
+ * recorded deaths (Oct 27 2026, Richard's standing approval; Kate found it; all breeds at Richard's request).
  * See docs/mlosz-harvest.md.
  *
  *   php artisan hf:harvest-mlosz                 fetch result pages not kept yet, then load
@@ -20,7 +20,7 @@ class HarvestMlosz extends Command
 {
     protected $signature = 'hf:harvest-mlosz {--delay=3} {--offline} {--no-load} {--refresh} {--reload : load every kept page again, not only new or changed ones} {--breed=*}';
 
-    protected $description = 'Collect MLOSZ (Hungary) stud-book records of American breeds: identity, pedigree, breeder; owners are not published';
+    protected $description = 'Collect the MLOSZ (Hungary) stud book, every horse breed: identity, pedigree, breeder, UELN, recorded deaths; owners are not published';
 
     public function handle(): int
     {
