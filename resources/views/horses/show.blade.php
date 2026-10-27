@@ -131,6 +131,8 @@
                             </form>
                         @endif
                     </section>
+
+                    @include('horses.partials.published-profile', ['horse' => $horse])
                 </div>
 
                 <aside class="space-y-6">

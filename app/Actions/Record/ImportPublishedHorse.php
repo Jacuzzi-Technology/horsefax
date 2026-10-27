@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\DB;
  * foal_year, color, registry) so ancestors link by number; 'previous_names' are former registered names: a record still
  * under one of them is renamed to the official name and the old one kept as a previous name (ShowNameRule flags it
  * if the horse has results under the old name); a foal year already on the record upgrades to the full date.
- * 'breed' and 'breeder' (Oct 27 2026) fill those fields when blank. 'parentage_must_agree' (stud books from other
+ * 'breed', 'breeder' and 'height' (Oct 27 2026) fill those fields when blank. 'parentage_must_agree' (stud books from other
  * countries, where a same-named horse is often a different one): a record whose sire or dam differs from the page's is
  * not this horse; when every same-named record differs, a new record is made beside them.
  *
@@ -27,9 +27,13 @@ use Illuminate\Support\Facades\DB;
  */
 class ImportPublishedHorse
 {
+    /** The record the last call matched or created (null when it skipped), for callers that add more to it. */
+    public ?Horse $last = null;
+
     public function __invoke(array $h, string $sourceUrl): string
     {
         $system = BuildRecordsFromResults::system();
+        $this->last = null;
 
         return DB::transaction(function () use ($h, $sourceUrl, $system) {
             $horse = null;
@@ -92,6 +96,9 @@ class ImportPublishedHorse
             if (! $horse->breeder && trim((string) ($h['breeder'] ?? '')) !== '') {
                 $fill['breeder'] = trim($h['breeder']);
             }
+            if (! $horse->height_hands && ($h['height'] ?? null) && $h['height'] >= 6 && $h['height'] <= 20) {
+                $fill['height_hands'] = $h['height'];
+            }
             if ($fill) {
                 $horse->forceFill($fill + ['listed' => true, 'public_summary' => true])->save();
                 app(RecordFacts::class)($horse, $system, RecordFacts::fromColumns($horse->only(array_merge(array_keys($fill), ['birth_precision', 'birth_year', 'birth_date']))), 'historical');
@@ -142,6 +149,8 @@ class ImportPublishedHorse
                 app(CreateAncestorRecords::class)($horse, $system);
                 $status = $status === 'created' ? 'created' : 'updated';
             }
+
+            $this->last = $horse;
 
             return $status;
         });

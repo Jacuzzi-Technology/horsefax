@@ -142,6 +142,8 @@
                 @endif
             </section>
 
+            @include('horses.partials.published-profile', ['horse' => $horse, 'size' => '28px'])
+
             {{-- Pedigree --}}
             @if ($pedigree->isNotEmpty() || $offspring->isNotEmpty())
                 <section aria-labelledby="h-pedigree">

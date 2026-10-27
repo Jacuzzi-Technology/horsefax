@@ -87,6 +87,7 @@ final class Record
         'care' => 'Care (farrier, dental, deworming)',
         'training' => 'Training',
         'competition' => 'Competition & achievements',
+        'achievements' => 'Achievements & earnings',
         'ownership' => 'Ownership & custody',
         'transport' => 'Transport',
         'other' => 'Other',
@@ -95,16 +96,17 @@ final class Record
     /** Health detail is sensitive: private unless the owner chooses otherwise. */
     public const DEFAULT_EVENT_VISIBILITY = [
         'health' => 'private', 'care' => 'private', 'training' => 'shared', 'competition' => 'shared',
-        'ownership' => 'private', 'transport' => 'private', 'other' => 'private',
+        'ownership' => 'private', 'transport' => 'private', 'other' => 'private', 'achievements' => 'shared',
     ];
 
     /** Entry types within each category. Health detail is what buyers and vets ask for first. */
     public const EVENT_TYPES = [
-        'health' => ['coggins' => 'Coggins (EIA) test', 'health_certificate' => 'Health certificate (CVI)', 'vaccination' => 'Vaccination', 'exam' => 'Veterinary exam', 'pre_purchase' => 'Pre-purchase exam', 'treatment' => 'Treatment / procedure', 'injury' => 'Injury or illness', 'imaging' => 'Radiographs / imaging', 'medication' => 'Medication'],
+        'health' => ['coggins' => 'Coggins (EIA) test', 'health_certificate' => 'Health certificate (CVI)', 'vaccination' => 'Vaccination', 'exam' => 'Veterinary exam', 'pre_purchase' => 'Pre-purchase exam', 'treatment' => 'Treatment / procedure', 'injury' => 'Injury or illness', 'imaging' => 'Radiographs / imaging', 'medication' => 'Medication', 'genetic_test' => 'Genetic test'],
         'care' => ['farrier' => 'Farrier', 'dental' => 'Dental', 'deworming' => 'Deworming', 'bodywork' => 'Chiropractic / massage', 'nutrition' => 'Feeding / nutrition'],
         'training' => ['program' => 'Training program (dates, trainer, facility)', 'skill' => 'Documented skill, title or qualification'],
         'competition' => ['show' => 'Show / class result', 'award' => 'Award / title', 'certification' => 'Certification / inspection'],
         'ownership' => ['sale' => 'Sale', 'purchase' => 'Purchase', 'auction' => 'Auction', 'lease' => 'Lease', 'gift' => 'Gift / transfer', 'breeding' => 'Foaled / bred by'],
+        'achievements' => ['title' => 'Title, award or honor', 'earnings' => 'Reported lifetime earnings', 'enrollment' => 'Incentive program nomination'],
         'transport' => ['haul' => 'Transport'],
         'other' => ['note' => 'Note', 'retirement' => 'Retirement', 'death' => 'Death'],
     ];
