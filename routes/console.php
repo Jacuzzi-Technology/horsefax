@@ -420,6 +420,22 @@ Artisan::command('hf:harvest-billings {--no-archive} {--delay=3} {--max-files=}'
     $this->info('Billings: '.json_encode($out));
 })->purpose('Collect Billings Livestock horse-sale catalogs and Top lists into the sale-lots index');
 
+// Billings catalogs from Richard's own PDF copies (PDFNotes, 2013-2024), read from disk; the files are never changed.
+// The biggest (Sept 2013, 50 MB) needs more than the default 128 MB:
+// php -d memory_limit=1G artisan hf:import-billings-catalogs "<DoNotEdit>/F009597BA3B64337/E22DAA685508703E.pdf" [--month=2013-02] [--dry-run]
+Artisan::command('hf:import-billings-catalogs {paths*} {--month=} {--dry-run}', function () {
+    $paths = $this->argument('paths');
+    if ($this->option('month') && count($paths) > 1) {
+        $this->error('--month applies to one file at a time');
+
+        return 1;
+    }
+    $h = new \App\Harvest\BillingsHarvester(3.0, fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+    foreach ($paths as $p) {
+        $this->info(json_encode($h->importFile($p, $this->option('month') ?: null, (bool) $this->option('dry-run'))));
+    }
+})->purpose('Load Billings Livestock catalog PDFs (Richard\'s copies) into the sale-lots index');
+
 Artisan::command('hf:create-sale-records {source} {--dry-run}', function (string $source) {
     $out = app(\App\Actions\Record\CreateRecordsFromSaleLots::class)($source, (bool) $this->option('dry-run'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
     $this->info(($this->option('dry-run') ? 'Dry run (nothing saved): ' : '').json_encode($out));
