@@ -31,6 +31,14 @@ class AdvertisedRegisteredName
             return 'unmatched';
         }
         [$horse, $tier, $review, $note] = (new MatchSaleLots)->match($lot); // a fresh matcher each time: it sees records made so far
+        if ($horse && $tier === 'name_empty_record') {
+            // An empty record of this name and nothing disagreeing: the lot goes on it; the nightly hf:match-sales
+            // publishes it there (AttachSaleLot), which also fills the record's registration number, foal year and pedigree.
+            $lot->forceFill(['horse_id' => $horse->id, 'match_tier' => $tier, 'matched_at' => now(),
+                'review_status' => $lot->priceKind() && ! $lot->publishable() ? 'held' : null, 'review_note' => null])->save();
+
+            return 'matched';
+        }
         if ($horse) {
             if (SaleLot::where('horse_id', $horse->id)->where('data_source_id', $lot->data_source_id)->where('match_tier', 'created')->exists()) {
                 $lot->forceFill(['horse_id' => $horse->id, 'match_tier' => $tier, 'matched_at' => now(), 'review_status' => 'held',

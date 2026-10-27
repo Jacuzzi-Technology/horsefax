@@ -142,6 +142,18 @@ class MatchSaleLots
         if (! $strong && count($medium) === 1) {
             return [$medium[0]['horse'], 'foal_year_parent', null, null];
         }
+        // One record of this name that is still empty (made from someone's pedigree chart or a results list: no parents,
+        // no registration number, no owner) and the lot itself says who the horse is (a registration number, or sire and
+        // dam): registered names are unique, nothing disagrees, so the lot belongs there and fills it (Richard, Oct 27 2026).
+        if (! $strong && ! $medium && count($fits) === 1) {
+            $h = $fits[0]['horse'];
+            $empty = ! isset($parents[$h->id]) && ($regs[$h->id] ?? collect())->isEmpty()
+                && in_array($h->source, ['pedigree', 'results', 'published'], true) && ! $h->activeStewards()->exists();
+            $says = (preg_match('/\d/', (string) $lot->registration_number)) || ($lot->sire_name && $lot->dam_name);
+            if ($empty && $says) {
+                return [$h, 'name_empty_record', null, null];
+            }
+        }
         if ($fits) {
             $basis = count($fits) > 1 ? count($fits).' records share this name'
                 : ($fits[0]['year'] ? 'Name and foal year agree; no parentage to compare' : 'Name only: nothing on the record to compare');

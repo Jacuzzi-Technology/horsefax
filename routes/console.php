@@ -495,3 +495,43 @@ Artisan::command('hf:search-report', function () {
     $this->info('Items: '.$items.' · with an answer: '.$rows->where('suggestion', '!=', 'unsure')->sum('n').' · accepted '.$acc.', rejected '.$rej
         .($acc + $rej ? ' ('.round(100 * $acc / ($acc + $rej)).'% accepted)' : '').' · cost per item $'.($items ? number_format($rows->sum('cents') / 100 / $items, 4) : '0'));
 })->purpose('Pilot report for search-backed review suggestions');
+
+// Re-apply a sale source's catalog lots after a matching-rule change (Oct 27 2026): lots waiting on staff only because
+// a same-name record had "nothing to compare" are placed again (they now join an empty record), and every attached
+// lot's printed identity fills what its record is missing (pedigree positions included). Safe to rerun.
+// php artisan hf:reapply-catalog-lots billings [--dry-run]
+Artisan::command('hf:reapply-catalog-lots {source} {--dry-run}', function (string $source) {
+    $ds = \App\Models\DataSource::where('key', $source)->firstOrFail();
+    $label = $ds->name;
+    $out = ['re_placed' => [], 'identity_filled' => 0, 'pedigrees_deepened' => 0];
+    $run = function () use ($ds, $label, &$out) {
+        \App\Models\SaleLot::where('data_source_id', $ds->id)->whereNull('horse_id')->where('review_status', 'queued')
+            ->where(fn ($w) => $w->where('review_note', 'like', 'Name only: nothing on the record to compare%')->orWhere('review_note', 'like', 'Name and foal year agree; no parentage%'))
+            ->lazyById(500, 'id')->each(function ($lot) use ($label, &$out) {
+                $lot->forceFill(['review_status' => null, 'review_note' => null])->save();
+                $r = \App\Harvest\RegistrationOnlyMatch::place($lot, $label);
+                $out['re_placed'][$r] = ($out['re_placed'][$r] ?? 0) + 1;
+            });
+        $system = \App\Actions\Record\BuildRecordsFromResults::system();
+        \App\Models\SaleLot::where('data_source_id', $ds->id)->whereNotNull('horse_id')->with('horse')->lazyById(500, 'id')->each(function ($lot) use ($system, &$out) {
+            if (! $lot->horse) {
+                return;
+            }
+            $pedigree = $lot->pedigree ?: array_filter(['s' => $lot->sire_name, 'd' => $lot->dam_name, 'ds' => $lot->dam_sire_name]);
+            $f = app(\App\Actions\Record\AddPublishedIdentity::class)($lot->horse, $system, [
+                'registry' => $lot->registry, 'registration_number' => $lot->registration_number, 'foal_year' => $lot->foal_year, 'pedigree' => $pedigree,
+            ], 'sale lot '.$lot->id);
+            $out['identity_filled'] += $f ? 1 : 0;
+            $out['pedigrees_deepened'] += in_array('pedigree', $f, true) ? 1 : 0;
+        });
+    };
+    if ($this->option('dry-run')) {
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        $run();
+        \Illuminate\Support\Facades\DB::rollBack();
+        $this->info('Dry run (nothing saved): '.json_encode($out));
+    } else {
+        $run();
+        $this->info(json_encode($out));
+    }
+})->purpose('Re-place and re-fill a sale source\'s catalog lots after a matching-rule change');
