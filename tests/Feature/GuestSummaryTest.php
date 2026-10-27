@@ -31,7 +31,7 @@ class GuestSummaryTest extends TestCase
             ->assertDontSee('Sample Spooks')->assertDontSee('Sample Futurity Open');
         $this->assertSame(route('horse.public', $h), session('url.intended'));
 
-        $this->post(route('register'), ['name' => 'New Reader', 'email' => 'reader@example.com', 'password' => 'a-Long-password-123', 'password_confirmation' => 'a-Long-password-123', 'terms' => '1'])
+        $this->post(route('register'), ['name' => 'New Reader', 'email' => 'reader@example.com', 'password' => 'a-Long-password-123', 'password_confirmation' => 'a-Long-password-123', 'terms' => '1', 'form_started' => encrypt(now()->subSeconds(10)->timestamp)])
             ->assertRedirect(route('horse.public', $h));
         $this->get(route('horse.public', $h))->assertSee('Sample Spooks')->assertSee('Sample Futurity Open');
     }
