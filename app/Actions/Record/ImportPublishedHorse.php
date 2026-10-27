@@ -19,6 +19,9 @@ use Illuminate\Support\Facades\DB;
  * foal_year, color, registry) so ancestors link by number; 'previous_names' are former registered names: a record still
  * under one of them is renamed to the official name and the old one kept as a previous name (ShowNameRule flags it
  * if the horse has results under the old name); a foal year already on the record upgrades to the full date.
+ * 'breed' and 'breeder' (Oct 27 2026) fill those fields when blank. 'parentage_must_agree' (stud books from other
+ * countries, where a same-named horse is often a different one): a record whose sire or dam differs from the page's is
+ * not this horse; when every same-named record differs, a new record is made beside them.
  *
  * @return string created, updated, unchanged or skipped_owned / skipped_ambiguous
  */
@@ -46,6 +49,9 @@ class ImportPublishedHorse
                 }
                 $same = Horse::named($name)->get()
                     ->filter(fn ($x) => ! $h['foal_year'] || ! $x->birth_year || (int) $x->birth_year === (int) $h['foal_year']);
+                if (! empty($h['parentage_must_agree'])) {
+                    $same = $same->reject(fn ($x) => self::parentsDiffer($x, $h['pedigree']));
+                }
                 if ($same->count() > 1) {
                     return 'skipped_ambiguous';
                 }
@@ -78,8 +84,13 @@ class ImportPublishedHorse
             if ((($horse->birth_precision ?? 'unknown') === 'unknown' && ($h['birth_date'] || $h['foal_year'])) || $sameYear) {
                 $fill += $h['birth_date'] ? ['birth_precision' => 'day', 'birth_date' => $h['birth_date'], 'birth_year' => $h['foal_year']] : ['birth_precision' => 'year', 'birth_year' => $h['foal_year']];
             }
-            if (! $horse->breed && $h['registry'] === 'AQHA') {
+            if (! $horse->breed && ($h['breed'] ?? null)) {
+                $fill['breed'] = $h['breed'];
+            } elseif (! $horse->breed && $h['registry'] === 'AQHA') {
                 $fill['breed'] = 'Quarter Horse';
+            }
+            if (! $horse->breeder && trim((string) ($h['breeder'] ?? '')) !== '') {
+                $fill['breeder'] = trim($h['breeder']);
             }
             if ($fill) {
                 $horse->forceFill($fill + ['listed' => true, 'public_summary' => true])->save();
@@ -134,5 +145,19 @@ class ImportPublishedHorse
 
             return $status;
         });
+    }
+
+    /** The record names a sire or dam, and it isn't the one given. */
+    private static function parentsDiffer(Horse $horse, array $pedigree): bool
+    {
+        $have = $horse->pedigree()->whereIn('position', ['s', 'd'])->pluck('name', 'position');
+        foreach (['s', 'd'] as $pos) {
+            $want = is_array($pedigree[$pos] ?? null) ? ($pedigree[$pos]['name'] ?? null) : ($pedigree[$pos] ?? null);
+            if ($want && isset($have[$pos]) && \App\Models\ShowRecord::key($have[$pos]) !== \App\Models\ShowRecord::key($want)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

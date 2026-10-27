@@ -128,6 +128,7 @@ final class Record
         'USTA' => 'U.S. Trotting Assn (Standardbred)',
         'AHHA' => 'American Haflinger Registry',
         'ARHA' => 'American Ranch Horse Association (ARHA)',
+        'MLOSZ' => 'Hungarian stud book (MLOSZ)',
         'Other' => 'Other registry',
     ];
 
@@ -184,6 +185,7 @@ final class Record
     public const IDENTIFIER_KINDS = [
         'registration' => 'Registration number',
         'microchip' => 'Microchip',
+        'ueln' => 'UELN (Universal Equine Life Number)',
         'other' => 'Other identifier (brand, passport, DNA case)',
     ];
 

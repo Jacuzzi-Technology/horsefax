@@ -181,7 +181,7 @@ final class Views
 
         // Records loaded in bulk from a published list keep identity on the record itself: show those values as claims too.
         if (in_array($horse->source, ['ifce'], true)) {
-            $from = ['registered_name' => $horse->registered_name, 'breed' => $horse->breed, 'sex' => $horse->sex, 'color' => $horse->color,
+            $from = ['registered_name' => $horse->registered_name, 'breed' => $horse->breed, 'sex' => $horse->sex, 'color' => $horse->color, 'breeder' => $horse->breeder,
                 'birth' => $horse->birth_precision === 'day' ? $horse->birth_date?->toDateString() : ($horse->birth_year ? (string) $horse->birth_year : null)];
             foreach ($from as $field => $value) {
                 if ($value !== null && $value !== '' && ! $facts->has($field)) {

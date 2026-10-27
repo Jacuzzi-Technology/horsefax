@@ -9,7 +9,7 @@
     $shows = $byCat->get('competition', collect());
     $sales = $byCat->get('ownership', collect());
     $timeline = $events->reject(fn ($e) => in_array($e->category, ['competition', 'ownership'], true));
-    $identityFacts = collect(['breed', 'sex', 'birth', 'color', 'height', 'markings'])->map(fn ($f) => $facts->get($f))->filter();
+    $identityFacts = collect(['breed', 'sex', 'birth', 'color', 'height', 'markings', 'breeder'])->map(fn ($f) => $facts->get($f))->filter();
     $summary = \App\Support\Summary::parts($horse, $facts, $identifiers, $events, $pedigree, $documents);
 @endphp
 <x-layouts.site :title="$horse->displayName()" :robots="($isReport && ! $sample) || $preview ? 'noindex, nofollow' : null" :canonical="$sample ? route('sample') : ($isReport ? null : route('horse.public', $horse))"

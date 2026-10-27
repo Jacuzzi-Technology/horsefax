@@ -20,6 +20,7 @@
             </div>
             <div class="grid sm:grid-cols-2 gap-5"><x-height-select :value="$horse->height_hands" /><x-input name="height_measured_on" type="date" label="Measured on" :value="$horse->height_measured_on?->format('Y-m-d')" /></div>
             <div><label class="field-label" for="f-markings">Markings & distinguishing features</label><textarea id="f-markings" name="markings" rows="2" class="field">{{ old('markings', $horse->markings) }}</textarea></div>
+            <x-input name="breeder" label="Breeder (as the registry records it)" :value="$horse->breeder" />
             <button class="btn-gold">Save</button>
         </form>
     </div>

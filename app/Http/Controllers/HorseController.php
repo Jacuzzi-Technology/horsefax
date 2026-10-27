@@ -30,6 +30,7 @@ class HorseController extends Controller
             'birth_year' => 'nullable|required_if:birth_precision,year|integer|min:1970|max:'.now()->year,
             'color' => 'nullable|string|max:60',
             'markings' => 'nullable|string|max:1000',
+            'breeder' => 'nullable|string|max:160',
             'height_hands' => 'nullable|numeric|min:6|max:20',
             'height_measured_on' => 'nullable|date|before_or_equal:today',
         ];
