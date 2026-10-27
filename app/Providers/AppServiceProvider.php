@@ -19,6 +19,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Plans: @can('feature', 'report_downloads') in views, Gate::allows('feature', ...) in code.
+        \Illuminate\Support\Facades\Gate::define('feature', fn (?\App\Models\User $user, string $feature) => \App\Support\Plans::allows($user, $feature));
+        // Members page: when someone last signed in.
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class, fn ($e) => $e->user->forceFill(['last_login_at' => now()])->saveQuietly());
+
         Route::bind('horse', fn (string $value) => Horse::where('horsefax_id', strtoupper($value))->firstOrFail());
 
         Password::defaults(fn () => app()->isProduction() ? Password::min(10)->uncompromised() : Password::min(10));

@@ -6,5 +6,6 @@
     <a href="{{ route('admin.sale-lots') }}" class="btn-ghost btn-small {{ request()->routeIs('admin.sale-lots') ? 'bg-gold/15' : '' }}">Sale history</a>
     <a href="{{ route('admin.names') }}" class="btn-ghost btn-small {{ request()->routeIs('admin.names') ? 'bg-gold/15' : '' }}">Duplicate names</a>
     <a href="{{ route('admin.qr') }}" class="btn-ghost btn-small {{ request()->routeIs('admin.qr') ? 'bg-gold/15' : '' }}">QR codes</a>
+    <a href="{{ route('admin.members') }}" class="btn-ghost btn-small {{ request()->routeIs('admin.members', 'admin.member') ? 'bg-gold/15' : '' }}">Members</a>
     <a href="{{ route('admin.messages') }}" class="btn-ghost btn-small {{ request()->routeIs('admin.messages') ? 'bg-gold/15' : '' }}">Messages</a>
 </nav>

@@ -110,6 +110,9 @@ Route::middleware(['auth', 'standing', 'staff'])->prefix('admin')->name('admin.'
     Route::post('/withdraw/{type}/{id}', [AdminController::class, 'withdraw'])->name('withdraw');
     Route::post('/users/{user}/credentials', [AdminController::class, 'credentials'])->name('credentials');
     Route::get('/messages', [AdminController::class, 'messages'])->name('messages');
+    Route::get('/members', [\App\Http\Controllers\Admin\MemberController::class, 'index'])->name('members');
+    Route::get('/members/{user}', [\App\Http\Controllers\Admin\MemberController::class, 'show'])->name('member');
+    Route::post('/members/{user}/plan', [\App\Http\Controllers\Admin\MemberController::class, 'plan'])->name('member.plan');
     Route::get('/show-records', [AdminController::class, 'showRecords'])->name('show-records');
     Route::get('/offspring', [\App\Http\Controllers\Admin\OffspringController::class, 'index'])->name('offspring');
     Route::post('/show-records/{record}/attach', [AdminController::class, 'attachResults'])->name('show-records.attach');
