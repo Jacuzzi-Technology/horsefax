@@ -32,9 +32,9 @@ use Illuminate\Support\Facades\Storage;
  * Records go through ImportPublishedHorse (source "published", unverified; same-named records with different parents
  * stay apart). Extras: height, death year ("In loving memory … 1997 – 2019"), genetic test (Health, public: the owner
  * publishes it), lifetime earnings, highlights and nominations (Achievements & earnings), the stallion service (fee,
- * chute fee, breeding terms, farm, town, website) and article mentions (title and link only). Progeny with sire and dam
- * and a name of two or more words become records too. Never stored: owner names, phone numbers, emails, photos and
- * article text. A record someone owns is left alone.
+ * chute fee, breeding terms, farm, town, website, and the breeding contacts: farm and breeding-manager phone and email)
+ * and article mentions (title and link only). Progeny with sire and dam and a name of two or more words become records
+ * too. Never stored: the owner card (names and contacts), street addresses, photos and article text. A record someone owns is left alone.
  */
 class StallionCompareHarvester
 {
@@ -185,10 +185,12 @@ class StallionCompareHarvester
         foreach ($p['nominations'] as $n) {
             $event(['category' => 'achievements', 'type' => 'enrollment', 'title' => mb_substr('Nominated to '.$n, 0, 255)], ['type' => 'enrollment', 'title' => mb_substr('Nominated to '.$n, 0, 255)]);
         }
-        if ($p['fees'] || $p['standing']) {
+        if ($p['fees'] || $p['standing'] || $p['manager']) {
             StallionService::updateOrCreate(['horse_id' => $horse->id, 'data_source_id' => $this->source->id], [
                 'standing_at' => $p['standing']['name'] ?? null, 'city' => $p['standing']['city'] ?? null, 'region' => $p['standing']['region'] ?? null,
                 'country' => $p['standing']['country'] ?? null, 'website' => $p['standing']['website'] ?? null,
+                'phone' => $p['standing']['phone'] ?? null, 'email' => $p['standing']['email'] ?? null,
+                'manager_name' => $p['manager']['name'] ?? null, 'manager_phone' => $p['manager']['phone'] ?? null, 'manager_email' => $p['manager']['email'] ?? null,
                 'fee_cents' => $p['fees']['fee_cents'] ?? null, 'fee_text' => $p['fees']['fee_text'] ?? null, 'currency' => $p['fees']['currency'] ?? null,
                 'chute_fee_cents' => $p['fees']['chute_fee_cents'] ?? null, 'breeding' => isset($p['fees']['breeding']) ? mb_substr($p['fees']['breeding'], 0, 500) : null,
                 'source_url' => $url, 'observed_on' => now()->toDateString(),

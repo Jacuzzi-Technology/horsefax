@@ -39,11 +39,12 @@ a record someone owns is left alone):
 | Highlights / Overview list | Achievements & earnings · Title, award or honor (year when the text has one) |
 | Nominations (Super Sires, NSBA BCF …) | Achievements & earnings · Incentive program nomination |
 | Fees, chute fee, breeding terms, shipping regions | `stallion_services` |
-| Standing At: farm, town, state, country, website | `stallion_services` (street address not kept) |
+| Standing At: farm, town, state, country, website, phone, email | `stallion_services` (street address not kept) |
+| Breeding Manager: name, phone, email | `stallion_services` (Richard: breeding contacts help owners get contracts) |
 | Article mentions | `horse_mentions`: title and link only |
 | Outstanding progeny with sire **and** dam, name of 2+ words | new unverified records |
 
-Never stored: owner names, phone numbers, email addresses, street addresses, photos, article text.
+Never stored: the Owner(s) card (names and contacts), street addresses, photos, article text.
 
 The record page and public report show these in a **Published profile** section (lifetime earnings, At stud, In the
 news); titles, nominations and genetic tests appear under History.

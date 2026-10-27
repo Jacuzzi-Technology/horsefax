@@ -3,9 +3,10 @@
 namespace App\Harvest;
 
 /**
- * StallionCompare (stallioncompare.com) stallion and horse pages. Facts only: owner names, phone numbers and email
- * addresses are never read; the standing farm (a business), its town and website are, because Richard wants "where the
- * horse is standing" (Oct 27 2026). Article summaries are StallionCompare's own writing: only titles and links are kept.
+ * StallionCompare (stallioncompare.com) stallion and horse pages. The standing farm, its town and website, and the
+ * breeding contacts (phone and email of the farm and the breeding manager) are read: Richard wants "where the horse is
+ * standing" and the breeding contacts, which help the owners get breeding contracts (Oct 27 2026). The owner card
+ * (names and contacts) and street addresses are never read. Article summaries are StallionCompare's own writing: only titles and links are kept.
  */
 class StallionCompareParser
 {
@@ -37,7 +38,7 @@ class StallionCompareParser
         }
         $out = ['name' => $name, 'foal_year' => null, 'color' => null, 'breed' => null, 'registry' => null, 'sex' => null, 'height' => null,
             'died_year' => null, 'pedigree' => [], 'genetics' => null, 'fees' => null, 'standing' => null, 'nominations' => [],
-            'earnings_cents' => null, 'highlights' => [], 'progeny' => [], 'articles' => [], 'links' => []];
+            'earnings_cents' => null, 'highlights' => [], 'progeny' => [], 'articles' => [], 'links' => [], 'manager' => null];
 
         // "1997 Bay Quarter Horse (AQHA ) Stallion, 16.3h", then "Sire x Dam (Damsire)", then "In loving memory of …, 1997 – 2019."
         $p = $h1->nextSibling;
@@ -143,12 +144,14 @@ class StallionCompareParser
                     if ($country === null && count($bits) === 1 && ! preg_match('/\d/', $bits[0])) {
                         $country = $bits[0];
                     }
-                    $web = null;
-                    foreach ($x->query('.//a[starts-with(@href,"http")]', $card) as $a) {
-                        $web ??= $a->getAttribute('href');
-                    }
                     if ($head !== '') {
-                        $out['standing'] = ['name' => $head, 'city' => $city, 'region' => $region, 'country' => $country, 'website' => $web];
+                        $out['standing'] = ['name' => $head, 'city' => $city, 'region' => $region, 'country' => $country] + self::contacts($x, $card);
+                    }
+                    break;
+                case 'breeding manager':
+                    if ($head !== '') {
+                        $c = self::contacts($x, $card);
+                        $out['manager'] = ['name' => $head, 'phone' => $c['phone'], 'email' => $c['email']];
                     }
                     break;
             }
@@ -246,6 +249,24 @@ class StallionCompareParser
         }
 
         return $o;
+    }
+
+    /** Website, phone and email links on a contact card (breeding contacts; Richard, Oct 27 2026). */
+    private static function contacts(\DOMXPath $x, \DOMNode $card): array
+    {
+        $c = ['website' => null, 'phone' => null, 'email' => null];
+        foreach ($x->query('.//a[@href]', $card) as $a) {
+            $href = trim($a->getAttribute('href'));
+            if (preg_match('#^https?://#i', $href)) {
+                $c['website'] ??= $href;
+            } elseif (stripos($href, 'tel:') === 0) {
+                $c['phone'] ??= mb_substr(trim(rawurldecode(substr($href, 4))), 0, 40) ?: null;
+            } elseif (stripos($href, 'mailto:') === 0) {
+                $c['email'] ??= strtolower(trim(explode('?', rawurldecode(substr($href, 7)))[0])) ?: null;
+            }
+        }
+
+        return $c;
     }
 
     /** A paragraph's lines, split at <br>, footnote marks (<sup>) and tags removed. */

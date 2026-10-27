@@ -1,5 +1,5 @@
-{{-- Published profile (Oct 27 2026): reported lifetime earnings, at-stud details and article mentions from published
-     stallion pages. Business details only: no phone numbers or email addresses are stored. --}}
+{{-- Published profile (Oct 27 2026): reported lifetime earnings, at-stud details (with the breeding contacts the stallion
+     page publishes) and article mentions. --}}
 @php
     $earn = $horse->events()->where('type', 'earnings')->whereIn('visibility', ['public', 'shared'])->orderByDesc('occurred_on')->first();
     $services = $horse->stallionServices()->with('source')->get();
@@ -19,6 +19,8 @@
                         @if ($s->standing_at){{ $s->standing_at }}@if ($s->placeLabel())<span class="text-muted">, {{ $s->placeLabel() }}</span>@endif<br>@endif
                         <span class="font-sans text-[15px]">{{ collect([$s->feeLabel() ? 'Fee '.$s->feeLabel() : null, $s->chute_fee_cents ? 'chute fee $'.number_format($s->chute_fee_cents / 100) : null])->filter()->join(' · ') }}</span>
                         @if ($s->breeding)<p class="font-sans text-[14px] text-muted mt-1">{{ $s->breeding }}</p>@endif
+                        @if ($s->phone || $s->email)<p class="font-sans text-[14px] mt-1">Breeding contact: @if ($s->phone)<a href="tel:{{ preg_replace('/[^\d+]/', '', $s->phone) }}" class="text-gold-dark">{{ $s->phone }}</a>@endif @if ($s->email)<a href="mailto:{{ $s->email }}" class="text-gold-dark">{{ $s->email }}</a>@endif</p>@endif
+                        @if ($s->manager_name)<p class="font-sans text-[14px] mt-1">Breeding manager: {{ $s->manager_name }}@if ($s->manager_phone) · <a href="tel:{{ preg_replace('/[^\d+]/', '', $s->manager_phone) }}" class="text-gold-dark">{{ $s->manager_phone }}</a>@endif @if ($s->manager_email) · <a href="mailto:{{ $s->manager_email }}" class="text-gold-dark">{{ $s->manager_email }}</a>@endif</p>@endif
                         <p class="hint text-[13px]">@if ($s->website)<a href="{{ $s->website }}" rel="nofollow noopener" target="_blank" class="text-gold-dark">Farm website</a> · @endif As published{{ $s->source ? ' on '.preg_replace('/\s*\(.*$/', '', $s->source->name) : '' }}, {{ $s->observed_on?->format('M Y') }}.@if ($s->source_url) <a href="{{ $s->source_url }}" rel="nofollow noopener" target="_blank" class="text-gold-dark">Source</a>@endif</p>
                     </td></tr>
             @endforeach
