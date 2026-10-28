@@ -104,7 +104,7 @@ final class Record
         'health' => ['coggins' => 'Coggins (EIA) test', 'health_certificate' => 'Health certificate (CVI)', 'vaccination' => 'Vaccination', 'exam' => 'Veterinary exam', 'pre_purchase' => 'Pre-purchase exam', 'treatment' => 'Treatment / procedure', 'injury' => 'Injury or illness', 'imaging' => 'Radiographs / imaging', 'medication' => 'Medication', 'genetic_test' => 'Genetic test'],
         'care' => ['farrier' => 'Farrier', 'dental' => 'Dental', 'deworming' => 'Deworming', 'bodywork' => 'Chiropractic / massage', 'nutrition' => 'Feeding / nutrition'],
         'training' => ['program' => 'Training program (dates, trainer, facility)', 'skill' => 'Documented skill, title or qualification'],
-        'competition' => ['show' => 'Show / class result', 'award' => 'Award / title', 'certification' => 'Certification / inspection'],
+        'competition' => ['race' => 'Race result', 'show' => 'Show / class result', 'award' => 'Award / title', 'certification' => 'Certification / inspection'],
         'ownership' => ['sale' => 'Sale', 'purchase' => 'Purchase', 'auction' => 'Auction', 'lease' => 'Lease', 'gift' => 'Gift / transfer', 'breeding' => 'Foaled / bred by'],
         'achievements' => ['title' => 'Title, award or honor', 'earnings' => 'Reported lifetime earnings', 'enrollment' => 'Incentive program nomination'],
         'transport' => ['haul' => 'Transport'],
