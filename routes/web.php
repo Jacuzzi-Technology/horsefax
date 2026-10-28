@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [PublicController::class, 'home'])->name('home');
 Route::get('/search', [PublicController::class, 'search'])->middleware('throttle:search')->name('search');
 Route::get('/search/suggest', [PublicController::class, 'suggest'])->middleware('throttle:suggest')->name('search.suggest');
-Route::get('/horse/{horse}', [PublicController::class, 'horse'])->name('horse.public');
+Route::get('/horse/{horse}', [PublicController::class, 'horse'])->middleware('throttle:records')->name('horse.public');
 Route::get('/report/{token}', [PublicController::class, 'report'])->middleware('throttle:reports')->name('report.show');
 Route::get('/sample-report', [PublicController::class, 'sample'])->name('sample');
 Route::get('/sample-report/pdf', [PublicController::class, 'samplePdf'])->middleware('throttle:reports')->name('sample.pdf');

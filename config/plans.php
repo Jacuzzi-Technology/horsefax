@@ -13,6 +13,11 @@
 return [
     'default' => 'free',
 
+    // Record pages a signed-out visitor may open per day (per IP). Signed-in limits are record_views_per_day below.
+    // Following a pedigree to the end takes thousands of pages, so daily caps slow scrapers far more than people
+    // (Richard, Oct 28 2026). Verified Google and Bing crawlers are exempt (App\Support\SearchBots).
+    'guest_record_views_per_day' => 100,
+
     'features' => [
         // What the site does today (all on Free)
         'search' => 'Search horses',
@@ -33,7 +38,7 @@ return [
             'public' => true,
             'price' => null,
             'features' => ['search', 'create_records', 'share_reports', 'view_public_records', 'invite_professionals'],
-            'limits' => ['history_reports_per_month' => null, 'saved_searches' => 0],
+            'limits' => ['history_reports_per_month' => null, 'saved_searches' => 0, 'record_views_per_day' => 300],
         ],
         // Placeholders: TODO (Richard) names, prices, contents.
         'pro' => [
@@ -41,14 +46,14 @@ return [
             'public' => false,
             'price' => null,
             'features' => ['search', 'create_records', 'share_reports', 'view_public_records', 'invite_professionals', 'full_history_reports', 'report_downloads', 'saved_searches'],
-            'limits' => ['history_reports_per_month' => null, 'saved_searches' => 25],
+            'limits' => ['history_reports_per_month' => null, 'saved_searches' => 25, 'record_views_per_day' => 2000],
         ],
         'business' => [
             'name' => 'Business (placeholder)',
             'public' => false,
             'price' => null,
             'features' => ['search', 'create_records', 'share_reports', 'view_public_records', 'invite_professionals', 'full_history_reports', 'report_downloads', 'saved_searches', 'api_access'],
-            'limits' => ['history_reports_per_month' => null, 'saved_searches' => null],
+            'limits' => ['history_reports_per_month' => null, 'saved_searches' => null, 'record_views_per_day' => null],
         ],
     ],
 ];
