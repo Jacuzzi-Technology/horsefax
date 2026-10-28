@@ -297,6 +297,12 @@ final class Record
      */
     public static function placeholderName(?string $name): bool
     {
+        // "Unknown" in the stud books' own languages (Oct 28 2026: the Hungarian "Ismeretlen" became a record that was
+        // its own parent; ~300 such records held ~10,000 pedigree links).
+        if (preg_match('/^\s*(unknown|ismeretlen|inconnue?|desconocid[oa]|onbekend|unbekannt|sconosciut[oa]|okänd|ukjent|ukendt|nieznany|neznámý|nn|n\.\s?n\.?|not named|no-name)(\s*\((unknown|ismeretlen)\))?\s*$/iu', (string) $name)) {
+            return true;
+        }
+
         return (bool) preg_match('/^\s*(horse name:\s*)?((aqha|apha|reg(istration|istered)?|name)\s+)*(pending( registration)?|unnamed( (colt|filly|foal))?|foal|no name|none|n\/?a|tba|tbd)\s*$/i', (string) $name)
             || (bool) preg_match('/^\s*((aqha|apha|reg(istration|istered)?|name)\s+)*pending\s*([a-z]{1,2}|\d{1,2})?(\s*\([^)]*\))?\s*([\/:\-–—]|$)/iu', (string) $name);
     }

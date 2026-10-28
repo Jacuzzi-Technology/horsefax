@@ -74,7 +74,7 @@
             ['Show results', $shows->count() ?: null],
             ['Known earnings', ($e = $shows->sum('earnings_cents')) ? HorseEvent::money($e) : null],
             ['Sale records', $sales->filter(fn ($s) => $s->isPriceEntry() || $s->type === 'sale')->count() ?: null],
-            ['Pedigree', ($gen = (int) $pedigree->max(fn ($p) => strlen($p->position))) ? $gen.' '.Str::plural('generation', $gen) : null],
+            ['Pedigree', $pedigree->isNotEmpty() && ($gen = \App\Support\PedigreeDepth::traced($horse) ?: (int) $pedigree->max(fn ($p) => strlen($p->position))) ? 'Traced '.$gen.' '.Str::plural('generation', $gen) : null],
             ['Photos & videos', $media->count() ?: null],
             ['Last updated', collect([$horse->updated_at, $events->max('updated_at'), $media->max('updated_at')])->filter()->max()?->format('M j, Y')],
         ])->filter(fn ($g) => $g[1] !== null);
