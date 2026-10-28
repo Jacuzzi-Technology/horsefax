@@ -13,9 +13,10 @@ use Illuminate\Support\Facades\Route;
 
 // Public
 Route::get('/', [PublicController::class, 'home'])->name('home');
-Route::get('/search', [PublicController::class, 'search'])->middleware('throttle:search')->name('search');
-Route::get('/search/suggest', [PublicController::class, 'suggest'])->middleware('throttle:suggest')->name('search.suggest');
-Route::get('/horse/{horse}', [PublicController::class, 'horse'])->middleware('throttle:records')->name('horse.public');
+Route::get('/search', [PublicController::class, 'search'])->middleware(['untrapped', 'throttle:search'])->name('search');
+Route::get('/search/suggest', [PublicController::class, 'suggest'])->middleware(['untrapped', 'throttle:suggest'])->name('search.suggest');
+Route::get('/x/{any?}', \App\Http\Controllers\TrapController::class)->where('any', '.*')->name('trap'); // bot trap: forbidden in robots.txt, linked invisibly
+Route::get('/horse/{horse}', [PublicController::class, 'horse'])->middleware(['untrapped', 'throttle:records'])->name('horse.public');
 Route::get('/report/{token}', [PublicController::class, 'report'])->middleware('throttle:reports')->name('report.show');
 Route::get('/sample-report', [PublicController::class, 'sample'])->name('sample');
 Route::get('/sample-report/pdf', [PublicController::class, 'samplePdf'])->middleware('throttle:reports')->name('sample.pdf');

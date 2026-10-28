@@ -346,7 +346,7 @@ class PublicController extends Controller
                 ."User-agent: Bytespider\nUser-agent: meta-externalagent\nUser-agent: Amazonbot\nUser-agent: cohere-training-data-crawler\nDisallow: /\n\n"
                 ."# Bulk SEO/data crawlers\n"
                 ."User-agent: SemrushBot\nUser-agent: AhrefsBot\nUser-agent: MJ12bot\nUser-agent: DotBot\nUser-agent: PetalBot\nDisallow: /\n\n"
-                ."User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\nDisallow: /search\nDisallow: /api/\n\nSitemap: ".url('/sitemap.xml')."\n"
+                ."User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\nDisallow: /search\nDisallow: /api/\nDisallow: /x/\n\nSitemap: ".url('/sitemap.xml')."\n"
             : "User-agent: *\nDisallow: /\n";
 
         return response($body, 200, ['Content-Type' => 'text/plain']);

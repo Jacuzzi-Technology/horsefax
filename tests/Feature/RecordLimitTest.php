@@ -70,4 +70,29 @@ class RecordLimitTest extends TestCase
         $fake->get($url)->assertOk();
         $fake->get($url)->assertStatus(429);
     }
+
+    public function test_bot_trap_pauses_scrapers_but_not_search_engines_or_members(): void
+    {
+        Cache::flush();
+        $url = route('horse.public', $this->horse());
+        $this->get('/')->assertSee('href="/x/records-index"', false);
+        $this->app->detectEnvironment(fn () => 'production');
+        $this->get('/robots.txt')->assertSee('Disallow: /x/');
+        $this->app->detectEnvironment(fn () => 'testing');
+
+        $scraper = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.7', 'HTTP_USER_AGENT' => 'python-requests/2.32']);
+        $scraper->get($url)->assertOk();
+        $scraper->get('/x/records-index')->assertNotFound();
+        $scraper->get($url)->assertStatus(403)->assertSee('Access paused');
+        $scraper->get(route('search', ['q' => 'Sample']))->assertStatus(403);
+        // Another address is unaffected; a member on the trapped address is too.
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.8'])->get($url)->assertOk();
+        $this->actingAs(User::factory()->create())->withServerVariables(['REMOTE_ADDR' => '198.51.100.7'])->get($url)->assertOk();
+
+        // Verified Google is never trapped.
+        SearchBots::$resolver = fn (string $ip) => ['host' => 'crawl-66-249-66-2.googlebot.com', 'ips' => [$ip]];
+        $google = $this->withServerVariables(['REMOTE_ADDR' => '66.249.66.2', 'HTTP_USER_AGENT' => 'Mozilla/5.0 (compatible; Googlebot/2.1)']);
+        $google->get('/x/records-index');
+        $google->get($url)->assertOk();
+    }
 }

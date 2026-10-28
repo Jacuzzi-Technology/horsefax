@@ -1,7 +1,9 @@
 <x-layouts.site title="Please slow down" robots="noindex, nofollow">
     <div class="wrap py-16 max-w-[640px]">
-        <h1 class="text-[34px]">{{ $daily ? 'You\'ve reached today\'s limit' : 'Please slow down' }}</h1>
-        @if ($daily)
+        <h1 class="text-[34px]">{{ ! empty($trapped) ? 'Access paused' : ($daily ? 'You\'ve reached today\'s limit' : 'Please slow down') }}</h1>
+        @if (! empty($trapped))
+            <p class="mt-4 text-[18px]">Automated access from your network has been paused. If you're a person and think this is a mistake, <a href="{{ route('login') }}" class="text-gold-dark">sign in</a> or <a href="{{ route('contact') }}" class="text-gold-dark">contact us</a>.</p>
+        @elseif ($daily)
             <p class="mt-4 text-[18px]">You've opened {{ number_format($limit) }} horse records today, the daily limit for {{ auth()->check() ? 'your plan' : 'visitors who aren\'t signed in' }}. The limit resets at midnight UTC.</p>
             @guest<p class="mt-3 text-[18px]">A free Horsefax account raises the limit. <a href="{{ route('register') }}" class="text-gold-dark">Create a free account</a> or <a href="{{ route('login') }}" class="text-gold-dark">sign in</a>.</p>@endguest
         @else
