@@ -118,3 +118,17 @@ consignments page is skipped) are added to the fixed list, dated from the homepa
 the Designer Sale on the first day, the Legacy Sale on the last). Slugs and dates are kept in `calendar.json`. A results
 page is fetched again for 40 days after its sale, while it fills in. `hf:sale-watch` runs this harvester 1, 3, 7, 14 and
 30 days after each sale (see docs/sale-watch.md).
+
+## Catalogs (Oct 28 2026)
+
+`php artisan hf:legacy-catalogs` (LegacyCatalogs, LegacyCatalogParser) adds what the results pages lack: AQHA number,
+foaling date, color, sex and the 3-generation pedigree. Files: the full catalogs for 2024, 2025 and the current sale
+(/pdf/), one PDF per hip from 2018 in the WordPress uploads (names from the Internet Archive's index, kept in
+`storage/app/private/legacysale/catalogs/archive-index.json` for when the Archive is down), all read from Legacy's own
+server. Older full catalogs (2005, 2010, 2015) are Internet Archive copies in `storage/app/private/legacysale/old/`.
+A catalog hip fills the results lot of the same year and hip when the names agree; 2005 and 2010 have no results, so
+their hips become `offered` lots (`legacy-catalog:YEAR:HIP`). Great-grandparent names that wrap onto two lines leave a
+6-name pedigree. Not found anywhere: 2014, 2016, 2017 and 2023 catalogs; the 2026 catalog uses another layout (Robin
+Glenn already holds its pedigrees).
+
+Oct 28 2026 (local): 1,366 catalog hips, 1,135 AQHA numbers, 1,050 full pedigrees; 967 results lots filled.
