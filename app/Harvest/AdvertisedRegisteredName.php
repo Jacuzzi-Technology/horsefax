@@ -19,14 +19,15 @@ class AdvertisedRegisteredName
      *  - a record of that name with nothing to compare: left queued for staff, nothing created beside it;
      *  - no record of that name, or every one contradicts the ad (a different horse): a new unverified record.
      * A registered name: the ad names a registry (or says registered) or gives sire and dam, the horse isn't listed as
-     * grade, and the name has two or more words ("Trigger" is a barn name). Mules and donkeys are left out. Returns proposed, linked, created, queued or unmatched.
+     * grade, and the name has two or more words ("Trigger" is a barn name) unless the lot also prints a registration number
+     * and both parents (Standardbreds are often registered under one word: "Fearthelicious"; Richard, Oct 29 2026). Mules and donkeys are left out. Returns proposed, linked, created, queued or unmatched.
      * $noun is what the source publishes ("ad" for classifieds, e.g. "catalog lot" for sale catalogs); it's only used in staff notes.
      */
     public static function apply(SaleLot $lot, string $site, string $noun = 'ad'): string
     {
         $words = count(preg_split('/\s+/', trim($lot->horse_name)));
         $registered = $lot->registry || $lot->registered === true || ($lot->sire_name && $lot->dam_name);
-        if (! $registered || Record::placeholderName($lot->horse_name) || $words < 2 || $lot->registered === false
+        if (! $registered || Record::placeholderName($lot->horse_name) || ($words < 2 && ! ($lot->registration_number && $lot->sire_name && $lot->dam_name)) || $lot->registered === false
             || preg_match('/\b(mule|donkey|burro|ass)\b/i', (string) $lot->breed)) {
             return 'unmatched';
         }

@@ -350,15 +350,17 @@ class BuckeyeClassicHarvester
                     'pedigree' => $lot->pedigree ?: [],
                 ], 'sale lot '.$lot->id);
                 $out['records_filled'] += $filled ? 1 : 0;
-                if ($h['microchip'] && ! $lot->horse->activeStewards()->exists()
-                    && ! $lot->horse->identifiers()->where('kind', 'microchip')->where('value_normalized', \App\Support\Record::normalizeIdentifier($h['microchip']))->exists()) {
-                    app(\App\Actions\Record\AddIdentifier::class)($lot->horse, $system, ['kind' => 'microchip', 'registry' => self::CATALOG_CHIP,
-                        'value' => $h['microchip'], 'visibility' => 'private', 'source_type' => 'historical']);
-                    $out['microchips']++;
-                }
             } else {
                 $p = RegistrationOnlyMatch::place($lot, $this->site['sale']);
                 $out['placed'][$p] = ($out['placed'][$p] ?? 0) + 1;
+                $lot->refresh();
+            }
+            // The chip goes on the record, including one just made from this lot (not one only proposed to staff).
+            if ($h['microchip'] && $lot->horse && ! $lot->horse->activeStewards()->exists()
+                && ! $lot->horse->identifiers()->where('kind', 'microchip')->where('value_normalized', \App\Support\Record::normalizeIdentifier($h['microchip']))->exists()) {
+                app(\App\Actions\Record\AddIdentifier::class)($lot->horse, $system, ['kind' => 'microchip', 'registry' => self::CATALOG_CHIP,
+                    'value' => $h['microchip'], 'visibility' => 'private', 'source_type' => 'historical']);
+                $out['microchips']++;
             }
         }
 
