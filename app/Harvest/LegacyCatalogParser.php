@@ -29,65 +29,72 @@ class LegacyCatalogParser
             if (! $words) {
                 continue;
             }
-            $segs = LolliParser::segments($words);
-            $head = null;
-            foreach ($segs as $s) {
-                if (preg_match('/^Hip No\./', $s['t'])) {
-                    $head = $s;
-                    break;
+            $page = LolliParser::segments($words);
+            // One hip per page (Legacy) or several down the page (Shawnee 2020): each left-hand "Hip No." label starts a band.
+            $heads = array_values(array_filter($page, fn ($s) => preg_match('/^Hip No\./', $s['t'])));
+            usort($heads, fn ($a, $b) => [$a['y'], $a['x']] <=> [$b['y'], $b['x']]);
+            $heads = array_values(array_filter($heads, fn ($h) => ! array_filter($heads, fn ($o) => $o !== $h && abs($o['y'] - $h['y']) < 5 && $o['x'] < $h['x'])));
+            foreach ($heads as $i => $head) {
+                $end = isset($heads[$i + 1]) ? $heads[$i + 1]['y'] - 2 : INF;
+                $segs = array_values(array_filter($page, fn ($s) => $s['y'] >= $head['y'] - 2 && $s['y'] < $end));
+                if ($hip = self::hip($segs, $head)) {
+                    $out[] = $hip;
                 }
             }
-            if (! $head) {
-                continue;
-            }
-            $hip = $name = $desc = null;
-            foreach ($segs as $s) {
-                $dy = $s['y'] - $head['y'];
-                if ($hip === null && $dy > 3 && $dy < 25 && preg_match('/^\d{1,3}$/', $s['t']) && $s['x'] < $head['x'] + 40) {
-                    $hip = $s['t'];
-                }
-            }
-            foreach ($segs as $s) {
-                $dy = $s['y'] - $head['y'];
-                if ($name === null && $dy > 3 && $dy < 25 && $s['x'] > $head['x'] + 40 && ! preg_match('/^\d{1,3}$|Consigned|Hip No/i', $s['t'])) {
-                    $name = $s;
-                } elseif ($name && $desc === null && $s['y'] > $name['y'] + 3 && $s['y'] < $name['y'] + 25 && preg_match('/\b('.self::SEX.')\b/i', $s['t'])) {
-                    $desc = $s;
-                }
-            }
-            if ($hip === null || ! $name) {
-                continue;
-            }
-            $clean = LolliParser::cleanName($name['t']);
-            if ($clean === '' || preg_match('/^PENDING$/i', trim($name['t']))) {
-                continue; // "Pending": not named yet
-            }
-            $stop = INF;
-            $reg = null;
-            foreach ($segs as $s) {
-                if ($s['y'] > ($desc['y'] ?? $name['y']) && preg_match('/^(PERFORMANCE RECORD|NOTES|PRODUCE RECORD|By [A-Z]|1st dam|Sire:?$|Sire:)/i', $s['t'])) {
-                    $stop = min($stop, $s['y']);
-                }
-                if ($reg === null && preg_match('/^(\d{7})$/', $s['t'], $m) && $s['x'] < $head['x'] + 30 && $s['y'] > $name['y'] + 20) {
-                    $reg = $m[1];
-                }
-            }
-            $below = ($desc['y'] ?? $name['y']) + 3;
-            $tree = [];
-            foreach ($segs as $s) {
-                if ($s['y'] > $below && $s['y'] < $stop) {
-                    $t = trim(str_replace(['{', '}'], '', $s['t']));
-                    if ($t !== '' && LolliParser::cleanName($t) !== $clean) {
-                        $s['x'] += strlen($s['t']) - strlen(ltrim($s['t'], '{ ')) > 0 ? 6 : 0; // a "{" before the name shifts nothing that matters
-                        $s['t'] = $t;
-                        $tree[] = $s;
-                    }
-                }
-            }
-            $out[] = ['hip' => $hip, 'name' => $clean, 'registration_number' => $reg, 'pedigree' => self::pedigree($tree, $below, $clean)] + self::describe($desc['t'] ?? '');
         }
 
         return $out;
+    }
+
+    /** One hip's band of the page, from its "Hip No." label down to the next. */
+    private static function hip(array $segs, array $head): ?array
+    {
+        $hip = $name = $desc = null;
+        foreach ($segs as $s) {
+            $dy = $s['y'] - $head['y'];
+            if ($hip === null && $dy > 3 && $dy < 25 && preg_match('/^\d{1,3}$/', $s['t']) && $s['x'] < $head['x'] + 40) {
+                $hip = $s['t'];
+            }
+        }
+        foreach ($segs as $s) {
+            $dy = $s['y'] - $head['y'];
+            if ($name === null && $dy > 3 && $dy < 25 && $s['x'] > $head['x'] + 40 && ! preg_match('/^\d{1,3}$|Consigned|Hip No/i', $s['t'])) {
+                $name = $s;
+            } elseif ($name && $desc === null && $s['y'] > $name['y'] + 3 && $s['y'] < $name['y'] + 25 && preg_match('/\b('.self::SEX.')\b/i', $s['t'])) {
+                $desc = $s;
+            }
+        }
+        if ($hip === null || ! $name) {
+            return null;
+        }
+        $clean = LolliParser::cleanName($name['t']);
+        if ($clean === '' || preg_match('/^PENDING$/i', trim($name['t']))) {
+            return null; // "Pending": not named yet
+        }
+        $stop = INF;
+        $reg = null;
+        foreach ($segs as $s) {
+            if ($s['y'] > ($desc['y'] ?? $name['y']) && preg_match('/^(PERFORMANCE RECORD|NOTES|PRODUCE RECORD|By [A-Z]|1st dam|Sire:?$|Sire:)/i', $s['t'])) {
+                $stop = min($stop, $s['y']);
+            }
+            if ($reg === null && preg_match('/^(\d{7})$/', $s['t'], $m) && $s['x'] < $head['x'] + 30 && $s['y'] > $name['y'] + 20) {
+                $reg = $m[1];
+            }
+        }
+        $below = ($desc['y'] ?? $name['y']) + 3;
+        $tree = [];
+        foreach ($segs as $s) {
+            if ($s['y'] > $below && $s['y'] < $stop) {
+                $t = trim(str_replace(['{', '}'], '', $s['t']));
+                if ($t !== '' && LolliParser::cleanName($t) !== $clean) {
+                    $s['x'] += strlen($s['t']) - strlen(ltrim($s['t'], '{ ')) > 0 ? 6 : 0; // a "{" before the name shifts nothing that matters
+                    $s['t'] = $t;
+                    $tree[] = $s;
+                }
+            }
+        }
+
+        return ['hip' => $hip, 'name' => $clean, 'registration_number' => $reg, 'pedigree' => self::pedigree($tree, $below, $clean)] + self::describe($desc['t'] ?? '');
     }
 
     /** The full tree when it reads as 2 + 4 + 8; otherwise the 6 names of the first two generations, or nothing. */
