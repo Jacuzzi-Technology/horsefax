@@ -47,6 +47,10 @@ class PrintedCatalogTest extends TestCase
         $this->assertSame(['SAMPLE SIRE', 'SAMPLE DAM', 'SAMPLE SS', 'SAMPLE DD', 'SAMPLE SSS', 'SAMPLE DDD'], [$p['s'], $p['d'], $p['ss'], $p['dd'], $p['sss'], $p['ddd']]);
         $this->assertCount(14, $p);
 
+        // Sire and dam with only their sires above them (Boone County 2022-23).
+        $short = [$seg(40, 95, 'SAMPLE KING'), $seg(0, 110, 'SAMPLE SAM'), $seg(40, 160, 'SAMPLE REX'), $seg(0, 179, 'SAMPLE LADY')];
+        $this->assertSame(['s' => 'SAMPLE SAM', 'd' => 'SAMPLE LADY', 'ss' => 'SAMPLE KING', 'ds' => 'SAMPLE REX'], PrintedCatalogParser::tree($short, 90, 'SAMPLE HORSE'));
+
         // Columns that don't nest (a parent outside its own parents) are not a tree.
         $tree[3]['y'] = 95;
         $this->assertSame([], PrintedCatalogParser::tree($tree, 90, 'SAMPLE HORSE'));

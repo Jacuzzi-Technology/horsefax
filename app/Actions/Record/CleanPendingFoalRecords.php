@@ -33,8 +33,24 @@ class CleanPendingFoalRecords
         'transfers', 'media', 'radiograph_sets', 'share_links', 'verifications', 'review_items'];
 
     /** @return array{0: array<string,int|array>, 1: list<array{horsefax_id:string,name:string,sale:?string}>} counts, and the records removed (or that a dry run would remove) */
+    /** What a label looks like: the "Pending/<dam>" names by default, or another loader's (Boone County team lots). */
+    private \Closure $isLabel;
+
+    private string $like = '%pending%';
+
+    private string $note = self::NOTE;
+
+    /** The same cleanup for another kind of label: $like narrows the query, $isLabel decides, $note is left on the lots. */
+    public function forLabels(\Closure $isLabel, string $like, string $note): self
+    {
+        [$this->isLabel, $this->like, $this->note] = [$isLabel, $like, $note];
+
+        return $this;
+    }
+
     public function __invoke(bool $dryRun = false, ?\Closure $log = null): array
     {
+        $this->isLabel ??= fn ($n) => Record::placeholderName($n);
         $out = ['label_records' => 0, 'removed' => 0, 'lots_detached' => 0, 'queued_lots_reset' => 0, 'ancestors_pruned' => 0, 'kept' => []];
         $list = [];
         DB::beginTransaction();
@@ -53,9 +69,9 @@ class CleanPendingFoalRecords
     {
         $system = BuildRecordsFromResults::system();
         $records = Horse::where('source', 'published')->where('created_by', $system->id)->where('identity_status', 'unverified')
-            ->whereNull('merged_into_id')->where('registered_name', 'ilike', '%pending%')
+            ->whereNull('merged_into_id')->where('registered_name', 'ilike', $this->like)
             ->whereExists(fn ($q) => $q->from('sale_lots')->whereColumn('sale_lots.horse_id', 'horses.id')->where('match_tier', 'created'))
-            ->get()->filter(fn (Horse $h) => Record::placeholderName($h->registered_name))->values();
+            ->get()->filter(fn (Horse $h) => ($this->isLabel)($h->registered_name))->values();
         $out['label_records'] = $records->count();
         $log && $log($records->count().' system-made records named with an unnamed-foal label');
 
@@ -63,6 +79,7 @@ class CleanPendingFoalRecords
         foreach ($records as $h) {
             if ($why = $this->keep($h, $system->id)) {
                 $out['kept'][$why] = ($out['kept'][$why] ?? 0) + 1;
+
                 continue;
             }
             $remove[] = $h;
@@ -81,22 +98,22 @@ class CleanPendingFoalRecords
             $lotIds = SaleLot::whereIn('horse_id', $ids)->pluck('id');
             DB::table('review_suggestions')->where('subject_type', 'sale_lot')->whereIn('subject_id', $lotIds)->delete();
             $out['lots_detached'] += SaleLot::whereIn('id', $lotIds)->update(['horse_id' => null, 'horse_event_id' => null, 'match_tier' => null, 'matched_at' => null,
-                'review_status' => 'unmatched', 'review_note' => self::NOTE, 'updated_at' => now()]);
+                'review_status' => 'unmatched', 'review_note' => $this->note, 'updated_at' => now()]);
             DB::table('review_suggestions')->whereIn('horse_id', $ids)->delete();
             DB::table('name_reviews')->where(fn ($q) => $q->whereIn('horse_a_id', $ids)->orWhereIn('horse_b_id', $ids)->orWhereIn('kept_horse_id', $ids))->delete();
             foreach ($chunk as $h) {
-                Audit::record('horse.removed_cleanup', $h, ['horsefax_id' => $h->horsefax_id, 'registered_name' => $h->registered_name], ['reason' => self::NOTE], $h->id, $system->id);
+                Audit::record('horse.removed_cleanup', $h, ['horsefax_id' => $h->horsefax_id, 'registered_name' => $h->registered_name], ['reason' => $this->note], $h->id, $system->id);
                 $h->delete();
                 $out['removed']++;
             }
         }
 
         // Label lots that never got a record but wait on staff with a system suggestion (e.g. proposed against a record of the label).
-        $queued = SaleLot::whereNull('horse_id')->where('review_status', 'queued')->where('horse_name', 'ilike', '%pending%')->get()
-            ->filter(fn (SaleLot $l) => Record::placeholderName($l->horse_name) && ! DB::table('review_suggestions')->where('subject_type', 'sale_lot')->where('subject_id', $l->id)->whereNotNull('decided_by')->exists());
+        $queued = SaleLot::whereNull('horse_id')->where('review_status', 'queued')->where('horse_name', 'ilike', $this->like)->get()
+            ->filter(fn (SaleLot $l) => ($this->isLabel)($l->horse_name) && ! DB::table('review_suggestions')->where('subject_type', 'sale_lot')->where('subject_id', $l->id)->whereNotNull('decided_by')->exists());
         foreach ($queued as $l) {
             DB::table('review_suggestions')->where('subject_type', 'sale_lot')->where('subject_id', $l->id)->delete();
-            $l->forceFill(['review_status' => 'unmatched', 'review_note' => self::NOTE])->save();
+            $l->forceFill(['review_status' => 'unmatched', 'review_note' => $this->note])->save();
             $out['queued_lots_reset']++;
         }
 
@@ -108,7 +125,7 @@ class CleanPendingFoalRecords
     private function keep(Horse $h, int $system): ?string
     {
         $lots = SaleLot::where('horse_id', $h->id)->pluck('horse_name');
-        if ($lots->contains(fn ($n) => ! Record::placeholderName($n))) {
+        if ($lots->contains(fn ($n) => ! ($this->isLabel)($n))) {
             return 'has_a_lot_with_a_real_name';
         }
         foreach (self::BLOCKERS as $table) {

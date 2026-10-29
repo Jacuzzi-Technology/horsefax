@@ -29,6 +29,9 @@ class ImportPrintedCatalogs extends Command
         if ($this->option('copy')) {
             $this->info('Copied '.$c->copy($this->option('sale')).' catalogs');
         }
+        if (! $this->option('dry-run') && in_array($this->option('sale'), [null, 'boone'], true)) {
+            $this->info('Team lots: '.json_encode($c->cleanTeamLots()));
+        }
         foreach ($c->load($this->option('sale'), (bool) $this->option('dry-run')) as $sale => $out) {
             $this->info($sale.': '.json_encode($out));
         }

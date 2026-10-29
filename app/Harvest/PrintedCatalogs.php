@@ -2,8 +2,10 @@
 
 namespace App\Harvest;
 
+use App\Actions\Record\CleanPendingFoalRecords;
 use App\Models\DataSource;
 use App\Models\SaleLot;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The other sale catalogs in Richard's PDFNotes library (Richard, Oct 28 2026: "we should look through all the catalog
@@ -38,9 +40,12 @@ class PrintedCatalogs
         'boone' => [
             'key' => 'boonecounty', 'name' => 'Boone County Draft Horse & Mule Sale (Sedalia, MO)', 'sale' => 'Boone County Draft Horse & Mule Sale',
             'url' => 'https://boonecountydrafthorseandmules.com/catalog/', 'layout' => 'boone',
-            'terms' => 'Checked Oct 29 2026: boonecountyhorsesale.com redirects to boonecountydrafthorseandmules.com (WordPress); robots.txt (Yoast) allows all; no terms of use or legal page (Forms & Fees has sale terms only); no bot protection. Sale Results page gives category top prices only. Catalogs are Richard\'s own copies (PDFNotes); 2022-2023 copies are scans (not read yet). Facts only.',
+            'terms' => 'Checked Oct 29 2026: boonecountyhorsesale.com redirects to boonecountydrafthorseandmules.com (WordPress); robots.txt (Yoast) allows all; no terms of use or legal page (Forms & Fees has sale terms only); no bot protection. Sale Results page gives category top prices only. Catalogs are Richard\'s own copies (PDFNotes); 2022-2023 copies are scans, read by OCR. Facts only.',
             'catalogs' => [
                 ['CCE5C2BEDFB555DB/8A933998AEE3783D.pdf', 2020, 9], ['03CFC1BCE3CC4521/BC6B9652EB0B67B8.pdf', 2021, 3],
+                // Scans: read from text-only OCR copies (tesseract, see docs/printed-catalogs.md), never copied over.
+                ['A8AB920EB25E7CE7/7778753DDF5E5D52.pdf', 2022, 3, null, null, 'ocr'], ['C23E227CB84FA960/C587B9A8BE9D3247.pdf', 2022, 9, null, null, 'ocr'],
+                ['E738D2D2F0CA7CDC/021D50FD13BEDDF5.pdf', 2023, 3, null, null, 'ocr'], ['BA29E2A0045867C1/536AAB223E9F1B63.pdf', 2023, 9, null, null, 'ocr'],
                 ['5C9CD86EFAB9C0AA/B0D7B385E11092C6.pdf', 2024, 3], ['FF5089ACE66911C6/4AAC3726B2BA21B1.pdf', 2024, 9],
                 ['E304368CC8A7D0C5/372C13B53E653766.pdf', 2025, 3], ['171C387D9D7FF512/69F04CC1BCEFF63D.pdf', 2025, 9],
                 ['4850E16E4007450E/F25838A29A2DD87B.pdf', 2026, 3], ['9DF99B20136B0539/FCC231D7ED59FF40.pdf', 2026, 9],
@@ -104,7 +109,11 @@ class PrintedCatalogs
                 continue;
             }
             @mkdir($this->dir.'/'.$key, 0775, true);
-            foreach ($s['catalogs'] as [$file, $year, $month]) {
+            foreach ($s['catalogs'] as $c) {
+                [$file, $year, $month] = $c;
+                if (($c[5] ?? null) === 'ocr') {
+                    continue; // the OCR copy is made from the scan, not copied
+                }
                 $to = $this->dir.'/'.$key.'/'.self::file($year, $month);
                 if (! is_file($to) && is_file(self::library().'/'.$file)) {
                     copy(self::library().'/'.$file, $to);
@@ -139,6 +148,7 @@ class PrintedCatalogs
             foreach ($s['catalogs'] as $c) {
                 [, $year, $month] = $c;
                 $layout = $c[3] ?? $s['layout'];
+                $memory = ($c[5] ?? null) === 'ocr' ? ini_set('memory_limit', '4G') : null;
                 $path = $this->dir.'/'.$key.'/'.self::file($year, $month);
                 if (! is_file($path)) {
                     $this->say("missing $path");
@@ -189,6 +199,25 @@ class PrintedCatalogs
         }
 
         return $all;
+    }
+
+    /**
+     * Boone County team lots ("LOT 131 & 132 - Pete & Paul") were read as one horse named "& 132 - PETE & PAUL" before the
+     * anchor skipped them (fixed Oct 29 2026): records made from them go (CleanPendingFoalRecords' checks), then the lots.
+     */
+    public function cleanTeamLots(): array
+    {
+        $src = DataSource::where('key', self::SALES['boone']['key'])->value('id');
+        if (! $src) {
+            return ['team_lots' => 0];
+        }
+        $team = fn ($n) => (bool) preg_match('/^&\s*\d/', (string) $n);
+        [$out] = app(CleanPendingFoalRecords::class)->forLabels($team, '&%', 'A team of two horses, not one horse\'s name')();
+        $lots = SaleLot::where('data_source_id', $src)->where('horse_name', 'like', '&%')->whereNull('horse_id')->get()->filter(fn ($l) => $team($l->horse_name));
+        DB::table('review_suggestions')->where('subject_type', 'sale_lot')->whereIn('subject_id', $lots->pluck('id'))->whereNull('decided_by')->delete();
+        $out['team_lots_deleted'] = SaleLot::whereIn('id', $lots->pluck('id'))->delete();
+
+        return $out;
     }
 
     /** QData hip pages ("Hip No." layout) in PrintedCatalogParser's lot shape. */

@@ -40,6 +40,20 @@ Each layout finds the anchors on a page. The block under an anchor, in its own p
 
 **Waverly Fall 2021.** Richard's copy is whole, while the Internet Archive's is cut off. It was added to the Waverly loader as `root_WMHS-F21-Catalog.pdf` (origin `richard_copy`).
 
+## Scans (OCR)
+
+The Boone County 2022 and 2023 catalogs are scans (Corel PDFs with no text). On Oct 29, 2026 they were read with OCR. Each page was rendered at 300 dpi and run through Tesseract as a text-only PDF:
+
+```bash
+pdftoppm -r 300 -gray -png scan.pdf p
+for f in p-*.png; do tesseract "$f" "${f%.png}" -l eng --psm 3 -c textonly_pdf=1 pdf; done
+pdfunite p-*.pdf 2022-03.pdf
+```
+
+The result is stored as `printed-catalogs/boone/<year>-<month>.pdf` and read with the `boone` layout. `--copy` never overwrites it with the scan.
+
+These years print a shorter tree: sire and dam, with only each one's sire line above it. That gives `s`, `d`, `ss`, `ds`, and sometimes `sss` and `dss` (see `sireLines`). Team lots ("LOT 131 & 132") are skipped in every Boone catalog.
+
 ## Not read yet
 
 - Boone County 2022 and 2023: scans, needs OCR.

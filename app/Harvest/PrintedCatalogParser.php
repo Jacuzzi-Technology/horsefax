@@ -40,7 +40,7 @@ class PrintedCatalogParser
      */
     public const LAYOUTS = [
         'southwest' => ['anchor' => '/^LOT\s*NO\.?\s*(\d{1,4}[A-Z]?)\b\s*(.*)$/i', 'header' => 'line'],
-        'boone' => ['anchor' => '/^LOT\s*#?\s*(\d{1,4}[A-Z]?)\b\s+(.+)$/', 'header' => 'inline'],
+        'boone' => ['anchor' => '/^(?:LOT|Lot)\s*#?\s*(\d{1,4}[A-Z]?)\b(?!\s*&)\s*[-–]?\s*(.+)$/u', 'header' => 'inline'], // "LOT 131 & 132": a team, skipped
         'cla' => ['anchor' => '/^Hip\s*#\s*(\d{1,4}[A-Z]?)\s*()$/i', 'header' => 'line', 'name' => 'left'],
         'consignor' => ['anchor' => '/^Consignor:/i', 'header' => 'consignor'],
         'regline' => ['anchor' => '/^(AQHA|APHA|ApHC|APHC|PtHA|PTHA)\s+(\d{5,8})$/', 'header' => 'regline'],
@@ -425,7 +425,7 @@ class PrintedCatalogParser
     public static function tree(array $segs, float $below, string $name): array
     {
         $names = array_values(array_filter(array_map(fn ($s) => ['t' => str_replace(';', "'", $s['t'])] + $s, $segs), fn ($s) => self::nameOk($s['t']) && ! preg_match('/^('.self::REG.')\b|\b\d{5,}\b|^\d+$/', $s['t'])));
-        if (count($names) < 6) {
+        if (count($names) < 4) { // four: sire, dam and their sires (sireLines)
             return [];
         }
 
@@ -458,7 +458,7 @@ class PrintedCatalogParser
             }
         }
         if ($start === null) {
-            return [];
+            return ($p = self::sireLines($cols, $counts)) ? self::finish($p, $name) : [];
         }
         [$g1, $g2] = [$cols[$start]['n'], $cols[$start + 1]['n']];
         $g3 = ($counts[$start + 2] ?? 0) === 8 ? $cols[$start + 2]['n'] : null;
@@ -479,6 +479,41 @@ class PrintedCatalogParser
                 }
             }
         }
+
+        return self::finish($ped, $name);
+    }
+
+    /**
+     * The short tree some Boone County catalogs print: sire and dam, then only the sire line above each ("51's Leo" under
+     * "King's Final"; "King's Fern" under "Johns Johnnie"): columns of 2 and 2 (and 2), each name above its child.
+     */
+    private static function sireLines(array $cols, array $counts): array
+    {
+        foreach ($counts as $i => $n) {
+            if ($n !== 2 || ($counts[$i + 1] ?? 0) !== 2) {
+                continue;
+            }
+            [$g1, $g2] = [$cols[$i]['n'], $cols[$i + 1]['n']];
+            $above = fn ($p, $c) => $p['y'] < $c['y'] && $c['y'] - $p['y'] < 60;
+            if (! $above($g2[0], $g1[0]) || ! $above($g2[1], $g1[1]) || $g2[1]['y'] < $g1[0]['y']) {
+                return [];
+            }
+            $ped = ['s' => $g1[0]['t'], 'd' => $g1[1]['t'], 'ss' => $g2[0]['t'], 'ds' => $g2[1]['t']];
+            if (($counts[$i + 2] ?? 0) === 2) {
+                $g3 = $cols[$i + 2]['n'];
+                if ($above($g3[0], $g2[0]) && $above($g3[1], $g2[1]) && $g3[1]['y'] > $g1[0]['y']) {
+                    [$ped['sss'], $ped['dss']] = [$g3[0]['t'], $g3[1]['t']];
+                }
+            }
+
+            return $ped;
+        }
+
+        return [];
+    }
+
+    private static function finish(array $ped, string $name): array
+    {
         $ped = array_map(fn ($n) => self::clean($n), $ped);
         if (in_array('', [$ped['s'], $ped['d']], true)) {
             return [];
