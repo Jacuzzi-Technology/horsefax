@@ -102,10 +102,12 @@ class AdminController extends Controller
             ->orderByDesc('created_at')->paginate(50)->withQueryString();
 
         // Filter choices with how many records have each, refreshed hourly (counting 4M+ records on every visit is slow).
-        $options = \Illuminate\Support\Facades\Cache::remember('admin.horse-filter-options', 3600, fn () => [
+        // Breeds A-Z (Richard, Oct 29 2026), "(none)" last; the others most common first.
+        $options = \Illuminate\Support\Facades\Cache::remember('admin.horse-filter-options.v2', 3600, fn () => [
             'registry' => \App\Models\HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')->whereNotNull('registry')
                 ->selectRaw('registry v, count(distinct horse_id) n')->groupBy('registry')->orderByDesc('n')->pluck('n', 'v')->all(),
-            'breed' => Horse::selectRaw("coalesce(breed, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
+            'breed' => Horse::selectRaw("coalesce(breed, '(none)') v, count(*) n")->groupBy('v')->pluck('n', 'v')
+                ->sortKeysUsing(fn ($a, $b) => [$a === '(none)', strtolower($a)] <=> [$b === '(none)', strtolower($b)])->all(),
             'sex' => Horse::selectRaw("coalesce(sex, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
             'color' => Horse::selectRaw("coalesce(color, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
             'source' => Horse::selectRaw("coalesce(source, '(none)') v, count(*) n")->groupBy('v')->orderByDesc('n')->pluck('n', 'v')->all(),
@@ -126,8 +128,8 @@ class AdminController extends Controller
             'events' => $horse->events()->orderByDesc('created_at')->get(),
             'documents' => $horse->documents()->orderByDesc('created_at')->get(),
             'stewardships' => $horse->stewardships()->with('user')->orderBy('created_at')->get(),
-            'audit' => DB::table('audit_log')->where('horse_id', $horse->id)->leftJoin('users', 'users.id', '=', 'audit_log.actor_id')
-                ->orderByDesc('audit_log.id')->limit(200)->get(['audit_log.*', 'users.name as actor_name']),
+            'audit' => (new \App\Support\AuditMask)->rows(DB::table('audit_log')->where('horse_id', $horse->id)->leftJoin('users', 'users.id', '=', 'audit_log.actor_id')
+                ->orderByDesc('audit_log.id')->limit(200)->get(['audit_log.*', 'users.name as actor_name'])),
         ]);
     }
 

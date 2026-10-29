@@ -51,6 +51,14 @@ Artisan::command('hf:harvest-nrha {--years=} {--from=} {--to=1974} {--delay=3} {
     $this->info('Index now holds '.\App\Models\ShowRecord::count().' registered names, '.\App\Models\ShowAppearance::count().' results.');
 })->purpose('Harvest NRHA show results into the registered-name index');
 
+// Rider and owner for NRHA results stored before they were kept, read from the saved pages (no requests to NRHA).
+// php artisan hf:nrha-backfill-people [--limit=1000]
+Artisan::command('hf:nrha-backfill-people {--limit=}', function () {
+    [$pages, $filled] = (new \App\Harvest\NrhaHarvester(0, fn ($l) => $this->line(now()->format('H:i:s').' '.$l)))
+        ->backfillPeople($this->option('limit') ? (int) $this->option('limit') : null);
+    $this->info("NRHA backfill: $pages pages read, $filled results given rider and owner");
+})->purpose('Fill rider and owner on stored NRHA results from the saved pages');
+
 // Polite, resumable harvest of NRCHA's public results data files, newest year first (skips the current year).
 // php artisan hf:harvest-nrcha [--years=2025] --delay=3 [--max-shows=5]
 Artisan::command('hf:harvest-nrcha {--years=} {--delay=3} {--max-shows=}', function () {
@@ -86,7 +94,104 @@ Artisan::command('hf:harvest-equestrianlive {--delay=20} {--max-shows=}', functi
 Artisan::command('hf:build-records {--limit=}', function () {
     $out = app(\App\Actions\Record\BuildRecordsFromResults::class)($this->option('limit') ? (int) $this->option('limit') : null, fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
     $this->info(json_encode($out));
+    $this->info('Barn names: '.json_encode(app(\App\Actions\Record\LinkBarnNameRecords::class)()));
 })->purpose('Create unverified horse records from published show results and attach the results');
+
+// HOMD listings known only by a barn name, merged with the record made from the same name's results when every
+// check passes; the rest go to the name-review list (Oct 22 2026). hf:build-records runs this too.
+// php artisan hf:link-barn-names [--dry-run]
+Artisan::command('hf:link-barn-names {--dry-run}', function () {
+    $out = app(\App\Actions\Record\LinkBarnNameRecords::class)((bool) $this->option('dry-run'), fn ($l) => $this->line($l));
+    $this->info(json_encode($out));
+})->purpose('Merge results-made records into HOMD barn-name records of the same horse');
+
+// Sire and dam offspring earnings from harvested results (Richard, Oct 22 2026): staff only until they roughly match
+// NRHA's milestones. Cron runs it nightly after hf:build-records. --benchmark only prints the NRHA comparison.
+// php artisan hf:offspring-earnings [--benchmark]
+Artisan::command('hf:offspring-earnings {--benchmark}', function () {
+    if (! $this->option('benchmark')) {
+        $stats = app(\App\Actions\Record\OffspringEarnings::class)(fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+        $this->info(json_encode(\Illuminate\Support\Arr::except($stats, ['organizations', 'nrha_years', 'benchmark'])));
+    }
+    $rows = $stats['benchmark'] ?? \App\Actions\Record\OffspringEarnings::benchmark();
+    $this->table(['Horse', 'Role', 'NRHA passed', 'Ours (NRHA)', 'Share', 'NRHA earners', 'Foals', 'Records'], array_map(fn ($b) => [
+        $b['name'], $b['role'], '$'.$b['milestone_millions'].'M ('.$b['milestone_year'].')', '$'.number_format($b['nrha_cents'] / 100),
+        round(100 * $b['share_of_milestone'], 1).'%', $b['nrha_earners'], $b['offspring'], $b['records'],
+    ], $rows));
+})->purpose('Compute sire and dam offspring earnings (staff only) and compare with NRHA milestones');
+
+// Reining stallions' own pages (Richard, Oct 22 2026): each stallion's pedigree, and the offspring the page names as his
+// own get, linked by LinkPublishedOffspring's checks (the rest held for staff). A JSON list made by agents that fetched
+// only allowed pages (robots and terms checked, HorsefaxBot, 3 s a request). Each item: name, foal_year, registry,
+// registration_number, pedigree {s, d, ...}, source_url, offspring [{name, relation (only "get" is used), foal_year, dam, source_url}].
+// php artisan hf:import-offspring storage/app/private/imports/reining-stallion-pages.json [--dry-run]
+Artisan::command('hf:import-offspring {file} {--dry-run}', function () {
+    $items = json_decode((string) file_get_contents($this->argument('file')), true);
+    if (! is_array($items)) {
+        return $this->error('Not a JSON list.');
+    }
+    $display = fn ($n) => \App\Harvest\NrchaHarvester::display(trim((string) $n));
+    $source = \App\Models\DataSource::firstOrCreate(['key' => 'reining-stallion-pages'], [
+        'name' => 'Reining stallion pages (pedigrees and offspring)', 'url' => 'https://nrha.com/million-dollar-earners/', 'permission' => 'no_terms_posted',
+        'terms_note' => 'Oct 22 2026: NRHA\'s Million Dollar Earners sires and dams, and each stallion\'s own standing-farm or syndicate page; robots.txt and terms checked first, restricted or walled sites skipped. Names only (no earnings, owners or photos). Richard approved.',
+    ]);
+    $dry = (bool) $this->option('dry-run');
+    $dry && \Illuminate\Support\Facades\DB::beginTransaction();
+    $out = ['stallions' => [], 'offspring' => []];
+    $count = function (string $group, string $status) use (&$out) {
+        $out[$group][$status] = ($out[$group][$status] ?? 0) + 1;
+    };
+    foreach ($items as $h) {
+        $name = $display($h['name'] ?? '');
+        if ($name === '' || empty($h['source_url'])) {
+            $count('stallions', 'invalid');
+            continue;
+        }
+        $ped = collect($h['pedigree'] ?? [])->filter(fn ($n, $p) => preg_match('/^[sd]{1,5}$/', (string) $p) && trim((string) $n) !== '')->map($display)->all();
+        // A page's foal year that differs from the only record of the name would make ImportPublishedHorse start a second
+        // record: keep the record's year and leave the difference for staff.
+        $fy = ! empty($h['foal_year']) ? (int) $h['foal_year'] : null;
+        $same = \App\Models\Horse::named($name)->get();
+        if ($fy && $same->count() === 1 && $same->first()->birth_year && (int) $same->first()->birth_year !== $fy) {
+            $this->warn("$name: page says foaled $fy, the record says {$same->first()->birth_year}; kept the record's");
+            $fy = null;
+        }
+        if ($ped || ! empty($h['registration_number']) || $fy) {
+            $count('stallions', app(\App\Actions\Record\ImportPublishedHorse::class)([
+                'name' => $name, 'foal_year' => $fy,
+                'registry' => isset($h['registry']) ? \App\Harvest\SuperSiresParser::registry((string) $h['registry']) : null,
+                'registration_number' => $h['registration_number'] ?? null, 'color' => null,
+                'sex' => $h['sex'] ?? 'stallion', 'birth_date' => null, 'pedigree' => $ped, 'results' => [],
+            ], $h['source_url']));
+            \App\Models\HarvestPage::firstOrNew(['url' => $h['source_url']], ['data_source_id' => $source->id, 'kind' => 'stallion_site'])
+                ->fill(['status' => 'parsed', 'rows' => count($ped), 'fetched_at' => now()])->save();
+        }
+        $get = array_filter($h['offspring'] ?? [], fn ($o) => ($o['relation'] ?? '') === 'get' && trim((string) ($o['name'] ?? '')) !== '');
+        if (! $get) {
+            continue;
+        }
+        // Two records of the sire's name are a duplicate for staff to merge first: linking to either would split his foals.
+        $sires = \App\Models\Horse::named($name)->get();
+        if ($sires->count() !== 1) {
+            $count('stallions', $sires->isEmpty() ? 'sire_not_on_record' : 'sire_ambiguous');
+            $this->warn("$name: ".($sires->isEmpty() ? 'no record' : 'several records').', offspring not linked');
+            continue;
+        }
+        $sire = $sires->first();
+        foreach ($get as $o) {
+            $url = $o['source_url'] ?? $h['source_url'];
+            $status = app(\App\Actions\Record\LinkPublishedOffspring::class)($sire, ['name' => $o['name'], 'foal_year' => $o['foal_year'] ?? null, 'dam' => $o['dam'] ?? null, 'source_url' => $url]);
+            $count('offspring', $status);
+            \App\Models\HarvestPage::firstOrNew(['url' => $url], ['data_source_id' => $source->id, 'kind' => 'stallion_site'])
+                ->fill(['status' => 'parsed', 'fetched_at' => now()])->save();
+            if ($this->getOutput()->isVerbose()) {
+                $this->line("$name -> {$o['name']}: $status");
+            }
+        }
+    }
+    $dry && \Illuminate\Support\Facades\DB::rollBack();
+    $this->info(($dry ? 'DRY RUN (nothing saved) ' : '').json_encode($out));
+})->purpose('Link offspring named on reining stallions\' own pages to their records (checks in LinkPublishedOffspring)');
 
 // Super Sires stallion pedigrees and nominated foals (one page per 10 seconds, resumable).
 // php artisan hf:harvest-supersires [--delay=10] [--max-pages=5]
@@ -122,6 +227,28 @@ Artisan::command('hf:harvest-platinum {--all} {--delay=3} {--max-pages=}', funct
     [$pages, $lots] = (new \App\Harvest\PlatinumHarvester((float) $this->option('delay'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l)))->run((bool) $this->option('all'), $this->option('max-pages') ? (int) $this->option('max-pages') : null);
     $this->info("Platinum: $pages listing pages read, $lots lots stored");
 })->purpose('Collect Platinum Equine Auction expired auctions into the sale-lots index');
+
+// DreamHorse.com horse ads (Richard, Oct 22 2026), facts only, as held asking prices matched on registration number
+// only. Raw file + CSV/JSON in storage/app/private/dreamhorse (--dir to change). See docs/dreamhorse-harvest.md.
+// php artisan hf:harvest-dreamhorse [--delay=3] [--max-ads=50] [--refresh-days=30] [--no-discover] [--no-load]
+Artisan::command('hf:harvest-dreamhorse {--delay=3} {--max-ads=} {--refresh-days=30} {--no-discover} {--no-load} {--dir=}', function () {
+    // House rule: never under 3 s between requests.
+    $h = new \App\Harvest\DreamHorseHarvester(max(3.0, (float) $this->option('delay')), fn ($l) => $this->line(now()->format('H:i:s').' '.$l), $this->option('dir') ?: null);
+    try {
+        $out = $h->run(! $this->option('no-discover'), $this->option('max-ads') ? (int) $this->option('max-ads') : null, (int) $this->option('refresh-days'));
+    } catch (\App\Harvest\DreamHorseBlocked $e) {
+        return $this->error($e->getMessage());
+    }
+    $this->info('DreamHorse: '.json_encode($out));
+    if (! $this->option('no-load')) {
+        $this->info('Loaded: '.json_encode($h->load()));
+    }
+})->purpose('Collect DreamHorse.com horse ads (facts only) into the raw file and the sale-lots index');
+
+// Load a DreamHorse raw file (ads.jsonl in --dir) into sale_lots without fetching anything.
+Artisan::command('hf:load-dreamhorse {--dir=}', function () {
+    $this->info(json_encode((new \App\Harvest\DreamHorseHarvester(3.0, null, $this->option('dir') ?: null))->load()));
+})->purpose('Load collected DreamHorse ads into the sale-lots index (registration-number matches only)');
 
 // php artisan hf:match-sales [--limit=100]   (cron runs it nightly after hf:build-records)
 Artisan::command('hf:match-sales {--limit=}', function () {
@@ -182,6 +309,79 @@ Artisan::command('hf:import-pedigrees {file} {--source=stallion-sites}', functio
     $this->info(json_encode($out));
 })->purpose('Import pedigrees read from published stallion pages into horse records');
 
+// AQHA registration papers on file at Horse of My Dreams (Richard, Oct 20 2026): certificates and AQHA Records reports
+// read into a JSON list by the papers-inventory tools. Identity, registration number and pedigree only: owner names
+// and genetic results on the papers are never imported. Oldest horses first, so ancestors exist with their numbers
+// before the charts that name them. Rerunnable: it only fills what's missing.
+// php artisan hf:import-aqha-papers storage/app/private/aqha-papers.json [--dry-run]
+Artisan::command('hf:import-aqha-papers {file} {--dry-run}', function () {
+    $items = json_decode(file_get_contents($this->argument('file')), true, flags: JSON_THROW_ON_ERROR);
+    usort($items, fn ($a, $b) => ($a['foal_year'] ?? 9999) <=> ($b['foal_year'] ?? 9999));
+    $display = fn ($n) => \App\Harvest\NrchaHarvester::display(trim((string) $n));
+    $color = fn ($c) => $c ? \App\Harvest\SuperSiresParser::color(strcasecmp($c, 'gray') === 0 ? 'Grey' : $c) : null;
+    $out = [];
+    foreach ($items as $h) {
+        if (! preg_match('/^[A-Z]?\d{7}$/', (string) ($h['registration_number'] ?? '')) || trim((string) ($h['name'] ?? '')) === '') {
+            $out['invalid'] = ($out['invalid'] ?? 0) + 1;
+            continue;
+        }
+        $ped = collect($h['pedigree'] ?? [])->filter(fn ($l, $p) => preg_match('/^[sd]{1,3}$/', (string) $p) && trim((string) ($l['name'] ?? '')) !== '')
+            ->map(fn ($l) => ['name' => $display($l['name']), 'registry' => 'AQHA', 'registration_number' => $l['registration_number'] ?? null,
+                'foal_year' => $l['foal_year'] ?? null, 'color' => $color($l['color'] ?? null)])->all();
+        $item = [
+            'name' => $display($h['name']), 'registry' => 'AQHA', 'registration_number' => $h['registration_number'],
+            'foal_year' => $h['foal_year'] ?? null, 'birth_date' => $h['birth_date'] ?? null,
+            'sex' => in_array($h['sex'] ?? null, ['mare', 'stallion', 'gelding'], true) ? $h['sex'] : null, 'color' => $color($h['color'] ?? null),
+            'pedigree' => $ped, 'previous_names' => array_map($display, $h['previous_names'] ?? []), 'results' => [],
+        ];
+        if ($this->option('dry-run')) {
+            $out['would_import'] = ($out['would_import'] ?? 0) + 1;
+            continue;
+        }
+        $status = app(\App\Actions\Record\ImportPublishedHorse::class)($item, 'AQHA registration papers on file at Horse of My Dreams ('.($h['document'] ?? 'certificate').')');
+        $out[$status] = ($out[$status] ?? 0) + 1;
+    }
+    $this->info(json_encode($out));
+})->purpose('Import identity, registration numbers and pedigrees from AQHA papers on file');
+
+// Registry details from the same AQHA papers (Richard, Oct 21 2026): owner history, parentage verified, how produced,
+// health panel, deceased date, markings, show/race summaries. RECORDED, NOT SHOWN (see RegistryRecord). Matched to
+// horses by registration number only; rerunnable: a document already imported is replaced, never duplicated.
+// php artisan hf:import-registry-records storage/app/private/aqha-registry.json
+Artisan::command('hf:import-registry-records {file}', function () {
+    $items = json_decode(file_get_contents($this->argument('file')), true, flags: JSON_THROW_ON_ERROR);
+    $out = ['documents' => 0, 'owners' => 0, 'no_horse' => 0, 'ambiguous' => 0];
+    foreach ($items as $d) {
+        $ids = \App\Models\HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')
+            ->where('value_normalized', \App\Support\Record::normalizeIdentifier((string) $d['registration_number']))
+            ->where(fn ($q) => $q->whereNull('registry')->orWhere('registry', $d['registry']))->pluck('horse_id')->unique();
+        if ($ids->count() !== 1) {
+            $out[$ids->isEmpty() ? 'no_horse' : 'ambiguous']++;
+            continue;
+        }
+        \Illuminate\Support\Facades\DB::transaction(function () use ($d, $ids, &$out) {
+            $rec = \App\Models\RegistryRecord::updateOrCreate(
+                ['registry' => $d['registry'], 'registration_number' => $d['registration_number'], 'document_ref' => $d['document_ref']],
+                ['horse_id' => $ids->first(), 'document_kind' => $d['document_kind'], 'document_date' => $d['document_date'] ?? null,
+                    'source' => $d['source'] ?? null, 'data' => $d['data'] ?: null, 'raw_text' => $d['raw_text'] ?? null]);
+            $rec->owners()->delete();
+            foreach ($d['owners'] ?? [] as $o) {
+                if (trim((string) ($o['name'] ?? '')) === '') {
+                    continue;
+                }
+                $rec->owners()->create(['horse_id' => $rec->horse_id, 'role' => $o['role'] === 'current' ? 'current' : 'previous',
+                    'name' => trim($o['name']), 'city' => $o['city'] ?? null, 'state' => $o['state'] ?? null, 'country' => $o['country'] ?? null,
+                    'date_acquired' => $o['date_acquired'] ?? null]);
+                $out['owners']++;
+            }
+            // Counts only: the horse's audit page is visible to its owner, and these details are not shown.
+            \App\Support\Audit::record('registry_record.imported', $rec, null, ['document' => $d['document_kind'], 'owners' => count($d['owners'] ?? [])], $rec->horse_id);
+            $out['documents']++;
+        });
+    }
+    $this->info(json_encode($out));
+})->purpose('Record registry details (owner history and more) from AQHA papers, not shown on the site');
+
 // Possible duplicate names for staff review (spacing/punctuation variants and one-letter variants). Cron runs it nightly.
 // php artisan hf:find-name-variants
 Artisan::command('hf:find-name-variants', function () {
@@ -219,6 +419,22 @@ Artisan::command('hf:harvest-billings {--no-archive} {--delay=3} {--max-files=}'
         ->run(! $this->option('no-archive'), $this->option('max-files') ? (int) $this->option('max-files') : null);
     $this->info('Billings: '.json_encode($out));
 })->purpose('Collect Billings Livestock horse-sale catalogs and Top lists into the sale-lots index');
+
+// Billings catalogs from Richard's own PDF copies (PDFNotes, 2013-2024), read from disk; the files are never changed.
+// The biggest (Sept 2013, 50 MB) needs more than the default 128 MB:
+// php -d memory_limit=1G artisan hf:import-billings-catalogs "<DoNotEdit>/F009597BA3B64337/E22DAA685508703E.pdf" [--month=2013-02] [--dry-run]
+Artisan::command('hf:import-billings-catalogs {paths*} {--month=} {--dry-run}', function () {
+    $paths = $this->argument('paths');
+    if ($this->option('month') && count($paths) > 1) {
+        $this->error('--month applies to one file at a time');
+
+        return 1;
+    }
+    $h = new \App\Harvest\BillingsHarvester(3.0, fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+    foreach ($paths as $p) {
+        $this->info(json_encode($h->importFile($p, $this->option('month') ?: null, (bool) $this->option('dry-run'))));
+    }
+})->purpose('Load Billings Livestock catalog PDFs (Richard\'s copies) into the sale-lots index');
 
 Artisan::command('hf:create-sale-records {source} {--dry-run}', function (string $source) {
     $out = app(\App\Actions\Record\CreateRecordsFromSaleLots::class)($source, (bool) $this->option('dry-run'), fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
@@ -279,3 +495,43 @@ Artisan::command('hf:search-report', function () {
     $this->info('Items: '.$items.' · with an answer: '.$rows->where('suggestion', '!=', 'unsure')->sum('n').' · accepted '.$acc.', rejected '.$rej
         .($acc + $rej ? ' ('.round(100 * $acc / ($acc + $rej)).'% accepted)' : '').' · cost per item $'.($items ? number_format($rows->sum('cents') / 100 / $items, 4) : '0'));
 })->purpose('Pilot report for search-backed review suggestions');
+
+// Re-apply a sale source's catalog lots after a matching-rule change (Oct 27 2026): lots waiting on staff only because
+// a same-name record had "nothing to compare" are placed again (they now join an empty record), and every attached
+// lot's printed identity fills what its record is missing (pedigree positions included). Safe to rerun.
+// php artisan hf:reapply-catalog-lots billings [--dry-run]
+Artisan::command('hf:reapply-catalog-lots {source} {--dry-run}', function (string $source) {
+    $ds = \App\Models\DataSource::where('key', $source)->firstOrFail();
+    $label = $ds->name;
+    $out = ['re_placed' => [], 'identity_filled' => 0, 'pedigrees_deepened' => 0];
+    $run = function () use ($ds, $label, &$out) {
+        \App\Models\SaleLot::where('data_source_id', $ds->id)->whereNull('horse_id')->where('review_status', 'queued')
+            ->where(fn ($w) => $w->where('review_note', 'like', 'Name only: nothing on the record to compare%')->orWhere('review_note', 'like', 'Name and foal year agree; no parentage%'))
+            ->lazyById(500, 'id')->each(function ($lot) use ($label, &$out) {
+                $lot->forceFill(['review_status' => null, 'review_note' => null])->save();
+                $r = \App\Harvest\RegistrationOnlyMatch::place($lot, $label);
+                $out['re_placed'][$r] = ($out['re_placed'][$r] ?? 0) + 1;
+            });
+        $system = \App\Actions\Record\BuildRecordsFromResults::system();
+        \App\Models\SaleLot::where('data_source_id', $ds->id)->whereNotNull('horse_id')->with('horse')->lazyById(500, 'id')->each(function ($lot) use ($system, &$out) {
+            if (! $lot->horse) {
+                return;
+            }
+            $pedigree = $lot->pedigree ?: array_filter(['s' => $lot->sire_name, 'd' => $lot->dam_name, 'ds' => $lot->dam_sire_name]);
+            $f = app(\App\Actions\Record\AddPublishedIdentity::class)($lot->horse, $system, [
+                'registry' => $lot->registry, 'registration_number' => $lot->registration_number, 'foal_year' => $lot->foal_year, 'pedigree' => $pedigree,
+            ], 'sale lot '.$lot->id);
+            $out['identity_filled'] += $f ? 1 : 0;
+            $out['pedigrees_deepened'] += in_array('pedigree', $f, true) ? 1 : 0;
+        });
+    };
+    if ($this->option('dry-run')) {
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        $run();
+        \Illuminate\Support\Facades\DB::rollBack();
+        $this->info('Dry run (nothing saved): '.json_encode($out));
+    } else {
+        $run();
+        $this->info(json_encode($out));
+    }
+})->purpose('Re-place and re-fill a sale source\'s catalog lots after a matching-rule change');

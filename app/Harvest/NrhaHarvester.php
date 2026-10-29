@@ -14,7 +14,8 @@ use Illuminate\Support\Facades\Storage;
  * Polite, resumable harvest of NRHA's public show results, newest shows first. Same rules as the Congress
  * harvester: identifies itself, one request every few seconds, never refetches a page it has, keeps an evidence
  * copy (only the results section, gzipped: NRHA pages are mostly site navigation), and stores only the horse's
- * name, placing and earnings. Shows that are the Congress are skipped (collected from the Congress directly).
+ * name, placing and earnings, plus the rider and owner for matching only (Richard, Oct 22 2026; never shown
+ * publicly). Shows that are the Congress are skipped (collected from the Congress directly).
  */
 class NrhaHarvester
 {
@@ -80,6 +81,42 @@ class NrhaHarvester
         return [$parsed, $stored];
     }
 
+    /**
+     * Fill rider and owner on results stored before they were kept, from the saved evidence copies (no requests to
+     * NRHA). Only fills blanks. Returns [pages read, results filled].
+     */
+    public function backfillPeople(?int $limit = null): array
+    {
+        [$pages, $filled] = [0, 0];
+        $q = HarvestPage::where('data_source_id', $this->source->id)->where('kind', 'class')->where('status', 'parsed')
+            ->whereNotNull('path')->whereExists(fn ($w) => $w->select(DB::raw(1))->from('show_appearances')
+                ->whereColumn('show_appearances.harvest_page_id', 'harvest_pages.id')->whereNull('rider_name')->whereNull('owner_name'));
+        foreach ($q->lazyById(500) as $page) {
+            if ($limit !== null && $pages >= $limit) {
+                break;
+            }
+            $pages++;
+            $raw = Storage::disk('local')->get($page->path);
+            if ($raw === null || ($html = @gzdecode($raw)) === false) {
+                continue;
+            }
+            foreach (NrhaParser::classPage($html)['rows'] as $row) {
+                if (! $row['rider'] && ! $row['owner']) {
+                    continue;
+                }
+                $filled += ShowAppearance::where('harvest_page_id', $page->id)->where('placing', $row['placing'])
+                    ->whereIn('show_record_id', ShowRecord::where('name_key', ShowRecord::key($row['horse']))->select('id'))
+                    ->whereNull('rider_name')->whereNull('owner_name')
+                    ->update(['rider_name' => $row['rider'], 'owner_name' => $row['owner']]);
+            }
+            if ($pages % 5000 === 0) {
+                $this->say("$pages pages, $filled results filled");
+            }
+        }
+
+        return [$pages, $filled];
+    }
+
     private function load(string $url, string $kind, int $year, bool $keepWhole = false, ?HarvestPage $page = null): ?string
     {
         $page ??= HarvestPage::firstOrNew(['url' => $url], ['data_source_id' => $this->source->id, 'year' => $year, 'kind' => $kind]);
@@ -142,10 +179,13 @@ class NrhaHarvester
                         'event_dates' => $data['dates'] ?: $show['dates'], 'class_code' => $data['class_code'],
                         'class_name' => $className, 'organization' => 'NRHA', 'registry_inferred' => null,
                         'earnings_cents' => $row['earnings_cents'], 'source_url' => $page->url,
+                        'rider_name' => $row['rider'], 'owner_name' => $row['owner'],
                     ]
                 );
                 if ($app->wasRecentlyCreated) {
                     $n++;
+                } elseif (! $app->rider_name && ! $app->owner_name && ($row['rider'] || $row['owner'])) {
+                    $app->forceFill(['rider_name' => $row['rider'], 'owner_name' => $row['owner']])->save();
                 }
                 $touched[$record->id] = true;
             }

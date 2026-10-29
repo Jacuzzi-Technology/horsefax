@@ -94,6 +94,8 @@
 
 @unless ($inApp)
 <footer class="bg-forest text-cream/80 mt-auto print:hidden">
+    {{-- Bot trap (TrapController): invisible to people and screen readers, forbidden by robots.txt. --}}
+    <a href="/x/records-index" rel="nofollow" tabindex="-1" aria-hidden="true" style="display:none">Records index</a>
     <div class="wrap py-14 grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
             <img src="/img/wordmark-reverse.svg" alt="Horsefax" class="w-[180px] h-auto">

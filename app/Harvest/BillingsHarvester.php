@@ -86,6 +86,62 @@ class BillingsHarvester
         return $out;
     }
 
+    /**
+     * A catalog PDF from Richard's own copies (Richard, Oct 27 2026: the 2013-2024 catalogs he kept in PDFNotes on his
+     * iPad, copied to Dropbox/Horsefax/Sale Catalogs/DoNotEdit). Only the PDF's own text is read: PDFNotes keeps his
+     * handwritten notes in separate files beside it, which are never opened. The file is read, never changed. Lots link
+     * to Billings' horse-sale page (there is no public URL for a printed catalog); the harvest page is keyed by the
+     * file's SHA-256, so a rerun or the same file on another machine is the same page. Each lot is then placed as the
+     * other catalog imports do (RegistrationOnlyMatch::place: registration number, else the registered-name rule).
+     *
+     * @param  ?string  $month  "2013-02" when known; otherwise read from the cover
+     * @return array{file:string, sale:?string, hips:int, registration_numbers:int, pedigrees:int, placed:array<string,int>}
+     */
+    public function importFile(string $path, ?string $month = null, bool $dryRun = false): array
+    {
+        $pdf = file_get_contents($path);
+        $text = StatePdfHarvester::text($pdf);
+        $hips = BillingsParser::catalog(PremierParser::words($pdf));
+        $month ??= self::coverMonth($text);
+        $day = $month && strlen($month) === 10 ? $month : null; // "2015-02-27": a part of a catalog whose cover has no date
+        $name = $month ? strtolower(date('M', strtotime(substr($month, 0, 7).'-01'))).substr($month, 2, 2).'cat' : basename($path);
+        [$date] = $day ? [$day] : self::saleDate($name, $text);
+        $out = ['file' => basename($path), 'sale' => $date, 'hips' => count($hips),
+            'registration_numbers' => count(array_filter($hips, fn ($h) => $h['reg'])), 'pedigrees' => count(array_filter($hips, fn ($h) => $h['pedigree'])), 'placed' => []];
+        if ($dryRun || ! $hips || ! $date) {
+            return $out;
+        }
+        $sha = hash('sha256', $pdf);
+        $page = HarvestPage::firstOrNew(['url' => 'catalog-copy:billings:'.$sha], ['data_source_id' => $this->source->id, 'kind' => 'catalog_copy']);
+        $file = 'harvest/billings/'.substr($date, 0, 4).'/'.$sha.'.pdf.gz';
+        if (! \Illuminate\Support\Facades\Storage::disk('local')->exists($file)) {
+            \Illuminate\Support\Facades\Storage::disk('local')->put($file, gzencode($pdf, 9));
+        }
+        $page->fill(['path' => $file, 'sha256' => $sha, 'status' => 'fetched', 'fetched_at' => now()])->save();
+        $this->catalog($page, $name, $text, $hips, self::BASE.'/horse-sales/', $day);
+        $lots = SaleLot::where('data_source_id', $this->source->id)->where('harvest_page_id', $page->id);
+        (clone $lots)->where('status', 'catalog')->where('sale_date', '<', now()->subDays(3)->toDateString())
+            ->update(['status' => 'offered', 'note' => 'Offered at the sale; from Billings\' printed catalog, which gives no prices']);
+        foreach ($lots->get() as $lot) {
+            $r = RegistrationOnlyMatch::place($lot, 'Billings Livestock');
+            $out['placed'][$r] = ($out['placed'][$r] ?? 0) + 1;
+        }
+
+        return $out;
+    }
+
+    /** "February 22-23-24" etc. near the front of a catalog -> "2013-02", with the first four-digit year there. */
+    public static function coverMonth(string $text): ?string
+    {
+        $cover = substr($text, 0, 8000);
+        if (! preg_match('/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i', $cover, $m)
+            || ! preg_match('/\b(20[0-3]\d)\b/', $cover, $y)) {
+            return null;
+        }
+
+        return $y[1].'-'.date('m', strtotime($m[1].' 1 2000'));
+    }
+
     public static function isTopList(string $name): bool
     {
         return (bool) preg_match('/top[-_ ]?(20|25|30|40)/i', $name);
@@ -135,16 +191,16 @@ class BillingsHarvester
             [$month, $year] = [$months[strtolower($m[1])], 2000 + (int) $m[3]];
         }
         $cover = substr($text, 0, 6000);
-        if ($month && preg_match('/\b('.implode('|', array_map(fn ($k) => date('F', mktime(0, 0, 0, $months[$k], 1)), array_keys(array_filter($months, fn ($v) => $v === $month)))).')\s+(\d{1,2})\b/i', $cover, $d)) {
+        if ($month && preg_match('/\b('.implode('|', array_map(fn ($k) => date('F', mktime(0, 0, 0, $months[$k], 1)), array_keys(array_filter($months, fn ($v) => $v === $month)))).')\s*(\d{1,2})\b/i', $cover, $d)) {
             return [sprintf('%04d-%02d-%02d', $year, $month, (int) $d[2]), 'day'];
         }
 
         return $month ? [sprintf('%04d-%02d-01', $year, $month), 'month'] : [null, 'month'];
     }
 
-    private function catalog(HarvestPage $page, string $name, string $text, array $hips): int
+    private function catalog(HarvestPage $page, string $name, string $text, array $hips, ?string $sourceUrl = null, ?string $day = null): int
     {
-        [$date, $precision] = self::saleDate($name, $text);
+        [$date, $precision] = $day ? [$day, 'day'] : self::saleDate($name, $text);
         if (! $date) {
             $page->fill(['status' => 'skipped', 'error' => 'Catalog month not found'])->save();
 
@@ -162,7 +218,9 @@ class BillingsHarvester
                 'registration_number' => $h['reg'], 'foal_year' => $h['foal_year'], 'sex' => $h['sex'], 'color' => $h['color'],
                 'breed' => $h['registry'] === 'AQHA' ? 'Quarter Horse' : null,
                 'sire_name' => $h['pedigree']['s'] ?? null, 'dam_name' => $h['pedigree']['d'] ?? null, 'dam_sire_name' => $h['pedigree']['ds'] ?? null,
-                'pedigree' => $h['pedigree'] ?: null, 'source_url' => $page->url,
+                'pedigree' => $h['pedigree'] ?: null,
+                // A Top-list lot keeps its link to the published list when a printed catalog fills in its details.
+                'source_url' => $sourceUrl && $lot->exists ? $lot->source_url : ($sourceUrl ?? $page->url),
                 'note' => $h['video'] ? mb_substr('Video: '.$h['video'], 0, 250) : null,
             ], fn ($v) => $v !== null));
             if (! $keep) {

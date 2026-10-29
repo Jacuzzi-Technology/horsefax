@@ -21,7 +21,7 @@ class RecordFacts
     public static function fromColumns(array $c): array
     {
         $out = [];
-        foreach (['registered_name', 'barn_name', 'breed', 'sex', 'color', 'markings'] as $f) {
+        foreach (['registered_name', 'barn_name', 'breed', 'sex', 'color', 'markings', 'breeder'] as $f) {
             if (array_key_exists($f, $c)) {
                 $out[$f] = [self::clean($c[$f]), null];
             }

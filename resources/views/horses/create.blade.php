@@ -89,6 +89,7 @@
                     <label class="field-label" for="f-markings">Markings & distinguishing features</label>
                     <textarea id="f-markings" name="markings" rows="2" class="field">{{ $v('markings') }}</textarea>
                 </div>
+                <x-input name="breeder" label="Breeder (as the registry records it)" :value="$v('breeder')" />
             </section>
 
             <label class="flex items-start gap-2 font-sans text-[14px]"><input type="checkbox" name="attest" value="1" class="accent-gold mt-1" @checked(old('attest'))> <span>The information I enter is true to the best of my knowledge, and I own this horse or act for its owner.</span></label>
