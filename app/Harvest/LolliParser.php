@@ -430,7 +430,7 @@ class LolliParser
         return ['birth_date' => $birth, 'foal_year' => $y];
     }
 
-    private static function registry(?string $breed): array
+    public static function registry(?string $breed): array
     {
         $b = strtoupper(trim((string) $breed));
         $b = $b === 'APHA' || $b === 'APHA.' ? 'APHA' : preg_replace('/[^A-Z]/', '', $b);
