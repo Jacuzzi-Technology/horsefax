@@ -83,6 +83,10 @@ class OffspringEarnings
             DB::statement("drop table if exists $t");
         }
 
+        // A normal run takes minutes. Any statement still going after this fails the run instead of holding a CPU core and
+        // the build lock (Oct 28 2026: one update ran for 4 days and stopped hf:build-records and hf:match-sales).
+        DB::statement("set statement_timeout = '30min'");
+
         // Attached results, each counted once even when two harvested pages publish it; the foal is the record the
         // result is attached to now (a merge moves results to the kept record).
         DB::statement(<<<'SQL'
@@ -108,6 +112,8 @@ class OffspringEarnings
             where p.position in ('s', 'd') and p.superseded_by is null and p.status <> 'disputed'
             order by p.horse_id, p.position, p.updated_at desc
         SQL);
+        // Autovacuum never analyzes temp tables. Without statistics Postgres plans a nested loop over millions of rows.
+        DB::statement('analyze oe_parents');
         // Unlinked lines: a name that belongs to exactly one record (never an IFCE record) is that parent.
         $byName = DB::update(<<<'SQL'
             update oe_parents o set parent_id = m.id
@@ -129,6 +135,8 @@ class OffspringEarnings
             select foal_id, org, sum(cents) cents, min(event_year) first_year, max(event_year) last_year from oe_results group by 1, 2
         SQL);
         DB::statement('create index on oe_foal_org (foal_id)');
+        DB::statement('analyze oe_parents');
+        DB::statement('analyze oe_foal_org');
 
         $stats = $this->coverage($byName);
 
@@ -157,6 +165,7 @@ class OffspringEarnings
         foreach (['oe_results', 'oe_parents', 'oe_foal_org'] as $t) {
             DB::statement("drop table if exists $t");
         }
+        DB::statement('reset statement_timeout');
         DB::table('offspring_earnings_runs')->insert(['stats' => json_encode($stats), 'seconds' => (int) round(microtime(true) - $started),
             'created_at' => now(), 'updated_at' => now()]);
 

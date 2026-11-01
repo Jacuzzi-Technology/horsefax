@@ -161,7 +161,8 @@ class MatchSaleLots
             return [null, null, 'queued', $basis];
         }
 
-        return [null, null, 'conflict', self::DIFFERENT.implode(', ', $ruledOut)];
+        // Common names can rule out dozens of records; review_note holds 255 characters (Nov 1 2026: this stopped every run).
+        return [null, null, 'conflict', mb_substr(self::DIFFERENT.implode(', ', $ruledOut), 0, 255)];
     }
 
     public static function matchable($query)
