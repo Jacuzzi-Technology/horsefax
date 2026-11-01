@@ -215,10 +215,12 @@ class OffspringEarnings
             ->mapWithKeys(fn ($r) => [$r->event_year => ['results' => (int) $r->n, 'cents' => (int) $r->cents]])->all();
 
         $foals = DB::selectOne(<<<'SQL'
-            select count(distinct foal_id) foals_with_results,
-                   count(distinct foal_id) filter (where foal_id in (select foal_id from oe_parents where role = 'sire' and parent_id is not null)) with_sire,
-                   count(distinct foal_id) filter (where foal_id in (select foal_id from oe_parents where role = 'dam' and parent_id is not null)) with_dam
-            from oe_foal_org
+            select count(distinct f.foal_id) foals_with_results,
+                   count(distinct f.foal_id) filter (where s.parent_id is not null) with_sire,
+                   count(distinct f.foal_id) filter (where d.parent_id is not null) with_dam
+            from oe_foal_org f
+            left join oe_parents s on s.foal_id = f.foal_id and s.role = 'sire'
+            left join oe_parents d on d.foal_id = f.foal_id and d.role = 'dam'
         SQL);
 
         return [
