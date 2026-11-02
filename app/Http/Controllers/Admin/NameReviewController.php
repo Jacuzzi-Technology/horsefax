@@ -83,15 +83,15 @@ class NameReviewController extends Controller
     }
 
     /**
-     * Priority-1 pairs (same letters, different spacing or punctuation) where nothing on the two records disagrees and
-     * neither is owned: one page, each row preset to "same horse, keep the suggested spelling". Staff switch any row to
+     * Priority-1 pairs (same letters, different spacing or punctuation), and near names whose parents both match (a
+     * sibling is possible, Nov 2 2026), where nothing on the two records disagrees and neither is owned: one page, each row preset to "same horse, keep the suggested spelling". Staff switch any row to
      * the other spelling, "different horses" or "skip", then apply. Nothing merges without that click (Richard, Oct 19 2026).
      *
      * @return \Illuminate\Support\Collection<int, array{review: NameReview, keep: string}>
      */
     public static function batchRows(): \Illuminate\Support\Collection
     {
-        $reviews = NameReview::with(['a', 'b'])->where('status', 'open')->where('priority', 1)->orderBy('id')->get()
+        $reviews = NameReview::with(['a', 'b'])->where('status', 'open')->where(fn ($q) => $q->where('priority', 1)->orWhere('rule', 'near_name_both_parents'))->orderBy('id')->get()
             ->filter(fn ($r) => $r->a && $r->b && ! $r->a->merged_into_id && ! $r->b->merged_into_id
                 && ! \App\Support\Record::placeholderName($r->a->registered_name)); // two "Pending" records aren't one horse
         $check = app(NamePairCheck::class)->load($reviews->flatMap(fn ($r) => [$r->horse_a_id, $r->horse_b_id])->unique()->values()->all());
@@ -123,7 +123,7 @@ class NameReviewController extends Controller
             $review = NameReview::with(['a', 'b'])->find((int) $id);
             // Decided elsewhere meanwhile, or no longer a clean pair (a merge on this page, new facts): left for the one-by-one list.
             $check = $review ? app(NamePairCheck::class)->load([$review->horse_a_id, $review->horse_b_id]) : null;
-            if (! $review || $review->status !== 'open' || $review->priority !== 1 || $review->a->merged_into_id || $review->b->merged_into_id
+            if (! $review || $review->status !== 'open' || ($review->priority !== 1 && $review->rule !== 'near_name_both_parents') || $review->a->merged_into_id || $review->b->merged_into_id
                 || Record::placeholderName($review->a->registered_name)
                 || $check->owned($review->a) || $check->owned($review->b) || $check->disagreements($review->a, $review->b)) {
                 $out['changed']++;

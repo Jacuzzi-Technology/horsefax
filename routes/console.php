@@ -385,8 +385,40 @@ Artisan::command('hf:import-registry-records {file}', function () {
 // Possible duplicate names for staff review (spacing/punctuation variants and one-letter variants). Cron runs it nightly.
 // php artisan hf:find-name-variants
 Artisan::command('hf:find-name-variants', function () {
-    $this->info(app(\App\Actions\Record\FindNameVariants::class)().' new pairs; '.\App\Models\NameReview::where('status', 'open')->count().' open.');
-})->purpose('List records whose names are near-duplicates, for staff to decide');
+    $find = app(\App\Actions\Record\FindNameVariants::class);
+    $find();
+    $this->info(json_encode($find->stats).'; '.\App\Models\NameReview::where('status', 'open')->count().' open.');
+})->purpose('List records whose names are near-duplicates and sort them by the rules');
+
+// Merges the pairs the rules call the same horse. Not on cron yet: test batches first (Richard, Nov 2 2026).
+// php artisan hf:merge-duplicates [--limit=100] [--dry-run] [--reviews=1,2,3] [--batch=name]
+Artisan::command('hf:merge-duplicates {--limit=} {--dry-run} {--reviews=} {--batch=}', function () {
+    $out = app(\App\Actions\Record\MergeDuplicates::class)(
+        $this->option('limit') ? (int) $this->option('limit') : null, (bool) $this->option('dry-run'),
+        $this->option('reviews') ? array_map('intval', explode(',', $this->option('reviews'))) : null, $this->option('batch'),
+        fn ($l) => $this->line(now()->format('H:i:s').' '.$l));
+    $this->info(($this->option('dry-run') ? 'Dry run: ' : '').json_encode($out));
+})->purpose('Merge duplicate records the rules call the same horse');
+
+// php artisan hf:undo-merges --batch=name   or   --record=HF-XXXX-XXXX (the record that was merged away)
+Artisan::command('hf:undo-merges {--batch=} {--record=}', function () {
+    $q = \App\Models\HorseMerge::whereNull('undone_at')->orderByDesc('id');
+    if ($this->option('record')) {
+        $q->where('gone_horse_id', \App\Models\Horse::where('horsefax_id', $this->option('record'))->value('id'));
+    } elseif ($this->option('batch')) {
+        $q->where('batch', $this->option('batch'));
+    } else {
+        $this->error('Say which: --batch or --record.');
+
+        return 1;
+    }
+    $undone = 0;
+    foreach ($q->get() as $merge) {
+        $why = app(\App\Actions\Record\UnmergeHorses::class)($merge, \App\Actions\Record\BuildRecordsFromResults::system());
+        $why ? $this->warn($merge->gone->horsefax_id.': '.$why) : $undone++;
+    }
+    $this->info($undone.' merges undone.');
+})->purpose('Undo automatic merges');
 
 // IFCE–SIRE "Fichier des équidés" (French national registry open data): bulk import, resumable.
 // php -d memory_limit=1G artisan hf:import-ifce storage/app/private/harvest/ifce/donnees-equides-20260824.csv [--limit=5000]

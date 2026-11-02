@@ -7,6 +7,7 @@ use App\Models\HorseIdentifier;
 use App\Models\PedigreeEntry;
 use App\Models\SaleLot;
 use App\Models\ShowRecord;
+use App\Support\HorseNames;
 use App\Support\Record;
 
 /**
@@ -37,7 +38,7 @@ class MatchSaleLots
         // National registry lists (IFCE) are never matched by name, and merged-away records never at all.
         self::matchable(Horse::query())->whereNotNull('registered_name')->select(['id', 'registered_name'])->lazyById(2000, 'id')
             ->each(function ($h) {
-                $this->byName[ShowRecord::key($h->registered_name)][] = $h->id;
+                $this->byName[HorseNames::key($h->registered_name)][] = $h->id;
             });
         $system = BuildRecordsFromResults::system();
         $attach = app(AttachSaleLot::class);
@@ -105,9 +106,9 @@ class MatchSaleLots
         }
         if (! $this->byName) {
             self::matchable(Horse::whereRaw('lower(registered_name) = lower(?)', [$lot->horse_name]))->pluck('id')
-                ->each(fn ($id) => $this->byName[$lot->name_key][] = $id); // single lot (staff page)
+                ->each(fn ($id) => $this->byName[HorseNames::key($lot->horse_name)][] = $id); // single lot (staff page)
         }
-        $ids = $this->byName[$lot->name_key] ?? [];
+        $ids = $this->byName[HorseNames::key($lot->horse_name)] ?? [];
         if (! $ids) {
             return [null, null, null, null];
         }
@@ -129,7 +130,8 @@ class MatchSaleLots
             }
             $fits[] = [
                 'horse' => $h,
-                'sire' => $lot->sire_name && $sire, 'dam' => $lot->dam_name && $dam,
+                'sire' => HorseNames::parentsAgree(HorseNames::compareParents($lot->sire_name, $sire)),
+                'dam' => HorseNames::parentsAgree(HorseNames::compareParents($lot->dam_name, $dam)),
                 'year' => $lot->foal_year && $year,
             ];
         }
@@ -180,12 +182,18 @@ class MatchSaleLots
         }
         $year = $h->birth_precision !== 'unknown' ? $h->birth_year : null;
         $regs = $regs?->filter(fn ($r) => preg_match('/\d/', (string) $r->value_normalized));
+        // A misspelled or tagged parent is the same parent. The same name and foal year with one parent matching is the
+        // same horse even if the other parent differs: one source has it wrong (Nov 2 2026, Wimpys Flashy Jac), so the
+        // other name goes to staff when the lot attaches (AddPublishedIdentity) instead of splitting off a second record.
+        $bySire = HorseNames::compareParents($lot->sire_name, $sire);
+        $byDam = HorseNames::compareParents($lot->dam_name, $dam);
+        $sameYear = $lot->foal_year && $year && (int) $lot->foal_year === (int) $year;
 
         return match (true) {
             $lot->registration_number && preg_match('/\d/', $lot->registration_number) && $regs && $regs->isNotEmpty()
                 && ! $regs->contains(fn ($r) => $r->value_normalized === Record::normalizeIdentifier($lot->registration_number)) => 'registration number',
-            $lot->sire_name && $sire && ShowRecord::key($lot->sire_name) !== ShowRecord::key($sire) => 'sire',
-            $lot->dam_name && $dam && ShowRecord::key($lot->dam_name) !== ShowRecord::key($dam) => 'dam',
+            $bySire === 'diff' && ! ($sameYear && HorseNames::parentsAgree($byDam)) => 'sire',
+            $byDam === 'diff' && ! ($sameYear && HorseNames::parentsAgree($bySire)) => 'dam',
             $lot->foal_year && $year && $lot->foal_year !== $year => 'foal year',
             $lot->foal_year && ! $this->showsFit($h, $lot->foal_year) => 'show years', // shown before it was foaled
             default => null,
