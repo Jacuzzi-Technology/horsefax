@@ -63,6 +63,12 @@ class PrintedCatalogs
             'terms' => 'Checked Oct 29 2026: fandrlive.com (Weebly) robots.txt disallows only /ajax/ and /apps/; no terms of use or legal page; no bot protection. Catalog is Richard\'s own copy (PDFNotes); its trees are set in justified type, so only sire and dam are read. Facts only.',
             'catalogs' => [['89EB5C508ED1061C/278008494B982883.pdf', 2021, 10]],
         ],
+        'stroud' => [
+            'key' => 'stroudhorseauction', 'name' => 'Stroud Oklahoma Horse Auction (Stroud, OK)', 'sale' => 'Stroud Oklahoma Horse Auction 5th Saturday Special Sale',
+            'url' => 'https://drive.google.com/file/d/1DsLg_qFGqAD-D1DWUIdR4iQPtK5xGBPv/view', 'layout' => 'model',
+            'terms' => 'Nov 1 2026: no official website found, so no robots.txt or terms to read. Catalog is the auction\'s Google Drive PDF, link given by Richard; downloaded once. The catalog gives no prices. Facts only.',
+            'catalogs' => [['', 2026, 10, null, null, 'drive', '2026-10-31']],
+        ],
         'twincities' => [
             'key' => 'simonhorsecompany', 'name' => 'Simon Horse Company sales (Cannon Falls, MN)', 'sale' => 'Twin Cities Appaloosa, Paint & Quarter Horse Sale',
             'url' => 'https://www.simonhorsecompany.com/catalog-horse-sales', 'layout' => 'regline',
@@ -111,8 +117,8 @@ class PrintedCatalogs
             @mkdir($this->dir.'/'.$key, 0775, true);
             foreach ($s['catalogs'] as $c) {
                 [$file, $year, $month] = $c;
-                if (($c[5] ?? null) === 'ocr') {
-                    continue; // the OCR copy is made from the scan, not copied
+                if (! empty($c[5])) {
+                    continue; // an OCR copy made from the scan, or a catalog that isn't in the PDFNotes library
                 }
                 $to = $this->dir.'/'.$key.'/'.self::file($year, $month);
                 if (! is_file($to) && is_file(self::library().'/'.$file)) {
@@ -165,6 +171,7 @@ class PrintedCatalogs
                 $this->say($key.' '.self::file($year, $month).': '.count($lots).' lots, '.count(array_filter($lots, fn ($l) => $l['pedigree'])).' pedigrees');
                 $days = $month ? LolliHarvester::saleDays($year, $month, StatePdfHarvester::text($pdf)) : [];
                 [$date, $precision] = match (true) {
+                    isset($c[6]) => [$c[6], 'day'],
                     count($days) === 1 => [$days[0], 'day'],
                     (bool) $month => [sprintf('%04d-%02d-01', $year, $month), 'month'],
                     default => [$year.'-01-01', 'year'],

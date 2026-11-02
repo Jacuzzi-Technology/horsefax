@@ -32,6 +32,7 @@ Each layout finds the anchors on a page. The block under an anchor, in its own p
 | `cla` | CLA Spring Horse Sale 2016 (Clovis) | `LIL SUGAR CANDY   Hip # 26` / `AQHA 4879822-GRAY MARE MAY 5, 2006` |
 | `consignor` | Clovis Horse Sales Fall 2021 | name / `Consignor: …` / `2010 Gray AQHA GELDING // Reg #5279557`; lot number printed large beside the tree |
 | `regline` | Twin Cities Appaloosa, Paint & QH Sale 2019 | name / `AQHA 5549037` / `Foaled May 07, 2013- Gelding`; 2 generations with numbers |
+| `model` | Stroud Oklahoma Horse Auction, Oct 31 2026 (Google Drive PDF from Richard) | `LOT 1  MC GENUINE LITTLEJET  LOT 1` / `2019 MODEL PALOMINO GELDING`; unnamed lots ("DUN STUD COLT") are skipped |
 | `seymour` | Seymour Select Horse Sale 2026 | `Lot 25 - Coco Blackburn Champ, "Champ"   Quarter Horse` / `Reg. #6216001  DOB: 06/10/2022  Gelding` |
 | `farmers` | Farmers & Ranchers Fall Classic 2021 (Salina, KS) | read from text: `LOT # 5 - MARE` / `NAME - AQHA` / `Foaled: 2010. Color: Bay.`; sire and dam only (the trees are justified type) |
 | `qdata` | Shawnee Horse Sale, Spring 2020 | QData "Hip No." pages, read by `LegacyCatalogParser` (several hips to a page) |

@@ -35,6 +35,8 @@ class PrintedCatalogParser
      *    printed large beside the tree (Clovis Horse Sales, 2021);
      *  - regline: the name, "AQHA 5549037" under it, "Foaled May 07, 2013- Gelding", "Color: Gray", then two generations
      *    with each ancestor's number; the lot number printed large to the right (Twin Cities, 2019);
+     *  - model: "LOT 1   MC GENUINE LITTLEJET   LOT 1" / "2019 MODEL PALOMINO GELDING", a tree, then the description; some
+     *    lots have only a barn name or "DUN STUD COLT" (Stroud Oklahoma Horse Auction);
      *  - fields: "Lot 25 - Coco Blackburn Champ, “Champ”   Quarter Horse" / "Reg. #6216001  DOB: 06/10/2022  Gelding" /
      *    "Consigned by: ...  Buckskin" (Seymour Select).
      */
@@ -44,6 +46,7 @@ class PrintedCatalogParser
         'cla' => ['anchor' => '/^Hip\s*#\s*(\d{1,4}[A-Z]?)\s*()$/i', 'header' => 'line', 'name' => 'left'],
         'consignor' => ['anchor' => '/^Consignor:/i', 'header' => 'consignor'],
         'regline' => ['anchor' => '/^(AQHA|APHA|ApHC|APHC|PtHA|PTHA)\s+(\d{5,8})$/', 'header' => 'regline'],
+        'model' => ['anchor' => '/^LOT\s+(\d{1,4}[A-Z]?)$/', 'header' => 'model'],
         'seymour' => ['anchor' => '/^Lot\s+(\d{1,4}[A-Z]?)\s*[-–]\s*(.+)$/u', 'header' => 'fields'],
     ];
 
@@ -150,6 +153,19 @@ class PrintedCatalogParser
 
                 continue;
             }
+            if ($layouts['header'] === 'model') { // the lot number on both sides of the name: the left one is the anchor
+                $line = array_filter($segs, fn ($o) => $o !== $s && abs($o['yc'] - $s['yc']) < 7);
+                if (array_filter($line, fn ($o) => $o['t'] === $s['t'] && $o['x'] < $s['x'])) {
+                    continue;
+                }
+                usort($line, fn ($a, $b) => $a['x'] <=> $b['x']);
+                $between = array_values(array_filter($line, fn ($o) => $o['x'] > $s['x1'] && $o['t'] !== $s['t']));
+                if ($between) {
+                    $out[] = ['lot' => $m[1], 'name' => $between[0]['t'], 'seg' => $s];
+                }
+
+                continue;
+            }
             $name = trim($m[2] ?? '');
             if (($layouts['name'] ?? null) === 'left') { // "LIL SUGAR CANDY      Hip # 26": the name is the run to its left
                 $left = array_filter($segs, fn ($o) => $o !== $s && abs($o['yc'] - $s['yc']) < 4 && $o['x1'] < $s['x'] && $s['x'] - $o['x1'] < 300);
@@ -204,7 +220,14 @@ class PrintedCatalogParser
         $desc = '';
         $reg = null;
         $treeFrom = null;
-        if ($header === 'regline') {
+        $firstNote = null;
+        if ($header === 'model') {
+            $model = array_values(array_filter(array_slice($block, 0, 3), fn ($o) => preg_match('/^(?:19|20)\d\d\s+MODEL\b/i', $o['t'])));
+            $notes = array_values(array_filter($block, fn ($o) => mb_strlen($o['t']) > 36 || preg_match('/\b(yr|year|old|weanling|yearling)\b/i', $o['t'])));
+            $firstNote = $notes ? $notes[0]['t'] : null;
+            $desc = $model ? $model[0]['t'] : (string) $firstNote;
+            $treeFrom = $model ? $model[0]['y'] + $model[0]['h'] : null;
+        } elseif ($header === 'regline') {
             $lines = array_values(array_filter($block, fn ($o) => $o['y'] > $a['regseg']['y'] + 2 && $o['y'] - $a['regseg']['y'] < 40 && ! preg_match('/^Owner/i', $o['t'])));
             $desc = $a['reg'][0].' '.implode(' ', array_map(fn ($o) => preg_replace('/^Color:\s*/i', '', $o['t']), $lines));
             $reg = $a['reg'][1];
@@ -233,7 +256,7 @@ class PrintedCatalogParser
             $desc = ($reg ? 'Registered ' : '').$text;
             $consigned = array_filter($block, fn ($s) => preg_match('/^Consigned/i', $s['t']));
             $treeFrom = $consigned ? max(array_map(fn ($s) => $s['y'] + $s['h'] / 2, $consigned)) : null; // the tree's top name sits beside the color
-        } elseif ($inline) { // the name runs into the description: "Rock Lane Twelve 4 yr old Registered ..."
+        } elseif ($inline && $header !== 'model') { // the name runs into the description: "Rock Lane Twelve 4 yr old Registered ..."
             [$a['name'], $desc] = self::splitName($a['name']);
             if (count($block) && $block[0]['y'] - $a['seg']['y'] < $a['seg']['h'] * 2.5) {
                 $desc .= ' '.$block[0]['t']; // a description wrapped onto the next line ("Grade Dapple / Gray Percheron Gelding")
@@ -264,6 +287,29 @@ class PrintedCatalogParser
         if ($name !== '' && $out['registered'] !== false) {
             $tree = array_values(array_filter($block, fn ($s) => $s['y'] > $below + 1 && ! preg_match('/^CONSIGN/i', $s['t'])));
             $out['pedigree'] = self::tree($tree, $below, $name);
+        }
+        if ($header === 'model') {
+            if (empty($model)) {
+                $out['color'] = null; // a color in a sentence may be anyone's
+            }
+            if ($out['pedigree']) {
+                $out['registered'] = true;
+            }
+            if (preg_match('/(?:\bold|\byrs?|\byear|\d{4})\s+('.self::REG.')\b/', (string) $firstNote, $r)) {
+                $out = array_merge($out, array_filter(LolliParser::registry($r[1]), fn ($v) => $v !== null));
+                $out['registry'] ??= $r[1];
+                $out['registered'] = true;
+            }
+            // "SUNTAN SHOWGIRL W/2026 ...": a mare and foal, under the mare's name. "9 YR OLD", "2026 AQHA STALLION", "MARE & BLACK FILLY": no name.
+            $name = trim(preg_replace('/\s+W\/.*$/', '', $name));
+            $out['name'] = $name;
+            if (preg_match('/\b(YRS?|YEARS?)\s+OLD\b|\bMODEL\b|^(?:19|20)\d\d\s|\b(?:MARE|FILLY|COLT|GELDING)\s*&|&\s*(?:[A-Z]+\s+)?(?:MARE|FILLY|COLT|GELDING)\b|&$/', $name)) {
+                return null;
+            }
+            // "DUN STUD COLT", "BAY GELDING": no name at all.
+            if (preg_match('/^(?:(?:'.self::COLORS.'|(?:19|20)\d\d|GRADE|PONY|MINI|DRAFT|CROSS|GYPSY|QUARTER|HORSE|QH|PAINT|BELGIAN|PERCHERON|FRIESIAN|WEANLING|YEARLING)\s+)*(?:STUD COLT|STUD|GELDING|MARE|FILLY|COLT|STALLION|PONY|MULE|DONKEY)$/', $name)) {
+                return null;
+            }
         }
         if ($name === '' || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
             return null;
