@@ -53,7 +53,7 @@ class NamePairRules
         }
         if ($registries) {
             // One digit apart in a catalog, or a stud book's two entries for one imported horse: parents settle which.
-            return $both && ($gap === null || $gap < 2) ? [self::STAFF, 'numbers_differ_parents_match'] : [self::DIFFERENT, 'different_numbers'];
+            return $both && ! $numbered && ($gap === null || $gap < 2) ? [self::STAFF, 'numbers_differ_parents_match'] : [self::DIFFERENT, 'different_numbers'];
         }
         if ($numbered && ! $both) {
             return [self::DIFFERENT, 'different_number_in_name'];

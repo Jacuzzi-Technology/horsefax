@@ -84,6 +84,16 @@ class DuplicateRulesTest extends TestCase
         }
     }
 
+    public function test_stud_book_numbers_in_the_name_with_different_registrations_are_two_horses(): void
+    {
+        $parents = ['sire' => 'Sample Sire', 'dam' => 'Sample Dam'];
+
+        $this->assertSame([NamePairRules::DIFFERENT, 'different_numbers'], NamePairRules::classify(
+            $this->side('Sample Nonius XXXV', $parents + ['regs' => ['MLOSZ' => ['A' => true]]]),
+            $this->side('Sample Nonius XXIV', $parents + ['regs' => ['MLOSZ' => ['B' => true]]]),
+        ));
+    }
+
     public function test_a_lot_with_one_wrong_dam_joins_the_record_and_the_other_dam_goes_to_staff(): void
     {
         $horse = $this->horse('Sample Flashy Jac', ['birth_year' => 2009, 'sex' => 'gelding'], 'Sample Little Step', 'Sample Tackie Jac');
