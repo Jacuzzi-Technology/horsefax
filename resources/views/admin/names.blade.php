@@ -12,7 +12,7 @@
             @foreach (N::PRIORITIES as $k => $label)
                 <a href="{{ route('admin.names', ['p' => $k]) }}" class="btn-ghost btn-small {{ $p === $k ? 'bg-gold/15' : '' }}" title="{{ $label }}">{{ $k }}. {{ \Illuminate\Support\Str::limit($label, 44) }} ({{ number_format($counts[$k] ?? 0) }})</a>
             @endforeach
-            <a href="{{ route('admin.names.batch') }}" class="btn-ghost btn-small">Batch: same letters, nothing disagrees</a>
+            <a href="{{ route('admin.names.batch') }}" class="btn-ghost btn-small">Batch: clean pairs, nothing disagrees</a>
             <a href="{{ route('admin.names', ['status' => 'different_horses']) }}" class="btn-ghost btn-small {{ $status === 'different_horses' ? 'bg-gold/15' : '' }}">Different horses</a>
             <a href="{{ route('admin.names', ['status' => 'merged']) }}" class="btn-ghost btn-small {{ $status === 'merged' ? 'bg-gold/15' : '' }}">Merged</a>
         </div>

@@ -19,6 +19,11 @@ use Illuminate\Support\Str;
  * Donkeys and mules are left out for now. These records are never matched to others by name alone (names repeat and
  * there's no number to tell them apart). Bulk inserts in chunks; resumable from the last row done; a row fingerprint
  * keeps a later edition of the file from duplicating horses already imported.
+ *
+ * Older editions (Oct 27 2026, Richard: "if we missed anything ... go back and get that"): 2025, 2023, 2018 and 2014 are
+ * read too, to add horses that later editions dropped, and every new edition from now on. Their layouts differ (";" or "," delimiters, no header in 2014,
+ * a stray quote at line ends in 2023, Windows-1252 text). With $loose (every edition after the first): a horse is added only when no French record
+ * has the same name, foal date and sex, so a corrected color or country in a later edition never makes a duplicate.
  */
 class IfceImporter
 {
@@ -28,8 +33,9 @@ class IfceImporter
     public function __construct(private ?\Closure $log = null) {}
 
     /** Returns counts. $limit caps rows read this run (testing). */
-    public function run(string $file, string $url, ?int $limit = null, int $chunk = 2000): array
+    public function run(string $file, string $url, ?int $limit = null, int $chunk = 2000, bool $loose = false): array
     {
+        $this->loose = $loose;
         $source = DataSource::firstOrCreate(['key' => 'ifce'], [
             'name' => 'IFCE – SIRE Fichier des équidés (France)', 'url' => 'https://www.data.gouv.fr/datasets/fichier-des-equides', 'permission' => 'granted',
             'terms_note' => 'Open data under the Licence Ouverte / Etalab (reuse, including commercial, allowed with credit to the source and date). Kate confirmed (Oct 18 2026). Info chevaux itself is behind Imperva bot protection and is not crawled.',
@@ -41,14 +47,16 @@ class IfceImporter
         $out = ['read' => 0, 'skipped_donkey_mule' => 0, 'skipped_no_name' => 0, 'created' => 0, 'already_there' => 0, 'deaths' => 0];
 
         $fh = fopen($file, 'r');
-        $header = fgetcsv($fh, 0, ';', '"', '');
-        if (isset($header[0])) {
-            $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+        $first = (string) fgets($fh);
+        $delim = substr_count($first, ';') >= substr_count($first, ',') ? ';' : ',';
+        if (! preg_match('/^(\xEF\xBB\xBF)?"?RACE"?\s*[;,]/', $first)) {
+            rewind($fh); // no header row (2014)
         }
         $row = 0;
         $batch = [];
         $seen = []; // rows with no birth date can be identical yet different horses: number repeats in file order
-        while (($r = fgetcsv($fh, 0, ';', '"', '')) !== false) {
+        while (($r = fgetcsv($fh, 0, $delim, '"', '')) !== false) {
+            $r = array_map(self::clean(...), $r);
             $row++;
             if (trim($r[3] ?? '') === '') {
                 $b = md5(strtoupper(implode('|', array_map('trim', array_slice($r, 0, 6)))), true); // fields that don't change between editions
@@ -81,6 +89,16 @@ class IfceImporter
         Audit::record('horses.imported_ifce', $page, null, $out + ['through_row' => $row], null, $system->id);
 
         return $out;
+    }
+
+    private bool $loose = false;
+
+    /** Trimmed, stray quotes removed, in UTF-8 (older editions are Windows-1252). */
+    public static function clean(?string $v): string
+    {
+        $v = trim(trim((string) $v), '" ');
+
+        return mb_check_encoding($v, 'UTF-8') ? $v : mb_convert_encoding($v, 'UTF-8', 'Windows-1252');
     }
 
     /** One row: RACE; SEXE; ROBE; DATE_DE_NAISSANCE; PAYS_DE_NAISSANCE; NOM; CHE_COCONSO (not stored); DATE_DE_DECES. */
@@ -123,6 +141,21 @@ class IfceImporter
             return;
         }
         $existing = DB::table('horses')->whereIn('external_key', array_keys($horses))->pluck('external_key')->flip();
+        if ($this->loose) {
+            // Loose: the same name, foal date and sex already on a French record counts as already there.
+            $same = DB::table('horses')->where('source', 'ifce')
+                ->whereIn(DB::raw('lower(registered_name)'), array_unique(array_map(fn ($h) => mb_strtolower($h['registered_name']), $horses)))
+                ->get(['registered_name', 'birth_date', 'birth_year', 'sex'])
+                // Records from API Équidés carry the foal year only: same name, year and sex counts too.
+                ->flatMap(fn ($x) => array_filter([mb_strtolower($x->registered_name).'|'.$x->birth_date.'|'.$x->sex => true,
+                    ...($x->birth_date ? [] : [mb_strtolower($x->registered_name).'|Y'.$x->birth_year.'|'.$x->sex => true])]));
+            foreach ($horses as $key => $h) {
+                $n = mb_strtolower($h['registered_name']);
+                if (isset($same[$n.'|'.$h['birth_date'].'|'.$h['sex']]) || ($h['birth_year'] && isset($same[$n.'|Y'.$h['birth_year'].'|'.$h['sex']]))) {
+                    $existing[$key] = true;
+                }
+            }
+        }
         $now = now();
         $insert = [];
         $deaths = [];
@@ -161,7 +194,7 @@ class IfceImporter
     }
 
     /** Fresh, unused Horsefax IDs. */
-    private function newIds(int $n): array
+    public function newIds(int $n): array
     {
         $ids = [];
         while (count($ids) < $n) {

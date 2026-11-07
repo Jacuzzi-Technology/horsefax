@@ -7,7 +7,7 @@ namespace App\Harvest;
  *  - year list: admin-ajax.php?action=rh_fetch_show_results&year=Y -> rows of dates · show id · name · city · state · country
  *  - show page: /show-results-detail/?id=SHOW -> links to /show-results-class-detail/?id=SHOW&class-code=CODE
  *  - class page: <h2>show</h2><div>1100 - Open</div><div>dates</div> + table Horse ("1 Dual Reality") · Rider · Owner · Earnings
- * Only the horse's name, placing and earnings are returned: rider and owner columns are deliberately ignored.
+ * Rider and owner are returned too (Richard, Oct 22 2026), for matching only: they're never shown on public pages.
  */
 final class NrhaParser
 {
@@ -35,7 +35,7 @@ final class NrhaParser
         return array_values(array_unique($m[1]));
     }
 
-    /** @return array{show: ?string, class_code: ?string, class_name: ?string, dates: ?string, rows: list<array{placing: string, horse: string, earnings_cents: ?int}>} */
+    /** @return array{show: ?string, class_code: ?string, class_name: ?string, dates: ?string, rows: list<array{placing: string, horse: string, rider: ?string, owner: ?string, earnings_cents: ?int}>} */
     public static function classPage(string $html): array
     {
         $out = ['show' => null, 'class_code' => null, 'class_name' => null, 'dates' => null, 'rows' => []];
@@ -67,7 +67,9 @@ final class NrhaParser
                     continue; // unplaced or not a result row
                 }
                 $money = preg_replace('/[^0-9.]/', '', strip_tags(end($c[1])));
-                $out['rows'][] = ['placing' => $pm[1], 'horse' => trim($pm[2]), 'earnings_cents' => $money !== '' ? (int) round((float) $money * 100) : null];
+                $person = fn (string $v) => trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags($v), ENT_QUOTES | ENT_HTML5, 'UTF-8'))) ?: null;
+                $out['rows'][] = ['placing' => $pm[1], 'horse' => trim($pm[2]), 'rider' => $person($c[1][1]), 'owner' => $person($c[1][2]),
+                    'earnings_cents' => $money !== '' ? (int) round((float) $money * 100) : null];
             }
         }
 

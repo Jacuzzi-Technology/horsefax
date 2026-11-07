@@ -22,6 +22,8 @@ class BillingsParser
     {
         $out = [];
         foreach ($pages as $words) {
+            // Some catalogs (2021) pad words with (non-breaking) spaces and print runs of blanks as words.
+            $words = array_values(array_filter(array_map(fn ($w) => [$w[0], $w[1], $w[2], trim(str_replace("\u{00A0}", ' ', $w[3]))], $words), fn ($w) => $w[3] !== ''));
             $anchors = [];
             foreach ($words as $i => $w) {
                 if ($w[3] === 'HIP' && isset($words[$i + 1]) && preg_match('/^\d{1,4}[A-Z]?$/', $words[$i + 1][3])) {
@@ -49,8 +51,18 @@ class BillingsParser
                 }
             }
         }
+        // "HIP 86" also turns up inside ads and descriptions ("She sells! Hip 86"). A real block has a foal year or sex
+        // line under its name; when a hip still appears twice, keep the fuller block.
+        $out = array_filter($out, fn ($h) => ($h['foal_year'] || $h['sex']) && ! self::garbled($h));
+        $best = [];
+        foreach ($out as $h) {
+            $score = fn ($x) => ($x['reg'] ? 4 : 0) + ($x['pedigree'] ? 2 : 0) + ($x['foal_year'] && $x['sex'] ? 1 : 0);
+            if (! isset($best[$h['hip']]) || $score($h) > $score($best[$h['hip']])) {
+                $best[$h['hip']] = $h;
+            }
+        }
 
-        return $out;
+        return array_values($best);
     }
 
     /** Words -> text runs: same line (3pt) and no wide gap between words, top to bottom then left to right. */
@@ -78,7 +90,16 @@ class BillingsParser
         if (count($texts) < 2) {
             return null;
         }
-        $name = array_shift($texts);
+        // 2013-2016 catalogs may print a section label ("Rope Horse") above the name: start at the name, which is the
+        // run just before the "07 AQHA Dun Gelding" line (or before the registration number above it).
+        foreach (array_slice($texts, 0, 5) as $k => $t) {
+            if ($k >= 2 && preg_match('/^(?:\d\d|(?:19|20)\d\d)\s*(?:(?:AQHA|APHA|ApHC|PtHA|Grade|Registered)\b|.*\b(?:'.self::SEXES.')\b)/i', $t)) {
+                $start = preg_match('/^([A-Z]?\d{5,8}|PENDING|Pending)$/', $texts[$k - 1]) ? $k - 2 : $k - 1;
+                $texts = array_slice($texts, $start);
+                break;
+            }
+        }
+        $name = trim(preg_replace('/\s*\((pending|papers pending)\)$/i', '', array_shift($texts))); // registration not back yet
         $reg = null;
         if (isset($texts[0]) && preg_match('/^([A-Z]?\d{5,8}|PENDING|Pending)$/', $texts[0])) {
             $reg = strtoupper(array_shift($texts));
@@ -120,13 +141,34 @@ class BillingsParser
         ] + $id;
     }
 
+    /**
+     * A block where two columns ran together (seen in 2013-2016 catalogs): the name holds a registration number, a HIP
+     * marker, a section label, a sale note or the consignor's town, or the color picked up a number or a registry.
+     * Better left out than loaded under a wrong name.
+     */
+    private static function garbled(array $h): bool
+    {
+        return (bool) preg_match('/\d{5,}|\bHIP\b|^(Rope|Ranch|Barrel|Cutting|Ranch Riding|Rope Horse|Saddle)\s+Horses?$|^Sells\b|,\s*[A-Z][A-Za-z]$|^\d/i', $h['name'])
+            || ! preg_match('/\pL/u', $h['name']) || self::sentence($h['name'])
+            || preg_match('/\d|\b(AQHA|APHA|ApHC|Grade|PENDING|APPLICATION|HIP)\b/i', (string) $h['color']) || str_word_count((string) $h['color']) > 4;
+    }
+
+    /** Ad or terms copy beside a HIP marker ("leaves the ring. We want you to buy"), or bold text drawn twice. */
+    private static function sentence(string $name): bool
+    {
+        $w = preg_split('/\s+/', trim($name));
+
+        return (bool) preg_match('/^[\p{Ll}(]|[;:!,"“”]|-$|\b(Session|Policy|Hotel)\b/u', $name) || count($w) > 6 || mb_strlen($name) > 40
+            || (count($w) >= 4 && count(array_unique(array_map('strtolower', $w))) <= intdiv(count($w) + 1, 2) + 1);
+    }
+
     /** "2024 AQHA Bay Gelding" -> foal year, registry, color, sex. */
     public static function descriptor(string $d): array
     {
         $d = trim($d);
         // Catalogs before about 2022 print a two-digit year: "07 AQHA Bay Gelding", "98 Grade Sorrel Mare".
-        if (preg_match('/^(\d\d)\s+(?=[A-Za-z])/', $d, $two)) {
-            $d = ((int) $two[1] > (int) date('y') + 1 ? '19' : '20').$two[1].substr($d, 2);
+        if (preg_match('/^(\d\d)\s*(?=[A-Za-z])/', $d, $two)) { // "07AQHA" too
+            $d = ((int) $two[1] > (int) date('y') + 1 ? '19' : '20').$two[1].' '.ltrim(substr($d, 2));
         }
         $year = preg_match('/^((?:19|20)\d\d)\b/', $d, $m) ? (int) $m[1] : null;
         $rest = trim(preg_replace('/^(19|20)\d\d\s*/', '', $d));

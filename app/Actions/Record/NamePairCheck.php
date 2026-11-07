@@ -5,6 +5,7 @@ namespace App\Actions\Record;
 use App\Models\Horse;
 use App\Models\PedigreeEntry;
 use App\Models\ShowRecord;
+use App\Support\HorseNames;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -47,15 +48,14 @@ class NamePairCheck
         if ($ya && $yb && $ya !== $yb) {
             $w[] = 'Foal years disagree ('.$ya.' left, '.$yb.' right).';
         }
-        // A filly grows into a mare and a colt into a stallion; any other difference (a gelding, the other sex) counts.
-        $sex = fn ($s) => ['filly' => 'mare', 'colt' => 'stallion'][strtolower((string) $s)] ?? strtolower((string) $s);
-        if ($a->sex && $b->sex && $sex($a->sex) !== $sex($b->sex)) {
+        // A filly grows into a mare, a colt into a stallion and a stallion into a gelding; male against female counts.
+        if (HorseNames::oppositeSex($a->sex, $b->sex)) {
             $w[] = 'Sex disagrees ('.$a->sex.' left, '.$b->sex.' right).';
         }
         foreach (['s' => 'Sire', 'd' => 'Dam'] as $pos => $label) {
             $na = collect($this->facts['parents'][$a->id] ?? [])->firstWhere('position', $pos)?->name;
             $nb = collect($this->facts['parents'][$b->id] ?? [])->firstWhere('position', $pos)?->name;
-            if ($na && $nb && ShowRecord::key($na) !== ShowRecord::key($nb)) {
+            if (HorseNames::compareParents($na, $nb) === 'diff') { // a misspelled parent isn't another parent
                 $w[] = $label.'s disagree ('.$na.' left, '.$nb.' right).';
             }
         }

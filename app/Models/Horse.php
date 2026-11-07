@@ -56,6 +56,8 @@ class Horse extends Model
     public function documents(): HasMany { return $this->hasMany(Document::class); }
     public function shareLinks(): HasMany { return $this->hasMany(ShareLink::class); }
     public function pedigree(): HasMany { return $this->hasMany(PedigreeEntry::class)->whereNull('superseded_by'); }
+    public function stallionServices(): HasMany { return $this->hasMany(StallionService::class); }
+    public function mentions(): HasMany { return $this->hasMany(HorseMention::class)->orderByDesc('published_on')->orderBy('title'); }
     public function media(): HasMany { return $this->hasMany(Media::class); }
     public function facts(): HasMany { return $this->hasMany(HorseFact::class); }
     public function currentFacts(): HasMany { return $this->hasMany(HorseFact::class)->where('is_current', true)->whereNull('superseded_by'); }

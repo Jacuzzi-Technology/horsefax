@@ -39,6 +39,6 @@
         @endforeach
     </div>
 </div>
-@if ($anyInherited)
-    <p class="hint mt-2">Some earlier generations come from the pedigree on the ancestor's own Horsefax record.</p>
-@endif
+@php $traced = isset($horse) ? \App\Support\PedigreeDepth::traced($horse) : 0; @endphp
+<p class="hint mt-2">{{ $depth }} generations shown.@if ($traced > $depth) This pedigree is traced {{ $traced }} generations on Horsefax: click any name to keep going back.@endif
+    @if ($anyInherited) Some earlier generations come from the pedigree on the ancestor's own Horsefax record.@endif</p>

@@ -87,6 +87,7 @@ final class Record
         'care' => 'Care (farrier, dental, deworming)',
         'training' => 'Training',
         'competition' => 'Competition & achievements',
+        'achievements' => 'Achievements & earnings',
         'ownership' => 'Ownership & custody',
         'transport' => 'Transport',
         'other' => 'Other',
@@ -95,16 +96,17 @@ final class Record
     /** Health detail is sensitive: private unless the owner chooses otherwise. */
     public const DEFAULT_EVENT_VISIBILITY = [
         'health' => 'private', 'care' => 'private', 'training' => 'shared', 'competition' => 'shared',
-        'ownership' => 'private', 'transport' => 'private', 'other' => 'private',
+        'ownership' => 'private', 'transport' => 'private', 'other' => 'private', 'achievements' => 'shared',
     ];
 
     /** Entry types within each category. Health detail is what buyers and vets ask for first. */
     public const EVENT_TYPES = [
-        'health' => ['coggins' => 'Coggins (EIA) test', 'health_certificate' => 'Health certificate (CVI)', 'vaccination' => 'Vaccination', 'exam' => 'Veterinary exam', 'pre_purchase' => 'Pre-purchase exam', 'treatment' => 'Treatment / procedure', 'injury' => 'Injury or illness', 'imaging' => 'Radiographs / imaging', 'medication' => 'Medication'],
+        'health' => ['coggins' => 'Coggins (EIA) test', 'health_certificate' => 'Health certificate (CVI)', 'vaccination' => 'Vaccination', 'exam' => 'Veterinary exam', 'pre_purchase' => 'Pre-purchase exam', 'treatment' => 'Treatment / procedure', 'injury' => 'Injury or illness', 'imaging' => 'Radiographs / imaging', 'medication' => 'Medication', 'genetic_test' => 'Genetic test'],
         'care' => ['farrier' => 'Farrier', 'dental' => 'Dental', 'deworming' => 'Deworming', 'bodywork' => 'Chiropractic / massage', 'nutrition' => 'Feeding / nutrition'],
         'training' => ['program' => 'Training program (dates, trainer, facility)', 'skill' => 'Documented skill, title or qualification'],
-        'competition' => ['show' => 'Show / class result', 'award' => 'Award / title', 'certification' => 'Certification / inspection'],
+        'competition' => ['race' => 'Race result', 'show' => 'Show / class result', 'award' => 'Award / title', 'certification' => 'Certification / inspection'],
         'ownership' => ['sale' => 'Sale', 'purchase' => 'Purchase', 'auction' => 'Auction', 'lease' => 'Lease', 'gift' => 'Gift / transfer', 'breeding' => 'Foaled / bred by'],
+        'achievements' => ['title' => 'Title, award or honor', 'earnings' => 'Reported lifetime earnings', 'enrollment' => 'Incentive program nomination'],
         'transport' => ['haul' => 'Transport'],
         'other' => ['note' => 'Note', 'retirement' => 'Retirement', 'death' => 'Death'],
     ];
@@ -128,6 +130,7 @@ final class Record
         'USTA' => 'U.S. Trotting Assn (Standardbred)',
         'AHHA' => 'American Haflinger Registry',
         'ARHA' => 'American Ranch Horse Association (ARHA)',
+        'MLOSZ' => 'Hungarian stud book (MLOSZ)',
         'Other' => 'Other registry',
     ];
 
@@ -184,6 +187,7 @@ final class Record
     public const IDENTIFIER_KINDS = [
         'registration' => 'Registration number',
         'microchip' => 'Microchip',
+        'ueln' => 'UELN (Universal Equine Life Number)',
         'other' => 'Other identifier (brand, passport, DNA case)',
     ];
 
@@ -287,10 +291,19 @@ final class Record
 
     /**
      * A stand-in printed where a horse has no name yet ("Pending", "AQHA Pending", "Name pending", "Unnamed", "Foal"),
-     * not a name: never matched, paired or made into a record by it.
+     * not a name: never matched, paired or made into a record by it. Also the unnamed-foal labels sale catalogs print as
+     * "Pending/<dam>", "Pending A/<dam>", "PendingB/<dam>", "Pending (P)/<dam>", "Pending - <dam>", "AQHA Name Pending/<dam>"
+     * or "Pending 3" (the name after the label is the dam's, not the foal's). A name followed by "(pending)" is a name.
      */
     public static function placeholderName(?string $name): bool
     {
-        return (bool) preg_match('/^\s*(horse name:\s*)?((aqha|apha|reg(istration)?|name)\s+)?(pending( registration)?|unnamed( (colt|filly|foal))?|foal|no name|none|n\/?a|tba|tbd)\s*$/i', (string) $name);
+        // "Unknown" in the stud books' own languages (Oct 28 2026: the Hungarian "Ismeretlen" became a record that was
+        // its own parent; ~300 such records held ~10,000 pedigree links).
+        if (preg_match('/^\s*(unknown|ismeretlen|inconnue?|desconocid[oa]|onbekend|unbekannt|sconosciut[oa]|okänd|ukjent|ukendt|nieznany|neznámý|nn|n\.\s?n\.?|not named|no-name)(\s*\((unknown|ismeretlen)\))?\s*$/iu', (string) $name)) {
+            return true;
+        }
+
+        return (bool) preg_match('/^\s*(horse name:\s*)?((aqha|apha|reg(istration|istered)?|name)\s+)*(pending( registration)?|unnamed( (colt|filly|foal))?|foal|no name|none|n\/?a|tba|tbd)\s*$/i', (string) $name)
+            || (bool) preg_match('/^\s*((aqha|apha|reg(istration|istered)?|name)\s+)*pending\s*([a-z]{1,2}|\d{1,2})?(\s*\([^)]*\))?\s*([\/:\-–—]|$)/iu', (string) $name);
     }
 }

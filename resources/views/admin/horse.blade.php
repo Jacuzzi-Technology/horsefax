@@ -36,6 +36,21 @@
             </div>
         </div>
 
+        @php $offspring = \App\Models\OffspringEarning::where('horse_id', $horse->id)->orderBy('role')->orderByRaw("organization <> 'all'")->orderByDesc('earnings_cents')->get(); @endphp
+        @if ($offspring->isNotEmpty())
+            <div class="card p-5 mt-6">
+                <p class="label text-muted text-[10px]">Offspring earnings · staff only</p>
+                <p class="hint text-[13px] mt-1">From the results we've harvested, for foals whose pedigree names this horse. Not on the public page until the totals roughly match NRHA's milestones (Richard, Oct 22 2026). <a href="{{ route('admin.offspring') }}" class="text-gold-dark">Leading sires and coverage</a></p>
+                <table class="table-hf mt-2 text-[13px]">
+                    <thead><tr><th>As</th><th>Organization</th><th class="text-right">Earnings</th><th class="text-right">Earners</th><th class="text-right">Starters</th><th class="text-right">Foals</th><th>Years</th></tr></thead>
+                    <tbody>@foreach ($offspring as $o)
+                        <tr class="{{ $o->organization === 'all' ? 'font-semibold' : '' }}"><td>{{ $o->role }}</td><td>{{ $o->organization === 'all' ? 'All' : $o->organization }}</td><td class="text-right">{{ \App\Models\HorseEvent::money($o->earnings_cents) }}</td><td class="text-right">{{ number_format($o->earners) }}</td><td class="text-right">{{ number_format($o->starters) }}</td><td class="text-right">{{ number_format($o->offspring) }}</td><td>{{ $o->first_year === $o->last_year ? $o->first_year : $o->first_year.'–'.$o->last_year }}</td></tr>
+                    @endforeach</tbody>
+                </table>
+                <p class="font-sans text-[11px] text-muted mt-2">Computed {{ $offspring->first()->computed_at->setTimezone('America/Chicago')->format('M j g:ia') }}</p>
+            </div>
+        @endif
+
         @php
             $sections = [
                 'fact' => ['Identity facts', $facts],

@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'standing' => \App\Http\Middleware\GoodStanding::class,
             'staff' => \App\Http\Middleware\StaffOnly::class,
+            'untrapped' => \App\Http\Middleware\BlockTrapped::class,
         ]);
         $middleware->web(append: [\App\Http\Middleware\SecurityHeaders::class]);
         // Only Cloudflare (and the local host) may set X-Forwarded-For. Trusting '*' let any client fake its IP and
