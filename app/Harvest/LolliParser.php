@@ -51,9 +51,14 @@ class LolliParser
             preg_match_all('/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/', $chunk, $m, PREG_SET_ORDER);
             $words = [];
             foreach ($m as $w) {
-                $t = trim(str_replace("\u{00A0}", ' ', html_entity_decode($w[5], ENT_QUOTES | ENT_HTML5)));
+                $raw = str_replace("\u{00A0}", ' ', html_entity_decode($w[5], ENT_QUOTES | ENT_HTML5));
+                $t = trim($raw);
                 if ($t !== '') {
-                    $words[] = [(float) $w[1], (float) $w[2], (float) $w[3], (float) $w[4], $t];
+                    $x = (float) $w[1];
+                    if (preg_match('/^\s/', $raw)) { // tabs inside the word ("\t\t\tDudes", Midpoint 2025): its box starts at the margin
+                        $x = max($x, (float) $w[3] - mb_strlen($t) * ((float) $w[4] - (float) $w[2]) * 0.5);
+                    }
+                    $words[] = [$x, (float) $w[2], (float) $w[3], (float) $w[4], $t];
                 }
             }
             $pages[] = $words;

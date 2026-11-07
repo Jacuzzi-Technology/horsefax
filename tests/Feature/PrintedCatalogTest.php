@@ -33,6 +33,24 @@ class PrintedCatalogTest extends TestCase
         $this->assertFalse(PrintedCatalogParser::free('5 yr old Grade Blonde Belgian Gelding', 2024)['registered']);
     }
 
+    public function test_name_and_what_is_printed_with_it(): void
+    {
+        $this->assertSame(['SAMPLE RUNNING CASH', ['registration_number' => '870841', 'registered' => true]], PrintedCatalogParser::nameFacts('SAMPLE RUNNING CASH - 870841'));
+        $this->assertSame(['SAMPLE MCCOY', ['registry' => 'AQHA', 'breed' => 'Quarter Horse', 'registration_number' => '5757650', 'registered' => true]], PrintedCatalogParser::nameFacts('SAMPLE MCCOY - AQHA 5757650'));
+        $this->assertSame(['SAMPLE GOOSE', ['breed' => 'Quarter Horse', 'registered' => false]], PrintedCatalogParser::nameFacts('SAMPLE GOOSE - QH Grade'));
+        $this->assertSame(['SAMPLE RICO', []], PrintedCatalogParser::nameFacts('SAMPLE RICO - Andalusian/Friesian Cross')); // a cross: no one breed
+        $this->assertSame('SAMPLE MOONSTAR', PrintedCatalogParser::nameFacts('Sample Moonstar “Denver”')[0]); // the barn name beside it
+        $this->assertSame('SAMPLE', PrintedCatalogParser::nameFacts('“Sample”')[0]);
+        $this->assertSame('A SAMPLE OF NITRO', PrintedCatalogParser::nameFacts('41 - A Sample of Nitro')[0]);
+    }
+
+    public function test_year_before_the_registry(): void
+    {
+        $d = PrintedCatalogParser::free('AQHA 5710562 2015 AQHA Buckskin Gelding', 2020);
+        $this->assertSame([2015, 'gelding', 'Buckskin', '5710562'], [$d['foal_year'], $d['sex'], $d['color'], $d['registration_number']]);
+        $this->assertSame([2021, null], [PrintedCatalogParser::free('2021 Gray Standardbred Gelding', 2026)['foal_year'], PrintedCatalogParser::free('3/4 Standardbred 1/4 Percheron', 2026)['breed']]);
+    }
+
     public function test_tree_from_left_aligned_columns(): void
     {
         $seg = fn ($x, $y, $t) => ['x' => $x, 'x1' => $x + 6 * strlen($t), 'y' => $y, 'yc' => $y + 5, 'h' => 10, 't' => $t];

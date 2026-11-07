@@ -37,6 +37,22 @@ Each layout finds the anchors on a page. The block under an anchor, in its own p
 | `farmers` | Farmers & Ranchers Fall Classic 2021 (Salina, KS) | read from text: `LOT # 5 - MARE` / `NAME - AQHA` / `Foaled: 2010. Color: Bay.`; sire and dam only (the trees are justified type) |
 | `qdata` | Shawnee Horse Sale, Spring 2020 | QData "Hip No." pages, read by `LegacyCatalogParser` (several hips to a page) |
 
+The layouts below are "generic" (Nov 2026): set up by rules in `LAYOUTS` rather than code. The name is inline, on the line
+below, or in a labelled field; the description is the next line or the lines matching a pattern, read by `free()`; the tree
+is whatever names sit below. `nameFacts()` reads what's printed with a name ("NAME - AQHA 5757650", "NAME - QH Grade",
+"Name “Barn name”"). A line ending in " - <State>" is a consignor's, never a name: that lot is skipped.
+
+| Layout | Sale | What a lot looks like |
+|---|---|---|
+| `lotname` | Five Star Horse Sale 2018 (Schmitt Horse Ranch, OCR), Anderson County 2021, Colorado Horse Sale 2025 | `LOT# 23` / `GETTIN HUNTED` / `2013 AQHA SORREL GELDING` |
+| `hipfields` | Schmitt Horse Ranch Timed Internet Offering, Dec 2020 | `HIP 9` / `HORSE NAME:` / `REGISTRATION NUMBER: AQHA 5710562` / `AGE: 2015 AQHA Buckskin Gelding` |
+| `dots` | Midpoint Riding Horse Sale 2025-26 (Middlefield, OH) | `41 · a streak of nitro · $` / `7-23-2022 • AQHA Gelding • Red roan` |
+| `starred` | Midwest Draft Cross & Quarter Horse Sale 2025 (Jamesport, MO); 5 Star Equine Sale 2026 (Arcola, IL) | `129 GENUINE'S SMART PEARL` / `Consigned By:` / `*Foaled: 2022 *Sorrel *AQHA *Mare`; trees drawn on "____" rules, draft-cross trees naming breeds |
+| `bignum` | South Dakota's Elite Horse Sale 2023 | `16 TENDER BEAUTY` (large) / `DOB: 6-2-22 • Chestnut Mare • REG: 6213427` |
+| `hipline` | Heart of Cowboy Country 2013 (Stillwater, OK; OCR) | `Hip # 25   AQHA Sorrel Gelding` / `SONNY RUNNING CASH - 870841` / `Foaled 2006` |
+| `gatrhs21` | Great American Ranch & Trail 2018-2024 | the hip printed large beside or just below `NAME - AQHA 4198657`, then `2002 Palomino Mare`; sire and dam alone where the rest of the tree is dotted leaders |
+| `form` | Boone County, September 2021 | `LOT 429-  Horse: Revenue Lauxmont  Age: 6 yrs` / `Registered: x  Color: Bay  Breed: Standardbred  Sex: Mare`; teams skipped |
+
 **Robin Glenn overlap.** Robin Glenn already posts the Shawnee and Seymour hip pages. Richard's other Shawnee copies are sales Robin Glenn already has, so only Spring 2020 is read. Seymour 2026 skips any lot that Robin Glenn has under the same lot number.
 
 **Waverly Fall 2021.** Richard's copy is whole, while the Internet Archive's is cut off. It was added to the Waverly loader as `root_WMHS-F21-Catalog.pdf` (origin `richard_copy`).
@@ -55,11 +71,16 @@ The result is stored as `printed-catalogs/boone/<year>-<month>.pdf` and read wit
 
 These years print a shorter tree: sire and dam, with only each one's sire line above it. That gives `s`, `d`, `ss`, `ds`, and sometimes `sss` and `dss` (see `sireLines`). Team lots ("LOT 131 & 132") are skipped in every Boone catalog.
 
-## Not read yet
+**Great American.** TurnbullHarvester reads 2025-26. Its 2018-2024 copies in `storage/app/private/turnbull/pdf` were
+damaged in the download (each cut to about 60% of the size it declares), which is why they looked like scans. Fresh copies,
+fetched Nov 6 2026 at one a minute, have text and are read here from `printed-catalogs/greatamerican` (2021 from Richard's
+copy). Don't also point TurnbullHarvester at them: the same lots would load twice.
 
-- Boone County 2022 and 2023: scans, needs OCR.
-- Boone County September 2021: a form layout (`Horse:` / `Age:` / `Breed:`) with no pedigrees.
-- Heart of Cowboy Country 2013: small caps that the PDF text splits into single letters.
-- Timed internet offering 2020, Midpoint 2025–26, Midwest Draft Cross 2025 and its 2026 sister catalog, Colorado 2025, Virginia Horse Center 2021, South Dakota's Elite 2023, Heart and Soul 2019, Anderson County 2021, Heartland 2020, Southern Belle 2024: each has its own layout.
-- Great American 2018–2024: scans (see docs/great-american-trail-sale.md).
-- 5 Star Equine 2025: an image capture.
+## Not read
+
+- Heart and Soul Horse Co. Ranch & Trail Sale, November 2019: its text layer spaces every letter alike, so word breaks are
+  lost, and OCR can't read the white-on-wood headers. Names came out as "DAS", "W HI": nothing loaded.
+- Heartland Horse & Livestock Premier Sale, October 2020: hips print year, registry and sex; a name, when there is one, is
+  only inside the description ("AQHA 2013 model KRS JACKS LIL HOSS!! If you're…"), which isn't read.
+- Southern Belle Classic 2024: a screenshot of the sale's web listing, with names cut off mid-word.
+- 5 Star Equine Sale 2025: a screenshot of the catalog's cover only.

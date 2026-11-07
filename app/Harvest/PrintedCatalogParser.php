@@ -18,7 +18,10 @@ class PrintedCatalogParser
     private const BREED_WORDS = ['MULE|MOLLY|JOHN MULE' => 'Mule', 'DONKEY|JENNY|JACK' => 'Donkey', 'WELCH PONY|WELSH PONY|WELSH' => 'Welsh Pony',
         'SHETLAND(?: PONY)?' => 'Shetland Pony', 'MINI(?:ATURE)?(?: HORSE)?' => 'Miniature', 'PONY' => 'Pony', 'WARMBLOOD' => 'Warmblood', 'QH|QUARTER HORSE' => 'Quarter Horse',
         'HAFLINGER|HALFLINGER' => 'Haflinger', 'PERCHERON' => 'Percheron', 'BELGIAN' => 'Belgian', 'FRIESIAN' => 'Friesian', 'GYPSY(?: VANNER)?' => 'Gypsy Vanner',
-        'THOROUGHBRED|TB' => 'Thoroughbred', 'ARABIAN' => 'Arabian', 'MORGAN' => 'Morgan', 'DRAFT(?: CROSS)?' => 'Draft', 'APPALOOSA' => 'Appaloosa'];
+        'THOROUGHBRED|TB' => 'Thoroughbred', 'STANDARDBRED' => 'Standardbred', 'ARABIAN' => 'Arabian', 'MORGAN' => 'Morgan', 'DRAFT(?: CROSS)?' => 'Draft', 'APPALOOSA' => 'Appaloosa'];
+
+    /** "Orla Schrock - Ohio", "A & A Farms - Indiana": a consignor's line, never a horse's name. */
+    private const STATES = 'Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|Ontario|Alberta|Canada';
 
     private const SEX = 'STUD COLT|STALLION|STUD|GELDING|MARE|FILLY|COLT|HORSE';
 
@@ -48,6 +51,16 @@ class PrintedCatalogParser
         'regline' => ['anchor' => '/^(AQHA|APHA|ApHC|APHC|PtHA|PTHA)\s+(\d{5,8})$/', 'header' => 'regline'],
         'model' => ['anchor' => '/^LOT\s+(\d{1,4}[A-Z]?)$/', 'header' => 'model'],
         'seymour' => ['anchor' => '/^Lot\s+(\d{1,4}[A-Z]?)\s*[-–]\s*(.+)$/u', 'header' => 'fields'],
+        // The rest are "generic": the name inline, on the line below, or in a labelled field; the description is the next line
+        // or the lines matching "desc"; "reg" finds the registration number. See generic().
+        'lotname' => ['anchor' => '/^LOT\s*#\s*(\d{1,4}[A-Z]?)$/i', 'header' => 'generic', 'name' => 'below', 'desc' => 'next'],
+        'hipfields' => ['anchor' => '/^HIP\s+(\d{1,4}[A-Z]?)$/', 'header' => 'generic', 'name' => '/^HORSE NAME:\s*(.+)$/i', 'desc' => '/^(?:AGE|REGISTRATION NUMBER):/i'],
+        'dots' => ['anchor' => '/^(\d{1,4}[A-Z]?)?\s*·\s*(.+?)\s*·(?:\s*\$)?$/u', 'header' => 'generic', 'name' => 'inline', 'desc' => '/(?:yr\.?\s*old|Foaled|\d{1,2}-\d{1,2}-\d{2,4}).*[·•]|[·•].*\b(?:Gelding|Mare|Stallion|Filly|Colt)\b/i'],
+        'starred' => ['anchor' => '/^(\d{1,4}[A-Z]?)(?:\s+(\D.*))?$/', 'header' => 'generic', 'name' => 'inline', 'desc' => '/^\*\s*Foaled/i', 'needs' => '/^Consigned By/i'],
+        'bignum' => ['anchor' => '/^(\d{1,4}[A-Z]?)\s+([A-Z].+)$/u', 'header' => 'generic', 'name' => 'inline', 'desc' => '/\bDOB:|\bREG:/i', 'minHeight' => 20],
+        'gatrhs21' => ['anchor' => '/^(\d{1,3})$/', 'header' => 'generic', 'name' => 'inline', 'desc' => '/^(?:19|20)\d\d\s+[A-Z]/', 'minHeight' => 18, 'parents' => true, 'above' => true, 'reach' => 45], // Great American 2021: the hip printed large left of the name
+        'hipline' => ['anchor' => '/^Hip\s*#\s*(\d{1,4}[A-Z]?)$/i', 'header' => 'generic', 'name' => 'below', 'desc' => '/\bFoaled\b/i'], // Heart of Cowboy Country 2013 (OCR)
+        'form' => ['anchor' => '/^LOT\s*#?\s*(\d{1,4}[A-Z]?)(?![\d&])\s*-?\s*(?:Grade:\s*x)?$/i', 'header' => 'generic', 'name' => '/^Horse:\s*(.*?)(?:\s+Age:.*)?$/', 'desc' => 'form', 'teams' => true],
     ];
 
     /** @return list<array> lots: lot, name, registry, registration_number, registered, breed, sex, color, birth_date, foal_year, pedigree */
@@ -58,7 +71,7 @@ class PrintedCatalogParser
             if (! $words) {
                 continue;
             }
-            $segs = LolliParser::segments($words);
+            $segs = LolliParser::segments(self::tidy($words));
             $anchors = self::anchors($segs, $layout);
             foreach ($anchors as $a) {
                 $block = self::block($a, $anchors, $segs);
@@ -122,6 +135,27 @@ class PrintedCatalogParser
         return $out;
     }
 
+    /**
+     * Rules and braces drawn as text: "____" lines under each tree name (Midwest Draft Cross, 5 Star) and "{" before a
+     * pair of parents (Five Star 2018, Heart and Soul) would join a name or shift its column.
+     */
+    private static function tidy(array $words): array
+    {
+        $out = [];
+        foreach ($words as $w) {
+            if (preg_match('/^(?:[_\-–—]{3,}|[{}]+)$/u', $w[4])) { // a rule or a brace; a lone "-" is "NAME - QH 5512093"
+                continue;
+            }
+            if (preg_match('/^[{}]+\s*(.+)$/u', $w[4], $m)) {
+                $w[0] += ($w[2] - $w[0]) * (mb_strlen($w[4]) - mb_strlen($m[1])) / max(mb_strlen($w[4]), 1);
+                $w[4] = $m[1];
+            }
+            $out[] = $w;
+        }
+
+        return $out;
+    }
+
     /** Lot anchors: [lot, name segment or null, the anchor segment]. */
     private static function anchors(array $segs, string $layout): array
     {
@@ -130,6 +164,55 @@ class PrintedCatalogParser
         $out = [];
         foreach ($segs as $s) {
             if (! preg_match($re, $s['t'], $m)) {
+                continue;
+            }
+            if ($layouts['header'] === 'generic') {
+                if ($s['h'] < ($layouts['minHeight'] ?? 0)) {
+                    continue;
+                }
+                $line = array_filter($segs, fn ($o) => $o !== $s && abs($o['yc'] - $s['yc']) < max(4, $s['h'] * 0.6));
+                if (isset($layouts['needs']) && ! array_filter($segs, fn ($o) => $o['y'] > $s['y'] && $o['y'] - $s['y'] < $s['h'] * 3 && abs($o['x'] - $s['x']) < 30 && preg_match($layouts['needs'], $o['t']))) {
+                    continue;
+                }
+                $lot = $m[1] ?? '';
+                if (preg_match('/^(?:19|20)\d\d$/', $lot) || preg_match('/^\d/', trim($m[2] ?? ''))) {
+                    continue; // "2015 Sorrel Mare" set large: a year, not a lot
+                }
+                $at = $s;
+                if ($lot === '') { // "41" printed apart, left of "· a streak of nitro ·": the block starts at the number
+                    $num = array_filter($line, fn ($o) => preg_match('/^\d{1,4}[A-Z]?$/', $o['t']) && $o['x1'] <= $s['x'] + 2);
+                    if (! $num) {
+                        continue;
+                    }
+                    $at = array_values($num)[0];
+                    $lot = $at['t'];
+                }
+                $right = array_values(array_filter($line, fn ($o) => $o['x'] > $s['x1'] && ! preg_match('/^\$$/', $o['t'])));
+                usort($right, fn ($a, $b) => $a['x'] <=> $b['x']);
+                $edge = $s['x1'];
+                foreach ($right as $i => $o) { // only what runs on from the anchor, not the next column's lot on the same line
+                    if ($o['x'] - $edge > 150) {
+                        $right = array_slice($right, 0, $i);
+                        break;
+                    }
+                    $edge = $o['x1'];
+                }
+                $name = trim($m[2] ?? '');
+                if (! empty($layouts['above'])) { // Great American 2022: the name sits just above the hip number, not beside it
+                    $up = array_filter($segs, fn ($o) => $o['y'] < $s['y'] && $s['y'] - $o['y'] < $s['h'] * 0.8 && $o['x'] > $s['x1'] && $o['x'] - $s['x1'] < 150 && $o['yc'] < $s['y'] + $s['h'] * 0.3);
+                    if ($up && ! array_filter($right, fn ($o) => $o['yc'] < $s['yc'] && ! preg_match('/^(?:19|20)\d\d\s/', $o['t']))) {
+                        usort($up, fn ($a, $b) => $a['x'] <=> $b['x']);
+                        $name = array_values($up)[0]['t'];
+                    }
+                }
+                if ($name === '' && ($layouts['name'] ?? null) === 'inline' && $right) {
+                    $i = array_key_first(array_filter($right, fn ($o) => ! preg_match('/^(?:19|20)\d\d\s/', $o['t']))) ?? 0; // not "2020 NGPA Bay Gelding" set beside it
+                    $name = $right[$i]['t'];
+                    array_splice($right, $i, 1);
+                }
+                $at = ['x' => $at['x'] - ($layouts['reach'] ?? 0)] + $at; // the tree starts left of the hip number (Great American 2022)
+                $out[] = ['lot' => $lot, 'name' => $name, 'seg' => $at, 'same' => implode(' ', array_map(fn ($o) => $o['t'], $right))];
+
                 continue;
             }
             if ($layouts['header'] === 'regline') { // the name is the larger run just above; the lot number large at the right
@@ -217,6 +300,9 @@ class PrintedCatalogParser
         $header = self::LAYOUTS[$layout]['header'];
         $inline = $header !== 'line';
         usort($block, fn ($x, $y) => [$x['y'], $x['x']] <=> [$y['y'], $y['x']]);
+        if ($header === 'generic') {
+            return self::generic($a, $block, self::LAYOUTS[$layout], $saleYear);
+        }
         $desc = '';
         $reg = null;
         $treeFrom = null;
@@ -311,11 +397,157 @@ class PrintedCatalogParser
                 return null;
             }
         }
-        if ($name === '' || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
+        if ($name === '' || preg_match('/^(?:19|20)\d\d\s/', $name) || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
             return null;
         }
 
         return $out;
+    }
+
+    /**
+     * The layouts set up in LAYOUTS by rules rather than code: the name is inline (in the anchor or just right of it), the
+     * first large line below ("below"), or a labelled field (a regex); the description is the line after the name ("next"),
+     * the lines matching a regex, or the label/value lines of a form ("form"). The description is read by free(); the
+     * tree is whatever names sit below the name, read by tree().
+     */
+    private static function generic(array $a, array $block, array $cfg, ?int $saleYear): ?array
+    {
+        $at = $a['seg'];
+        $lines = []; // the block's segments joined into lines
+        foreach ($block as $s) {
+            $k = array_key_last($lines);
+            if ($k !== null && abs($lines[$k]['yc'] - $s['yc']) < max(3, $s['h'] * 0.45)) {
+                $lines[$k]['segs'][] = $s;
+                $lines[$k]['t'] .= ' '.$s['t'];
+            } else {
+                $lines[] = ['yc' => $s['yc'], 'y' => $s['y'], 'h' => $s['h'], 't' => $s['t'], 'segs' => [$s]];
+            }
+        }
+        $name = $a['name'];
+        $nameSeg = null;
+        $nameRule = $cfg['name'] ?? 'inline';
+        if ($nameRule === 'below') {
+            foreach ($block as $s) {
+                if ($s['y'] - $at['y'] > $at['h'] * 3.5) {
+                    break;
+                }
+                if ($s['h'] >= $at['h'] * 0.5 && ! preg_match('/^Consign/i', $s['t'])) {
+                    // The whole line: "COLONEL GOLDEN BOY" and "- 3965949" can come out as two runs.
+                    $same = array_filter($block, fn ($o) => abs($o['yc'] - $s['yc']) < 3 && $o['x'] >= $s['x'] && $o['x'] - $s['x1'] < 40);
+                    usort($same, fn ($p, $q) => $p['x'] <=> $q['x']);
+                    [$name, $nameSeg] = [implode(' ', array_map(fn ($o) => $o['t'], $same)), $s];
+                    break;
+                }
+            }
+        } elseif ($nameRule !== 'inline') {
+            foreach ($block as $s) {
+                if (preg_match($nameRule, $s['t'], $m)) {
+                    [$name, $nameSeg] = [$m[1], $s];
+                    break;
+                }
+            }
+            if ($nameSeg === null && preg_match($nameRule, $a['same'] ?? '', $m)) { // "LOT 196-   Horse: The Irish Rose Popy   Age: 12 yrs"
+                $name = $m[1];
+            }
+        }
+        $after = $nameSeg ? $nameSeg['y'] + $nameSeg['h'] : $at['y'] + $at['h'];
+        $desc = [];
+        $descRule = $cfg['desc'] ?? 'next';
+        foreach ($lines as $i => $l) {
+            if ($descRule === 'next') {
+                if ($l['y'] >= $after - 1) {
+                    $desc[] = $l;
+                    break;
+                }
+            } elseif ($descRule === 'none') {
+                break;
+            } elseif ($descRule === 'form') { // "Horse: ... Age: 6 yrs" / "Registered: x Color: Bay Breed: Standardbred Sex: Mare"
+                if ($l['y'] > $at['y'] + $at['h'] * 4 || preg_match('/^Description:/i', $l['t'])) {
+                    break;
+                }
+                $desc[] = $l;
+            } elseif (preg_match($descRule, $l['t'])) {
+                $desc[] = $l;
+            }
+        }
+        $text = implode(' ', array_map(fn ($l) => $l['t'], $desc)).' '.($a['same'] ?? '');
+        $text = preg_replace('/Consign(?:or|ed by):.*?(?=\bFoaled\b|$)/i', ' ', $text); // a consignor's name may hold a color ("Bay Ranch")
+        $text = preg_replace(['/\b(yrs?|yr)\./i', '/[·•*]/u', '/\b(?:Horse|Age|Color|Breed|Sex|AGE|REGISTRATION NUMBER|DOB|Foaled|Sired by):\s*/i', '/\bRegistered:\s*x\b/i', '/\bGrade:\s*x\b/i', '/\b(?:Registered|Grade):\s*/i'],
+            ['$1', ' ', ' ', ' Registered ', ' Grade ', ' '], $text);
+        $text = preg_replace('/\bREG:\s*#?\s*([\d,]{5,9})/i', 'REGNO $1', $text);
+        $out = ['lot' => $a['lot'], 'registry' => null, 'registration_number' => null, 'registered' => null, 'breed' => null,
+            'sex' => null, 'color' => null, 'birth_date' => null, 'foal_year' => null, 'pedigree' => []];
+        $out = array_merge($out, self::free(trim(preg_replace('/\s+/', ' ', str_replace('REGNO', '', $text))), $saleYear));
+        if (preg_match('/REGNO\s+([\d,]{5,9})/', $text, $r)) {
+            $out['registration_number'] = str_replace(',', '', $r[1]);
+            $out['registered'] = true;
+        }
+        if (preg_match('/\s[-–]\s*(?:'.self::STATES.')\s*$/i', (string) $name) || preg_match('/^Consign/i', (string) $name)) {
+            return null; // the consignor's line, taken for the name: nothing of it is kept
+        }
+        [$name, $facts] = self::nameFacts((string) $name);
+        foreach ($facts as $k => $v) {
+            $out[$k] = $k === 'registered' ? $v : ($out[$k] ?? $v);
+        }
+        $out = ['name' => $name ?: null] + $out;
+        // No name printed, only the registry and number ("AQHA 5583760") or the breed ("GYPSY VANNER", "KENTUCKY MOUNTAIN HORSE 201009021").
+        if (preg_match('/^(?:'.self::REG.')\s*#?\s*\d|\d{6,}$|^(?:'.implode('|', array_keys(self::BREED_WORDS)).'|KENTUCKY MOUNTAIN(?: HORSE)?|TENNESSEE WALKER)$/', $name)) {
+            return null;
+        }
+        if ($name === '' || preg_match('/^(?:19|20)\d\d\s/', $name) || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT|OPEN)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
+            return null;
+        }
+        if (! empty($cfg['teams']) && preg_match('/\s(?:&|AND)\s|^TEAM\b/', $name)) {
+            return null; // "Charm & Charlie": a team sold as one lot
+        }
+        if ($out['registered'] !== false && ($cfg['tree'] ?? true)) {
+            $descSegs = array_merge(...array_map(fn ($l) => $l['segs'], $desc ?: [['segs' => []]]));
+            $tree = array_values(array_filter($block, fn ($s) => $s['y'] > $after - 1 && ! in_array($s, $descSegs, true) && $s !== $nameSeg && ! preg_match('/^(CONSIGN|PEDIGREE|HEIGHT|VIDEO|HORSE LOCATION|CALL)\b|^\d{1,4}\s*[-–]\s|\d{3}[-.]\d{3,4}/i', $s['t']))); // "41 - A Streak of Nitro" is the horse itself
+            $tree = array_map(fn ($s) => ['t' => preg_replace('/\s+(?:QH|TB|PH|AQHA|APHA)$/', '', $s['t'])] + $s, $tree); // "Definitely A Dunit QH"
+            $out['pedigree'] = self::tree($tree, $after, $name, true);
+            if (! $out['pedigree'] && ! empty($cfg['parents'])) { // only sire and dam known: dotted leaders where the rest would be (Great American)
+                $names = array_values(array_filter($tree, fn ($s) => self::nameOk($s['t']) && mb_strlen($s['t']) <= 36 && ! preg_match('/\d{3}|[.]{3}/', $s['t'])));
+                $left = $names ? min(array_map(fn ($s) => $s['x'], $names)) : 0;
+                $col = array_values(array_filter($names, fn ($s) => abs($s['x'] - $left) < 6 && $s['h'] < $at['h'] * 0.6));
+                if (count($col) === 2 && $col[1]['y'] - $col[0]['y'] < 120) {
+                    $out['pedigree'] = self::finish(['s' => $col[0]['t'], 'd' => $col[1]['t']], $name);
+                }
+            }
+            if ($out['pedigree'] && ! isset($out['pedigree']['sd'])) { // sireLines() is for Boone County's short trees; elsewhere 2 + 2 is a broken tree
+                $out['pedigree'] = array_intersect_key($out['pedigree'], ['s' => 1, 'd' => 1]);
+            }
+            if ($out['pedigree']) {
+                $out['registered'] = true;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * A lot's name and what's printed with it: "SONNY RUNNING CASH - 870841" carries its number, "RICO - Andalusian/Friesian
+     * Cross" its breed, "GOOSE - QH Grade" that it's grade; “Denver” beside a name is a barn name; a quoted name alone is one.
+     *
+     * @return array{0: string, 1: array<string, mixed>} the cleaned name, and registry, breed, registration_number, registered when printed
+     */
+    public static function nameFacts(string $name): array
+    {
+        $facts = [];
+        $name = trim(preg_replace('/^\d{1,4}\s*[-–]\s*/', '', $name));
+        if (preg_match('/^(.+?)\s*[-–]\s*((?:'.self::REG.'|QH|TB|POA)\b.*|[\d,]{5,9}|[A-Za-z][A-Za-z\/ ]+(?:\s+[\d,\-]{4,12})?)$/u', $name, $r) && ! preg_match('/^\d/', $r[1])) {
+            $name = $r[1];
+            $more = self::free(preg_replace('/^QH\b/', 'Quarter Horse', $r[2]), null);
+            $facts = array_filter(['registry' => $more['registry'], 'breed' => $more['breed']]);
+            if (preg_match('/([\d,]{5,9})\s*$/', $r[2], $n)) {
+                $facts['registration_number'] = str_replace(',', '', $n[1]);
+                $facts['registered'] = true;
+            } elseif ($more['registered'] !== null) {
+                $facts['registered'] = $more['registered'];
+            }
+        }
+        $name = preg_match('/^[“"].*[”"]$/u', $name) ? trim($name, '“”" ') : trim(preg_replace('/\s*[“"(][^”")]*[”")]\s*/u', ' ', $name));
+
+        return [self::clean($name), $facts];
     }
 
     /** A pedigree name; draft and warmblood names run longer than the 24 characters LolliParser allows. */
@@ -378,8 +610,8 @@ class PrintedCatalogParser
             $y = (int) $d[3] + (strlen($d[3]) === 2 ? ((int) $d[3] > (int) date('y') + 1 ? 1900 : 2000) : 0);
             $out['foal_year'] = $y;
             $out['birth_date'] = checkdate((int) $d[1], (int) $d[2], $y) ? sprintf('%04d-%02d-%02d', $y, $d[1], $d[2]) : null;
-        } elseif (preg_match('/\b(?:FOALED|BORN)\s+(?:IN\s+)?((?:19|20)\d\d)\b|\b((?:19|20)\d\d)\s+MODEL\b|^\s*((?:19|20)\d\d)\s+[A-Z]/', $first, $d)) {
-            $out['foal_year'] = (int) ($d[1] ?: ($d[2] ?: $d[3]));
+        } elseif (preg_match('/\b(?:FOALED|BORN)\s+(?:IN\s+)?((?:19|20)\d\d)\b|\b((?:19|20)\d\d)\s+(?:MODEL|'.self::REG.'|GRADE|REGISTERED)\b|^\s*((?:19|20)\d\d)\s+[A-Z]/', $first, $d)) {
+            $out['foal_year'] = (int) ($d[1] ?: ($d[2] ?: $d[3])); // "2015 AQHA Buckskin Gelding"
         } elseif ($saleYear) {
             $words = ['ONE' => 1, 'TWO' => 2, 'THREE' => 3, 'FOUR' => 4, 'FIVE' => 5, 'SIX' => 6, 'SEVEN' => 7, 'EIGHT' => 8, 'NINE' => 9, 'TEN' => 10, 'ELEVEN' => 11, 'TWELVE' => 12];
             if (preg_match('/\b(\d{1,2}|'.implode('|', array_keys($words)).')\s*(?:-|\s)?\s*(?:YR|YEAR)S?\b/', $first, $d)) {
@@ -408,7 +640,8 @@ class PrintedCatalogParser
                     $found[$b] = true;
                 }
             }
-            $out['breed'] = count($found) === 1 ? array_key_first($found) : null; // "Percheron/Quarter Horse" is a cross: no one breed
+            $cross = preg_match('/\bCROSS\b|\sX\s|[A-Z]\s*\/\s*[A-Z]/', $first) && array_key_first($found) !== 'Draft'; // "Andalusian/Friesian Cross"
+            $out['breed'] = count($found) === 1 && ! $cross ? array_key_first($found) : null; // "Percheron/Quarter Horse" is a cross: no one breed
         }
 
         return $out;
@@ -468,14 +701,43 @@ class PrintedCatalogParser
      * A positional tree: columns of 2, 4 and 8 names left to right (any deeper column is ignored). The full 14 when it
      * reads as 2 + 4 + 8; otherwise sire, dam and grandparents when the first two columns read as 2 + 4; otherwise nothing.
      */
-    public static function tree(array $segs, float $below, string $name): array
+    public static function tree(array $segs, float $below, string $name, bool $wrapped = false): array
     {
-        $names = array_values(array_filter(array_map(fn ($s) => ['t' => str_replace(';', "'", $s['t'])] + $s, $segs), fn ($s) => self::nameOk($s['t']) && ! preg_match('/^('.self::REG.')\b|\b\d{5,}\b|^\d+$/', $s['t'])));
+        if ($wrapped) {
+            $segs = self::unwrap($segs);
+        }
+        $names = array_values(array_filter(array_map(fn ($s) => ['t' => str_replace(';', "'", $s['t'])] + $s, $segs), fn ($s) => self::nameOk($s['t']) && ! preg_match('/^('.self::REG.')\b|\b\d{5,}\b|^\d+$/', $s['t'])
+            && ! preg_match('/^(?:'.implode('|', array_keys(self::BREED_WORDS)).'|GRADE|UNKNOWN|N\/A|UNREGISTERED)$/i', $s['t']))); // a draft cross's tree names breeds ("Percheron")
         if (count($names) < 4) { // four: sire, dam and their sires (sireLines)
             return [];
         }
 
-        return self::treeBy($names, $name, fn ($s) => $s['x'], 6) ?: self::treeBy($names, $name, fn ($s) => ($s['x'] + $s['x1']) / 2, 12); // left-aligned or centered columns
+        return self::treeBy($names, $name, fn ($s) => $s['x'], 6) ?: self::treeBy($names, $name, fn ($s) => ($s['x'] + $s['x1']) / 2, 12) // left-aligned or centered columns
+            ?: self::treeBy($names, $name, fn ($s) => ($s['x'] + $s['x1']) / 2, 22); // centered in wide boxes (Midwest Draft Cross)
+    }
+
+    /**
+     * Long names in a centered tree wrap onto a second, shorter line centered under the first ("POCO GRULLO" / "SPIRIT",
+     * Anderson County): join them. Left-aligned columns are never joined, since there the next name starts at the same x.
+     */
+    public static function unwrap(array $segs): array
+    {
+        usort($segs, fn ($a, $b) => [$a['y'], $a['x']] <=> [$b['y'], $b['x']]);
+        $out = [];
+        foreach ($segs as $s) {
+            foreach ($out as $i => $o) {
+                $center = abs(($o['x'] + $o['x1']) / 2 - ($s['x'] + $s['x1']) / 2);
+                if ($center < 15 && $s['y'] > $o['y'] && $s['y'] - $o['y'] < $o['h'] * 1.3 && abs($s['h'] - $o['h']) < 2 && ($s['x'] - $o['x'] > 5 || $o['x'] - $s['x'] > 5)
+                    && ! preg_match('/\d{4}|[a-z]{3,}\s+[a-z]{3,}\s+[a-z]{3,}/', $s['t'].' '.$o['t'])) {
+                    $t = str_ends_with($o['t'], '-') ? substr($o['t'], 0, -1).$s['t'] : $o['t'].' '.$s['t']; // "ALLAMERICAN-" / "DREAMGIRL" is one word
+                    $out[$i] = ['t' => $t, 'x' => min($o['x'], $s['x']), 'x1' => max($o['x1'], $s['x1']), 'yc' => ($o['y'] + $s['y'] + $s['h']) / 2] + $o;
+                    continue 2;
+                }
+            }
+            $out[] = $s;
+        }
+
+        return array_values($out);
     }
 
     private static function treeBy(array $names, string $name, \Closure $at, float $gap): array

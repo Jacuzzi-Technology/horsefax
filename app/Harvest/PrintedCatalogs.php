@@ -49,6 +49,7 @@ class PrintedCatalogs
                 ['5C9CD86EFAB9C0AA/B0D7B385E11092C6.pdf', 2024, 3], ['FF5089ACE66911C6/4AAC3726B2BA21B1.pdf', 2024, 9],
                 ['E304368CC8A7D0C5/372C13B53E653766.pdf', 2025, 3], ['171C387D9D7FF512/69F04CC1BCEFF63D.pdf', 2025, 9],
                 ['4850E16E4007450E/F25838A29A2DD87B.pdf', 2026, 3], ['9DF99B20136B0539/FCC231D7ED59FF40.pdf', 2026, 9],
+                ['EF4CF3CD4968CE7D/E14288B3BF5841E1.pdf', 2021, 9, 'form'], // a form ("Horse: / Age: / Breed:") instead of the usual lot line
             ],
         ],
         'clovis' => [
@@ -62,6 +63,63 @@ class PrintedCatalogs
             'url' => 'https://www.fandrlive.com/horse-sale-catalog.html', 'layout' => 'farmers',
             'terms' => 'Checked Oct 29 2026: fandrlive.com (Weebly) robots.txt disallows only /ajax/ and /apps/; no terms of use or legal page; no bot protection. Catalog is Richard\'s own copy (PDFNotes); its trees are set in justified type, so only sire and dam are read. Facts only.',
             'catalogs' => [['89EB5C508ED1061C/278008494B982883.pdf', 2021, 10]],
+        ],
+        'anderson' => [
+            'key' => 'andersoncountyhorsesale', 'name' => 'Anderson County Catalog Horse Sale (Anderson County Livestock Exchange, Elkhart, TX)', 'sale' => 'Anderson County Catalog Horse Sale',
+            'url' => 'https://lmaauctions.com/', 'layout' => 'lotname',
+            'terms' => 'Checked Nov 6 2026: the sale has no website of its own; later catalogs are posted on lmaauctions.com (robots.txt allows all; no terms of use page; no bot protection). Catalog is Richard\'s own copy (PDFNotes), April 17 [2021]. Mostly barn names with no pedigree. Facts only.',
+            'catalogs' => [['02029BE7AEDBB21B/ED63366CEC452E5D.pdf', 2021, 4, null, null, null, '2021-04-17']],
+        ],
+        'colorado' => [
+            'key' => 'coloradohorsesale', 'name' => 'Colorado Horse Sale (Adams County Fairgrounds, Brighton, CO)', 'sale' => 'Colorado Horse Sale', 'url' => 'https://coloradohorsesale.com/',
+            'layout' => 'lotname',
+            'terms' => 'Checked Nov 6 2026: coloradohorsesale.com (WordPress) robots.txt allows all; its only legal page is Sale Terms (conditions of sale: no clause on copying or collecting); no bot protection. Catalog is Richard\'s own copy (PDFNotes). Barn names in quotes, no pedigrees. Facts only.',
+            'catalogs' => [['3A5E5DA0F3A7EA10/08A80926AF6F3083.pdf', 2025, 5, null, null, null, '2025-05-17']],
+        ],
+        'fivestarequine' => [
+            'key' => 'fivestarequinesale', 'name' => '5 Star Equine Sale (5 Star Arena, Arcola, IL)', 'sale' => '5 Star Equine Sale', 'url' => 'https://fliphtml5.com/',
+            'layout' => 'starred',
+            'terms' => 'Checked Nov 6 2026: no website found for the sale (its catalogs are FlipHTML5 books), so no robots.txt or terms to read. Catalog is Richard\'s own copy (PDFNotes), May 28-29 2026; his 2025 copy is only a screenshot of the cover. Facts only.',
+            'catalogs' => [['092D7ECE4CA47FCA/6DF55069F462F549.pdf', 2026, 5]],
+        ],
+        'greatamerican' => [
+            'key' => 'turnbull', 'name' => 'Great American Ranch & Trail Horse Sale (Turnbull Equine Productions)', 'sale' => 'Great American Ranch & Trail Horse Sale',
+            'url' => 'https://greatamericantrailhorsesale.com/catalog/', 'layout' => 'gatrhs21',
+            'terms' => 'Already a source (TurnbullHarvester reads 2025-26; robots.txt allows all, Crawl-delay 60). Its 2018-2024 copies had been damaged in the download (cut to about 60% of their size; 2022 thought damaged at the source), not scanned: fresh copies were fetched Nov 6 2026 at one a minute and have text. 2021 is Richard\'s own copy (filed in PDFNotes as "Virginia Horse Center"). Facts only.',
+            // 'site': fetched from the sale's site into printed-catalogs/greatamerican (TurnbullHarvester::CATALOGS), not in PDFNotes.
+            'catalogs' => [
+                ['', 2018, 4, null, null, 'site'], ['', 2019, 4, null, null, 'site'], ['3D5FBED964D6E8DD/557FFB52CA570E46.pdf', 2021, 4], ['', 2022, 4, null, null, 'site'], ['', 2024, 4, null, null, 'site'],
+            ],
+        ],
+        'heartofcowboy' => [
+            'key' => 'heartofcowboycountry', 'name' => 'Heart of Cowboy Country Horse Sales (Payne County Expo Center, Stillwater, OK)', 'sale' => 'Heart of Cowboy Country Horse Sale', 'url' => 'https://www.paynecountyexpo.com/',
+            'layout' => 'hipline',
+            'terms' => 'Checked Nov 6 2026: no website found for the sale (2013), so no robots.txt or terms to read. Catalog is Richard\'s own copy (PDFNotes); its small capitals come apart in the text layer, so it is read by OCR. Facts only.',
+            'catalogs' => [['', 2013, 5, null, null, 'ocr', '2013-05-29']],
+        ],
+        'midpoint' => [
+            'key' => 'midpointridinghorsesale', 'name' => 'Midpoint Riding Horse Sale (Maple Country Farms, Middlefield, OH)', 'sale' => 'Midpoint Riding Horse Sale', 'url' => 'https://www.google.com/maps/search/17717+Newcomb+Road+Middlefield+OH',
+            'layout' => 'dots',
+            'terms' => 'Checked Nov 6 2026: no website found for the sale, so no robots.txt or terms to read. Catalogs are Richard\'s own copies (PDFNotes). Facts only.',
+            'catalogs' => [['B3B309CD4A4B45F9/83DC9C6ECF6E0AC6.pdf', 2025, 7, null, null, null, '2025-07-11'], ['E61F18D75E52A183/5C67B82492D82FF2.pdf', 2026, 6, null, null, null, '2026-06-26']],
+        ],
+        'midwestdraftcross' => [
+            'key' => 'midwestdraftcrossqh', 'name' => 'Midwest Draft Cross & Quarter Horse Sale (Jamesport, MO)', 'sale' => 'Midwest Draft Cross & Quarter Horse Sale', 'url' => 'https://www.gallopingbranch.com/',
+            'layout' => 'starred',
+            'terms' => 'Checked Nov 6 2026: the website printed in the catalog (gallopingbranch.com) is now an empty WordPress.com page; no other site found, so no terms to read. Catalog is Richard\'s own copy (PDFNotes; three identical copies), August 28-29 2025. Facts only.',
+            'catalogs' => [['2A0EAECF71601760/A8989098B91ED751.pdf', 2025, 8]],
+        ],
+        'schmitt' => [
+            'key' => 'schmitthorseranch', 'name' => 'Schmitt Horse Ranch (Holland, IA): Five Star Horse Sale and online sales', 'sale' => 'Schmitt Horse Ranch Five Star Horse Sale',
+            'url' => 'https://www.schmitthorseranch.com/five-star-horse-sale/', 'layout' => 'lotname',
+            'terms' => 'Checked Nov 6 2026: schmitthorseranch.com robots.txt allows all with Crawl-delay 60; no terms of use or legal page; no bot protection. Its later catalogs are on Robin Glenn (Five Star 2019 on). Catalogs are Richard\'s own copies (PDFNotes): Five Star February 2018 (a scan, read by OCR) and the December 2020 Timed Internet Offering. Facts only.',
+            'catalogs' => [['', 2018, 2, null, null, 'ocr', '2018-02-03'], ['2F04D58EA6042465/D641BB49A12E8A13.pdf', 2020, 12, 'hipfields', 'Schmitt Horse Ranch Timed Internet Offering']],
+        ],
+        'sdelite' => [
+            'key' => 'southdakotaselite', 'name' => 'South Dakota\'s Elite Horse Sale', 'sale' => 'South Dakota\'s Elite Horse Sale', 'url' => 'https://southdakotaselite.com/',
+            'layout' => 'bignum',
+            'terms' => 'Checked Nov 6 2026: southdakotaselite.com (WordPress) robots.txt allows all; no terms of use or legal page; no bot protection. Live Ag already gives the 2025 sale. Catalog is Richard\'s own copy (PDFNotes), July 2023. Facts only.',
+            'catalogs' => [['670E07FE21E997A6/B41CCAF584B24F33.pdf', 2023, 7]],
         ],
         'stroud' => [
             'key' => 'stroudhorseauction', 'name' => 'Stroud Oklahoma Horse Auction (Stroud, OK)', 'sale' => 'Stroud Oklahoma Horse Auction 5th Saturday Special Sale',
