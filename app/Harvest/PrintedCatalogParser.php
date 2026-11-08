@@ -57,7 +57,9 @@ class PrintedCatalogParser
         'hipfields' => ['anchor' => '/^HIP\s+(\d{1,4}[A-Z]?)$/', 'header' => 'generic', 'name' => '/^HORSE NAME:\s*(.+)$/i', 'desc' => '/^(?:AGE|REGISTRATION NUMBER):/i'],
         'dots' => ['anchor' => '/^(\d{1,4}[A-Z]?)?\s*·\s*(.+?)\s*·(?:\s*\$)?$/u', 'header' => 'generic', 'name' => 'inline', 'desc' => '/(?:yr\.?\s*old|Foaled|\d{1,2}-\d{1,2}-\d{2,4}).*[·•]|[·•].*\b(?:Gelding|Mare|Stallion|Filly|Colt)\b/i'],
         'starred' => ['anchor' => '/^(\d{1,4}[A-Z]?)(?:\s+(\D.*))?$/', 'header' => 'generic', 'name' => 'inline', 'desc' => '/^\*\s*Foaled/i', 'needs' => '/^Consigned By/i'],
-        'bignum' => ['anchor' => '/^(\d{1,4}[A-Z]?)\s+([A-Z].+)$/u', 'header' => 'generic', 'name' => 'inline', 'desc' => '/\bDOB:|\bREG:/i', 'minHeight' => 20],
+        // South Dakota's Elite: "16 TENDER BEAUTY" (2023) or "7" and "FRITO" apart (2026, a barn name); the registered name is
+        // the horse's own place in the tree, between sire and dam.
+        'bignum' => ['anchor' => '/^(\d{1,4}[A-Z]?)(?:\s+([A-Z].+))?$/u', 'header' => 'generic', 'name' => 'inline', 'desc' => '/\bDOB:|\bREG:/i', 'minHeight' => 20, 'treeName' => true, 'needsDesc' => true],
         'gatrhs21' => ['anchor' => '/^(\d{1,3})$/', 'header' => 'generic', 'name' => 'inline', 'desc' => '/^(?:19|20)\d\d\s+[A-Z]/', 'minHeight' => 18, 'parents' => true, 'above' => true, 'reach' => 45], // Great American 2021: the hip printed large left of the name
         'hipline' => ['anchor' => '/^Hip\s*#\s*(\d{1,4}[A-Z]?)$/i', 'header' => 'generic', 'name' => 'below', 'desc' => '/\bFoaled\b/i'], // Heart of Cowboy Country 2013 (OCR)
         'form' => ['anchor' => '/^LOT\s*#?\s*(\d{1,4}[A-Z]?)(?![\d&])\s*-?\s*(?:Grade:\s*x)?$/i', 'header' => 'generic', 'name' => '/^Horse:\s*(.*?)(?:\s+Age:.*)?$/', 'desc' => 'form', 'teams' => true],
@@ -67,11 +69,18 @@ class PrintedCatalogParser
     public static function read(string $pdf, string $layout, ?int $saleYear = null): array
     {
         $out = [];
+        $consignors = []; // index lines name them: "HIP 47 • Jessica Bunch /Jacob Littlepage • Strutin for the Money" (Great American 2023)
         foreach (LolliParser::words($pdf) as $words) {
             if (! $words) {
                 continue;
             }
             $segs = LolliParser::segments(self::tidy($words));
+            foreach ($segs as $s) {
+                preg_match_all('/HIP\s*\d{1,4}\s*•\s*([^•]+?)\s*•/u', $s['t'], $cm);
+                foreach ($cm[1] as $c) {
+                    $consignors[self::clean(str_replace('/', ' / ', $c))] = true;
+                }
+            }
             $anchors = self::anchors($segs, $layout);
             foreach ($anchors as $a) {
                 $block = self::block($a, $anchors, $segs);
@@ -80,6 +89,7 @@ class PrintedCatalogParser
                 }
             }
         }
+        $out = array_filter($out, fn ($l) => ! isset($consignors[$l['name']])); // a consignor's name, never a horse's
         $best = [];
         foreach ($out as $l) {
             $score = fn ($x) => count($x['pedigree']) + ($x['registration_number'] ? 2 : 0) + ($x['foal_year'] ? 1 : 0);
@@ -154,6 +164,187 @@ class PrintedCatalogParser
         }
 
         return $out;
+    }
+
+    /**
+     * A screenshot of a sale's web listing (Southern Belle Classic 2024, a Horse Sale Management site): cards four across,
+     * "Hip 6 Weston 2018" with labelled fields under it ("REGISTERED NAME (if applicable): W Hes Gritty Flit", "BREED: AQHA",
+     * "GENDER:", "AGE:", "COLOR:"). A card runs on to the top of the next page in its column, so each column is read as one
+     * stream across pages. Only the horse's fields are read: the consignor's name, ranch, phone, email and location never.
+     */
+    public static function webCards(string $pdf, int $saleYear): array
+    {
+        $streams = [];
+        foreach (LolliParser::words($pdf) as $words) {
+            $starts = [];
+            foreach (LolliParser::segments($words) as $s) {
+                if (preg_match('/^Hip\s+\d{1,4}\b/', $s['t'])) {
+                    $starts[] = $s['x'];
+                }
+            }
+            $cols = $starts ?: ($cols ?? []); // a page of card tails only: the last page's columns
+            sort($cols);
+            $cols = array_values(array_unique(array_map(fn ($x) => round($x / 20) * 20, $cols)));
+            if (! $cols) {
+                continue;
+            }
+            $by = [];
+            foreach ($words as $w) {
+                $c = 0;
+                foreach ($cols as $i => $x) {
+                    if ($w[0] >= $x - 12) {
+                        $c = $i;
+                    }
+                }
+                $by[$c][] = $w;
+            }
+            foreach ($by as $c => $ws) {
+                foreach (LolliParser::segments($ws) as $s) {
+                    $streams[$c][] = $s['t'];
+                }
+            }
+        }
+        $out = [];
+        foreach ($streams as $lines) {
+            $cards = preg_split('/\n(?=Hip\s+\d{1,4}\b)/', "\n".implode("\n", $lines));
+            foreach ($cards as $card) {
+                if (! preg_match('/^Hip\s+(\d{1,4})\s+(.*)$/s', trim($card), $m)) {
+                    continue;
+                }
+                $out[] = self::webCard($m[1], $m[2], $saleYear);
+            }
+        }
+        $out = array_values(array_filter($out));
+        $best = [];
+        foreach ($out as $l) {
+            $best[$l['lot']] ??= $l;
+        }
+
+        return array_values($best);
+    }
+
+    /**
+     * Heartland Horse & Livestock (Premier Sale 2020): each hip is "2008 AQHA Filly" over "Hip 139", then a description. The
+     * name, when printed, is only the registered name in capitals inside the first sentences ("AQHA 2013 model KRS JACKS LIL
+     * HOSS!!"): that name is taken and nothing else of the description. Hips without one are skipped.
+     */
+    public static function heartland(string $pdf, int $saleYear): array
+    {
+        $out = [];
+        $words = '(?:(?:19|20)\d\d|model|year|yr|old|\d+|a|an|the|registered|gelding|mare|filly|colt|stud|horse|'.strtolower(self::COLORS).')';
+        foreach (LolliParser::words($pdf) as $page) {
+            $segs = LolliParser::segments($page);
+            $hips = array_values(array_filter($segs, fn ($s) => preg_match('/^Hip\s+(\d{1,4})$/', $s['t'])));
+            $mid = fn ($o) => ($o['x'] + $o['x1']) / 2;
+            $heads = [];
+            foreach ($hips as $i => $h) { // "2016" / "AQHA Mare" / "Hip 136"
+                $above = array_filter($segs, fn ($o) => $o['y'] < $h['y'] && $h['y'] - $o['y'] < $h['h'] * 2.8 && abs($mid($o) - $mid($h)) < 80);
+                usort($above, fn ($a, $b) => $a['y'] <=> $b['y']);
+                $heads[$i] = self::free(implode(' ', array_map(fn ($o) => $o['t'], $above)), $saleYear);
+            }
+            $found = [];
+            foreach ($hips as $i => $h) { // the text under each hip: its column, halfway to the next hip label
+                $right = min(array_merge([PHP_FLOAT_MAX], array_map(fn ($o) => ($mid($o) + $mid($h)) / 2, array_filter($hips, fn ($o) => $mid($o) > $mid($h) + 60))));
+                $left = max(array_merge([0], array_map(fn ($o) => ($mid($o) + $mid($h)) / 2, array_filter($hips, fn ($o) => $mid($o) < $mid($h) - 60))));
+                $body = array_filter($segs, fn ($o) => $o['y'] > $h['y'] + $h['h'] && $o['y'] - $h['y'] < 140 && $o['x'] >= $left && $o['x'] < $right);
+                usort($body, fn ($a, $b) => [$a['y'], $a['x']] <=> [$b['y'], $b['x']]);
+                $text = implode(' ', array_map(fn ($o) => $o['t'], $body));
+                if (! preg_match('/\b(?:'.self::REG.')\b((?:\s+'.$words.')*)\s+([A-Z][A-Z0-9\']+(?:\s+[A-Z][A-Z0-9\']*){0,5})\b(.{0,40})/', $text, $n)) {
+                    continue;
+                }
+                $name = trim(preg_replace('/(?:\s+(?:'.self::COLORS.'|'.self::SEX.'))+$/', '', $n[2]));
+                $year = preg_match('/\b((?:19|20)\d\d)\b/', $n[1].' '.$n[3], $y) ? (int) $y[1] : null;
+                if ($year && $name !== '' && ! (str_word_count($name) < 2 && mb_strlen($name) < 8) && ! preg_match('/^(?:'.self::COLORS.'|'.self::SEX.')$/', $name)) {
+                    $found[$i] = [$name, $year];
+                }
+            }
+            // A description may sit under the other hip of its row: a name goes to the hip whose heading has its year.
+            foreach ($found as $i => [$name, $year]) {
+                $to = $heads[$i]['foal_year'] === $year ? $i : (array_keys(array_filter($heads, fn ($hd) => $hd['foal_year'] === $year))[0] ?? null);
+                if ($to === null || count(array_filter($heads, fn ($hd) => $hd['foal_year'] === $year)) > 1 && $to !== $i) {
+                    continue; // no heading with that year, or more than one: can't tell whose name it is
+                }
+                preg_match('/(\d+)$/', $hips[$to]['t'], $m);
+                $out[$m[1]] ??= ['lot' => $m[1], 'name' => self::clean($name), 'registration_number' => null, 'birth_date' => null, 'pedigree' => [], 'registered' => true] + $heads[$to];
+            }
+        }
+
+        return array_values(array_filter($out, fn ($l) => $l['name'] !== ''));
+    }
+
+    /**
+     * Heart and Soul Horse Co. (Ranch & Trail Sale, November 2019): headers "33 } kramor buckley   sorrel gelding" in white
+     * on wood. The text layer has the right letters but spaces every letter alike, so word breaks are lost; OCR of the page
+     * images (kept beside the PDF as <file>.ocr.txt) has the breaks but misreads letters. A header is read only when the
+     * two agree letter for letter: the OCR gives the spacing, the text layer vouches for the letters. Trees aren't read.
+     */
+    public static function heartAndSoul(string $pdf, string $ocr): array
+    {
+        $flat = fn ($t) => preg_replace('/[^A-Z0-9]/', '', strtoupper($t));
+        $layer = [];
+        foreach (LolliParser::words($pdf) as $words) {
+            $big = array_values(array_filter($words, fn ($w) => $w[3] - $w[1] > 18));
+            usort($big, fn ($a, $b) => [round($a[1]), $a[0]] <=> [round($b[1]), $b[0]]);
+            $lines = [];
+            foreach ($big as $w) {
+                $lines[(string) round($w[1])][] = $w[4];
+            }
+            foreach ($lines as $l) {
+                if (preg_match('/^(\d{1,3})\s*\}\s*(.+)$/', implode(' ', $l), $m)) {
+                    $layer[$m[1]] ??= $flat($m[2]); // the name only ("KRAMORBUCKLEY"): color and sex are set smaller
+                }
+            }
+        }
+        $out = [];
+        foreach (preg_split('/\n/', strtoupper($ocr)) as $line) {
+            if (! preg_match('/^\D{0,2}(\d{1,3})\s*[}\]){|%\/]\s*(.+)$/', trim($line), $m) || ! isset($layer[$m[1]]) || isset($out[$m[1]])) {
+                continue;
+            }
+            $words = preg_split('/\s+/', trim(preg_replace('/[^A-Z0-9\'& ]+/', ' ', $m[2])));
+            $words = array_values(array_filter($words, fn ($w) => $w !== '' && $w !== 'I' || false));
+            for ($n = count($words); $n > 0; $n--) { // the OCR words whose letters are exactly the text layer's name
+                $name = implode(' ', array_slice($words, 0, $n));
+                if ($flat($name) !== $layer[$m[1]]) {
+                    continue;
+                }
+                $facts = self::free(implode(' ', array_slice($words, $n)), null); // "SORREL GELDING" after it
+                $out[$m[1]] = ['lot' => $m[1], 'name' => self::clean($name), 'registry' => null, 'registration_number' => null, 'registered' => null, 'breed' => null,
+                    'sex' => $facts['sex'], 'color' => $facts['color'], 'birth_date' => null, 'foal_year' => null, 'pedigree' => []];
+                break;
+            }
+        }
+
+        return array_values(array_filter($out, fn ($l) => $l['name'] !== ''));
+    }
+
+    private static function webCard(string $hip, string $card, int $saleYear): ?array
+    {
+        $labels = 'BARN NAME|BREED|GENDER|AGE|COLOR|HEIGHT|WEIGHT|LOCATION OF HORSE|REGISTRATION STATUS|REGISTERED NAME \(if\s+applicable\)|REGISTRATION TYPE \(if\s+applicable\)|TEMPERAMENT RATING \(1\s+thru 5\)|LIST SKILLS|CONSIGNOR NAME|RANCH or BUSINESS NAME\s+\(if applicable\)|PHONE NUMBER|EMAIL|WEBSITE \(if applicable\)|FACEBOOK @ \(if\s+applicable\)|INSTAGRAM @ \(if\s+applicable\)|Publish Date';
+        $flat = preg_replace('/\s+/', ' ', $card);
+        $parts = preg_split('/\b('.$labels.'):\s*/', $flat, -1, PREG_SPLIT_DELIM_CAPTURE);
+        $title = trim(array_shift($parts));
+        $f = [];
+        for ($i = 0; $i + 1 < count($parts); $i += 2) {
+            $f[strtoupper(preg_replace('/\s.*$/', '', $parts[$i]))] ??= trim($parts[$i + 1]);
+        }
+        $title = trim(preg_replace('/(?:Click HERE|Here|This|Looking|Introducing|Meet)\b.*$/s', '', $title)); // the title, before the blurb
+        $registered = trim((string) ($f['REGISTERED'] ?? ''));
+        $name = $registered !== '' && ! preg_match('/^(N\/?A|none|grade|pending|-)$/i', $registered) ? $registered : trim(preg_split('/\s+(?:19|20)\d\d\b/', $title)[0]);
+        $facts = self::free(($f['REGISTRATION'] ?? '').' '.$title.' '.($f['BREED'] ?? '').' '.($f['GENDER'] ?? '').' '.($f['COLOR'] ?? ''), null);
+        $age = trim((string) ($f['AGE'] ?? ''));
+        $year = preg_match('/^((?:19|20)\d\d)$/', $age, $y) ? (int) $y[1] : (preg_match('/^(\d{1,2})\b/', $age, $y) ? $saleYear - (int) $y[1] : $facts['foal_year']);
+        $status = strtoupper((string) ($f['REGISTRATION'] ?? ''));
+        [$name] = self::nameFacts($name);
+        if ($name === '' || preg_match('/^(?:19|20)\d\d\b|\bHIP \d/', $name)) { // "Flashy Hip 25 Nice Guy": two hips in one card
+            return null;
+        }
+
+        return ['lot' => $hip, 'name' => $name] + array_merge($facts, [
+            'registered' => str_contains($status, 'GRADE') ? false : ($registered !== '' || str_contains($status, 'REGISTERED') ? true : $facts['registered']),
+            'foal_year' => $year && $year >= 1975 && $year <= $saleYear ? $year : null,
+            'color' => isset($f['COLOR']) && mb_strlen($f['COLOR']) <= 30 ? ucwords(strtolower($f['COLOR'])) : $facts['color'],
+            'pedigree' => [],
+        ]);
     }
 
     /** Lot anchors: [lot, name segment or null, the anchor segment]. */
@@ -482,7 +673,7 @@ class PrintedCatalogParser
             $out['registration_number'] = str_replace(',', '', $r[1]);
             $out['registered'] = true;
         }
-        if (preg_match('/\s[-–]\s*(?:'.self::STATES.')\s*$/i', (string) $name) || preg_match('/^Consign/i', (string) $name)) {
+        if (preg_match('/\s[-–]\s*(?:'.self::STATES.')\s*$/i', (string) $name) || preg_match('/^Consign|\b(?:COMPANY|CO\.?|LLC|INC\.?|STABLES|FARMS|PERFORMANCE HORSES|EQUINE|HORSES|LIVESTOCK)$/i', trim((string) $name))) {
             return null; // the consignor's line, taken for the name: nothing of it is kept
         }
         [$name, $facts] = self::nameFacts((string) $name);
@@ -491,11 +682,17 @@ class PrintedCatalogParser
         }
         $out = ['name' => $name ?: null] + $out;
         // No name printed, only the registry and number ("AQHA 5583760") or the breed ("GYPSY VANNER", "KENTUCKY MOUNTAIN HORSE 201009021").
-        if (preg_match('/^(?:'.self::REG.')\s*#?\s*\d|\d{6,}$|^(?:'.implode('|', array_keys(self::BREED_WORDS)).'|KENTUCKY MOUNTAIN(?: HORSE)?|TENNESSEE WALKER)$/', $name)) {
+        if (preg_match('/^(?:'.self::REG.')(?:\s*#?\s*\d.*)?$|\d{6,}$|^(?:'.implode('|', array_keys(self::BREED_WORDS)).'|KENTUCKY MOUNTAIN(?: HORSE)?|TENNESSEE WALKER)$/', $name)) {
             return null;
         }
         if ($name === '' || preg_match('/^(?:19|20)\d\d\s/', $name) || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT|OPEN)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
             return null;
+        }
+        if (preg_match('/^(?:(?:'.self::COLORS.'|GRADE|PONY|DRAFT|CROSS|WEANLING|YEARLING)\s+)*(?:STUD COLT|STUD|GELDING|MARE|FILLY|COLT|STALLION)$/', $name)) {
+            return null; // "SORREL STUD COLT": no name
+        }
+        if (! empty($cfg['needsDesc']) && ! $desc) {
+            return null; // a big number on an advertising page, not a lot
         }
         if (! empty($cfg['teams']) && preg_match('/\s(?:&|AND)\s|^TEAM\b/', $name)) {
             return null; // "Charm & Charlie": a team sold as one lot
@@ -511,6 +708,14 @@ class PrintedCatalogParser
                 $col = array_values(array_filter($names, fn ($s) => abs($s['x'] - $left) < 6 && $s['h'] < $at['h'] * 0.6));
                 if (count($col) === 2 && $col[1]['y'] - $col[0]['y'] < 120) {
                     $out['pedigree'] = self::finish(['s' => $col[0]['t'], 'd' => $col[1]['t']], $name);
+                }
+            }
+            if ($out['pedigree'] && ! empty($cfg['treeName'])) {
+                $sire = array_values(array_filter($tree, fn ($t) => self::clean($t['t']) === $out['pedigree']['s']))[0] ?? null;
+                $dam = array_values(array_filter($tree, fn ($t) => self::clean($t['t']) === $out['pedigree']['d']))[0] ?? null;
+                $own = $sire && $dam ? array_values(array_filter($tree, fn ($t) => $t['x'] < $sire['x'] - 20 && $t['y'] > $sire['y'] && $t['y'] < $dam['y'] && self::nameOk($t['t']))) : [];
+                if (count($own) === 1 && ($registered = self::clean($own[0]['t'])) !== '') {
+                    $out['name'] = $registered; // "BXL ANOTHER DUAL REY", not the barn name "FRITO"
                 }
             }
             if ($out['pedigree'] && ! isset($out['pedigree']['sd'])) { // sireLines() is for Boone County's short trees; elsewhere 2 + 2 is a broken tree
@@ -547,7 +752,7 @@ class PrintedCatalogParser
         }
         $name = preg_match('/^[“"].*[”"]$/u', $name) ? trim($name, '“”" ') : trim(preg_replace('/\s*[“"(][^”")]*[”")]\s*/u', ' ', $name));
 
-        return [self::clean($name), $facts];
+        return [self::clean(rtrim($name, '.')), $facts];
     }
 
     /** A pedigree name; draft and warmblood names run longer than the 24 characters LolliParser allows. */

@@ -67,14 +67,15 @@ class PrintedCatalogs
         'anderson' => [
             'key' => 'andersoncountyhorsesale', 'name' => 'Anderson County Catalog Horse Sale (Anderson County Livestock Exchange, Elkhart, TX)', 'sale' => 'Anderson County Catalog Horse Sale',
             'url' => 'https://lmaauctions.com/', 'layout' => 'lotname',
-            'terms' => 'Checked Nov 6 2026: the sale has no website of its own; later catalogs are posted on lmaauctions.com (robots.txt allows all; no terms of use page; no bot protection). Catalog is Richard\'s own copy (PDFNotes), April 17 [2021]. Mostly barn names with no pedigree. Facts only.',
+            'terms' => 'Checked Nov 6-8 2026: the sale has no website of its own; later catalogs are posted on lmaauctions.com, whose Terms of Use (found Nov 8; missed Nov 6) allow personal use only without written permission, so nothing is collected from LMA. Catalog is Richard\'s own copy (PDFNotes), April 17 [2021]; whether it stays is Richard\'s call (asked Nov 8 2026). Facts only.',
             'catalogs' => [['02029BE7AEDBB21B/ED63366CEC452E5D.pdf', 2021, 4, null, null, null, '2021-04-17']],
         ],
         'colorado' => [
             'key' => 'coloradohorsesale', 'name' => 'Colorado Horse Sale (Adams County Fairgrounds, Brighton, CO)', 'sale' => 'Colorado Horse Sale', 'url' => 'https://coloradohorsesale.com/',
             'layout' => 'lotname',
-            'terms' => 'Checked Nov 6 2026: coloradohorsesale.com (WordPress) robots.txt allows all; its only legal page is Sale Terms (conditions of sale: no clause on copying or collecting); no bot protection. Catalog is Richard\'s own copy (PDFNotes). Barn names in quotes, no pedigrees. Facts only.',
+            'terms' => 'Checked Nov 6-8 2026: coloradohorsesale.com (WordPress) robots.txt allows all; its only legal page is Sale Terms (conditions of sale: no clause on copying or collecting); no bot protection. Catalog is Richard\'s own copy (PDFNotes); the Sale Results page\'s files (full tables for 2026 and Oct 2025, top-seller summaries 2023-2025) were fetched Nov 8 2026. Facts only: consignors, buyers and destinations are never read.',
             'catalogs' => [['3A5E5DA0F3A7EA10/08A80926AF6F3083.pdf', 2025, 5, null, null, null, '2025-05-17']],
+            'results' => ColoradoHorseSaleResults::class, // the published results, 2023-2026 (printed-catalogs/colorado/results)
         ],
         'fivestarequine' => [
             'key' => 'fivestarequinesale', 'name' => '5 Star Equine Sale (5 Star Arena, Arcola, IL)', 'sale' => '5 Star Equine Sale', 'url' => 'https://fliphtml5.com/',
@@ -85,11 +86,23 @@ class PrintedCatalogs
         'greatamerican' => [
             'key' => 'turnbull', 'name' => 'Great American Ranch & Trail Horse Sale (Turnbull Equine Productions)', 'sale' => 'Great American Ranch & Trail Horse Sale',
             'url' => 'https://greatamericantrailhorsesale.com/catalog/', 'layout' => 'gatrhs21',
-            'terms' => 'Already a source (TurnbullHarvester reads 2025-26; robots.txt allows all, Crawl-delay 60). Its 2018-2024 copies had been damaged in the download (cut to about 60% of their size; 2022 thought damaged at the source), not scanned: fresh copies were fetched Nov 6 2026 at one a minute and have text. 2021 is Richard\'s own copy (filed in PDFNotes as "Virginia Horse Center"). Facts only.',
+            'terms' => 'Already a source (TurnbullHarvester reads 2025-26; robots.txt allows all, Crawl-delay 60). Its 2018-2024 copies had been damaged in the download (cut to about 60% of their size; 2022 thought damaged at the source), not scanned: fresh copies were fetched Nov 6 2026 at one a minute and have text; 2023 (never had) from the site Nov 8; 2016 from the Internet Archive (its link on the site now returns a web page). 2021 is Richard\'s own copy (filed in PDFNotes as "Virginia Horse Center"). Facts only.',
             // 'site': fetched from the sale's site into printed-catalogs/greatamerican (TurnbullHarvester::CATALOGS), not in PDFNotes.
             'catalogs' => [
-                ['', 2018, 4, null, null, 'site'], ['', 2019, 4, null, null, 'site'], ['3D5FBED964D6E8DD/557FFB52CA570E46.pdf', 2021, 4], ['', 2022, 4, null, null, 'site'], ['', 2024, 4, null, null, 'site'],
+                ['', 2016, 4, null, null, 'site'], ['', 2018, 4, null, null, 'site'], ['', 2019, 4, null, null, 'site'], ['3D5FBED964D6E8DD/557FFB52CA570E46.pdf', 2021, 4], ['', 2022, 4, null, null, 'site'], ['', 2023, 4, null, null, 'site'], ['', 2024, 4, null, null, 'site'],
             ],
+        ],
+        'heartandsoul' => [
+            'key' => 'heartandsoulhorseco', 'name' => 'Heart and Soul Horse Co. (Ranch & Trail Sale)', 'sale' => 'Heart and Soul Horse Co. November Ranch & Trail Sale', 'url' => 'https://www.facebook.com/',
+            'layout' => 'heartandsoul',
+            'terms' => 'Checked Nov 6 2026: no website found for the sale, so no robots.txt or terms to read. Catalog is Richard\'s own copy (PDFNotes), November 2019. Its text layer loses word breaks, so a header is kept only where OCR of the page (2019-11.pdf.ocr.txt beside it) agrees letter for letter. Facts only.',
+            'catalogs' => [['8489F7D3411F5FB9/29BCC46FBF0F43FB.pdf', 2019, 11]],
+        ],
+        'heartland' => [
+            'key' => 'heartlandhorselivestock', 'name' => 'Heartland Horse & Livestock Sales LLC (Premier Sale)', 'sale' => 'Heartland Horse & Livestock Premier Sale', 'url' => 'https://www.cattleusa.com/',
+            'layout' => 'heartland',
+            'terms' => 'Checked Nov 6-8 2026: no website found for the sale (its online bidding was on CattleUSA), so no robots.txt or terms to read. Catalog is Richard\'s own copy (PDFNotes), October 24 2020. Hips print year, registry and sex; a registered name is read from the first words of a description only when its year matches the hip\'s heading. Nothing else of the descriptions is kept.',
+            'catalogs' => [['64A0D0CCC15CE9C5/5D514B311BD04450.pdf', 2020, 10, null, null, null, '2020-10-24']],
         ],
         'heartofcowboy' => [
             'key' => 'heartofcowboycountry', 'name' => 'Heart of Cowboy Country Horse Sales (Payne County Expo Center, Stillwater, OK)', 'sale' => 'Heart of Cowboy Country Horse Sale', 'url' => 'https://www.paynecountyexpo.com/',
@@ -112,14 +125,21 @@ class PrintedCatalogs
         'schmitt' => [
             'key' => 'schmitthorseranch', 'name' => 'Schmitt Horse Ranch (Holland, IA): Five Star Horse Sale and online sales', 'sale' => 'Schmitt Horse Ranch Five Star Horse Sale',
             'url' => 'https://www.schmitthorseranch.com/five-star-horse-sale/', 'layout' => 'lotname',
-            'terms' => 'Checked Nov 6 2026: schmitthorseranch.com robots.txt allows all with Crawl-delay 60; no terms of use or legal page; no bot protection. Its later catalogs are on Robin Glenn (Five Star 2019 on). Catalogs are Richard\'s own copies (PDFNotes): Five Star February 2018 (a scan, read by OCR) and the December 2020 Timed Internet Offering. Facts only.',
-            'catalogs' => [['', 2018, 2, null, null, 'ocr', '2018-02-03'], ['2F04D58EA6042465/D641BB49A12E8A13.pdf', 2020, 12, 'hipfields', 'Schmitt Horse Ranch Timed Internet Offering']],
+            'terms' => 'Checked Nov 6 2026: schmitthorseranch.com robots.txt allows all with Crawl-delay 60; no terms of use or legal page; no bot protection. Its later catalogs are on Robin Glenn (Five Star 2019 on). Catalogs are Richard\'s own copies (PDFNotes): Five Star February 2018 (a scan, read by OCR) and the December 2020 Timed Internet Offering; May 2022 is the catalog on the site\'s Five Star page (fetched Nov 8 2026, one request). Facts only.',
+            'catalogs' => [['', 2018, 2, null, null, 'ocr', '2018-02-03'], ['2F04D58EA6042465/D641BB49A12E8A13.pdf', 2020, 12, 'hipfields', 'Schmitt Horse Ranch Timed Internet Offering'],
+                ['', 2022, 5, 'qdata', null, 'site', '2022-05-21']], // 2022: the catalog PDF on the Five Star page (QData hip pages), photos stripped
         ],
         'sdelite' => [
             'key' => 'southdakotaselite', 'name' => 'South Dakota\'s Elite Horse Sale', 'sale' => 'South Dakota\'s Elite Horse Sale', 'url' => 'https://southdakotaselite.com/',
             'layout' => 'bignum',
-            'terms' => 'Checked Nov 6 2026: southdakotaselite.com (WordPress) robots.txt allows all; no terms of use or legal page; no bot protection. Live Ag already gives the 2025 sale. Catalog is Richard\'s own copy (PDFNotes), July 2023. Facts only.',
-            'catalogs' => [['670E07FE21E997A6/B41CCAF584B24F33.pdf', 2023, 7]],
+            'terms' => 'Checked Nov 6 2026: southdakotaselite.com (WordPress) robots.txt allows all; no terms of use or legal page; no bot protection. Live Ag already gives the 2025 sale. 2023 is Richard\'s own copy (PDFNotes); 2026 is the catalog PDF on the site\'s Catalog page. Facts only.',
+            'catalogs' => [['670E07FE21E997A6/B41CCAF584B24F33.pdf', 2023, 7], ['', 2026, 7, null, null, 'site', '2026-07-25']], // 2026: the site's catalog PDF, fetched Nov 8 2026
+        ],
+        'southernbelle' => [
+            'key' => 'southernbelleclassic', 'name' => 'Southern Belle Classic (Aiken / Camden, SC)', 'sale' => 'Southern Belle Classic', 'url' => 'https://southernbelleclassic.com/',
+            'layout' => 'cards',
+            'terms' => 'Checked Nov 2-8 2026: southernbelleclassic.com (Shopify) robots.txt allows its pages; Buyer Terms & Conditions and Privacy Policy have no scraping, crawling or database clause. Listings are on southernbelleclassic.horsesalemanagement.com (Yclas; robots.txt Crawl-delay 10; no terms page), empty between sales, and the Internet Archive has none. Results pages give only the top sellers by hip and consignor. Catalog is Richard\'s own screenshot of the 2024 listing (PDFNotes). Facts only: consignor names, ranches, phones, emails and locations in the cards are never read.',
+            'catalogs' => [['2E0F54AF2585274C/D3464C396DE7DD0C.pdf', 2024, 3]],
         ],
         'stroud' => [
             'key' => 'stroudhorseauction', 'name' => 'Stroud Oklahoma Horse Auction (Stroud, OK)', 'sale' => 'Stroud Oklahoma Horse Auction 5th Saturday Special Sale',
@@ -223,6 +243,9 @@ class PrintedCatalogs
                 $lots = match ($layout) {
                     'qdata' => self::qdata($pdf),
                     'farmers' => PrintedCatalogParser::farmers(StatePdfHarvester::text($pdf)),
+                    'cards' => PrintedCatalogParser::webCards($pdf, $year),
+                    'heartland' => PrintedCatalogParser::heartland($pdf, $year),
+                    'heartandsoul' => PrintedCatalogParser::heartAndSoul($pdf, (string) @file_get_contents($path.'.ocr.txt')),
                     default => PrintedCatalogParser::read($pdf, $layout, $year),
                 };
                 $out['catalogs']++;
@@ -260,10 +283,64 @@ class PrintedCatalogs
                     $out[RegistrationOnlyMatch::place($lot, $s['sale'])]++;
                 }
             }
+            if (isset($s['results'])) {
+                $out['results'] = $this->results($key, $src, $dryRun);
+            }
             $all[$key] = $out;
         }
 
         return $all;
+    }
+
+    /**
+     * A sale's published results (ColoradoHorseSaleResults). A lot the catalog already has keeps its match and gets the
+     * price; an unmatched catalog lot also takes the results' name (often the registered one) and is placed again.
+     */
+    private function results(string $key, ?DataSource $src, bool $dryRun): array
+    {
+        $s = self::SALES[$key];
+        $reader = $s['results'];
+        $out = ['rows' => 0, 'priced' => 0, 'updated' => 0, 'new' => 0];
+        foreach ($reader::FILES as $file => [$date, $precision, $kind]) {
+            $path = $this->dir.'/'.$key.'/results/'.$file;
+            if (! is_file($path)) {
+                $this->say("missing $path");
+
+                continue;
+            }
+            $rows = $reader::read($path, $kind);
+            $this->say($key.' results '.$file.': '.count($rows));
+            $saleName = $s['sale'].', '.date('F Y', strtotime($date));
+            foreach ($rows as $r) {
+                $out['rows']++;
+                $out['priced'] += $r['price_cents'] ? 1 : 0;
+                if ($dryRun) {
+                    continue;
+                }
+                [$name, $facts] = PrintedCatalogParser::nameFacts($r['name']);
+                $desc = PrintedCatalogParser::free($r['description'], (int) substr($date, 0, 4));
+                $values = ['status' => $r['status'], 'price_cents' => $r['price_cents'], 'buyers_premium' => 'unknown', 'source_url' => $s['url'].'sale-results/',
+                    'note' => $kind === 'table' ? 'From the sale\'s published results' : 'From the sale\'s published top sellers'];
+                $id = $key.':'.substr($date, 0, 7).':'.$r['lot'];
+                $lot = SaleLot::where('data_source_id', $src->id)->where('external_id', $id)->first();
+                if ($lot && $lot->horse_id) {
+                    $lot->fill($values)->save();
+                    $out['updated']++;
+
+                    continue;
+                }
+                $lot = SaleLot::record($src->id, $id, $values + [
+                    'sale_name' => $saleName, 'sale_date' => $date, 'date_precision' => $precision, 'lot' => $r['lot'], 'horse_name' => mb_substr($name, 0, 255),
+                    'registered' => $facts['registered'] ?? $desc['registered'], 'registry' => $facts['registry'] ?? $desc['registry'], 'registration_number' => $facts['registration_number'] ?? null,
+                    'foal_year' => $desc['foal_year'], 'birth_date' => $desc['birth_date'], 'sex' => $desc['sex'], 'color' => $desc['color'], 'breed' => $facts['breed'] ?? $desc['breed'],
+                ]);
+                $out['new']++;
+                $placed = 'placed_'.RegistrationOnlyMatch::place($lot, $s['sale']);
+                $out[$placed] = ($out[$placed] ?? 0) + 1;
+            }
+        }
+
+        return $out;
     }
 
     /**

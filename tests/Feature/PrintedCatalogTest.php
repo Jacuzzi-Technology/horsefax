@@ -51,6 +51,22 @@ class PrintedCatalogTest extends TestCase
         $this->assertSame([2021, null], [PrintedCatalogParser::free('2021 Gray Standardbred Gelding', 2026)['foal_year'], PrintedCatalogParser::free('3/4 Standardbred 1/4 Percheron', 2026)['breed']]);
     }
 
+    public function test_colorado_results_table_and_summary(): void
+    {
+        $csv = tempnam(sys_get_temp_dir(), 'chs').'.csv';
+        file_put_contents($csv, "LotNumber,LotName*,Consignor,Final Price,Current Bid,Status\nCatalog Session,,,,,\n"
+            ."81,\"\"\"Sample Raven\"\" - 2019 AQHA Mare, Dependable!\",\"Doe, Jane\",25000,25000,Sold\n"
+            ."12,\"\"\"Sample Bambi\"\" - 6 Year Old Molly Mule\",\"Roe, Rick\",,1000,Unsold\n");
+        $rows = \App\Harvest\ColoradoHorseSaleResults::read($csv, 'table');
+        @unlink($csv);
+        $this->assertSame([['81', 'Sample Raven', 'sold', 2500000], ['12', 'Sample Bambi', 'high_bid', 100000]], array_map(fn ($r) => [$r['lot'], $r['name'], $r['status'], $r['price_cents']], $rows));
+        $this->assertStringNotContainsString('Doe', json_encode($rows)); // the consignor is never read
+
+        $summary = new \ReflectionMethod(\App\Harvest\ColoradoHorseSaleResults::class, 'summary');
+        $rows = $summary->invoke(null, "Lot 74 “Sample Bojangles” from Pat Doe - \$20,000\nLot 8 “Sample Blue Star” 2014 Blue Roan AQHA Gelding - \$11,000, headed to Edwards, CO\nLOT 35 – \$18,000.");
+        $this->assertSame([['74', 'Sample Bojangles', '', 2000000], ['8', 'Sample Blue Star', '2014 Blue Roan AQHA Gelding', 1100000]], array_map(fn ($r) => [$r['lot'], $r['name'], $r['description'], $r['price_cents']], $rows));
+    }
+
     public function test_tree_from_left_aligned_columns(): void
     {
         $seg = fn ($x, $y, $t) => ['x' => $x, 'x1' => $x + 6 * strlen($t), 'y' => $y, 'yc' => $y + 5, 'h' => 10, 't' => $t];

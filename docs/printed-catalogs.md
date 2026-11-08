@@ -76,11 +76,34 @@ damaged in the download (each cut to about 60% of the size it declares), which i
 fetched Nov 6 2026 at one a minute, have text and are read here from `printed-catalogs/greatamerican` (2021 from Richard's
 copy). Don't also point TurnbullHarvester at them: the same lots would load twice.
 
+## From the sales' own sites (Nov 8 2026)
+
+Richard asked to collect from every site found while reading the catalogs:
+
+- **Colorado Horse Sale results** (`ColoradoHorseSaleResults`): the Sale Results page's files, kept in
+  `printed-catalogs/colorado/results`. Full tables (every horse, final bid, sold/unsold) for February, April, May, August
+  and October 2026 and October 2025; top-seller summaries for 2023-2025. A lot the May 2025 catalog already has gets the
+  price; an unmatched catalog lot takes the results' name and is placed again. Consignors, buyers and destinations in
+  the summaries are cut before anything is read.
+- **South Dakota's Elite 2026**: the catalog PDF on its Catalog page. The barn name is printed large; the registered name
+  is the horse's own place in the tree (`treeName`).
+- **Schmitt Horse Ranch, Five Star May 2022**: the catalog on its Five Star page (QData hip pages; 97 MB, stored with
+  the photos stripped).
+- **Great American 2016 and 2023**: 2023 from the site; 2016 from the Internet Archive (the site's link now returns a
+  web page).
+- **Southern Belle Classic 2024** (`webCards`): Richard's screenshot of the listing site. Its cards hold labelled fields;
+  only the horse's are read. The listing site (Horse Sale Management) is empty between sales and the Archive has none.
+- **Heartland 2020** (`heartland`): a registered name read from the first words of a description, kept only when the
+  year printed with it matches the hip heading (the text layer sometimes puts a description under the other hip).
+- **Heart and Soul 2019** (`heartAndSoul`): a header is kept only where OCR (`2019-11.pdf.ocr.txt`) and the text layer
+  agree letter for letter.
+
+Index lines naming consignors ("HIP 47 • Jessica Bunch / Jacob Littlepage • Strutin for the Money") are collected, and
+a lot whose "name" is one of them, or ends in a business word (Stables, Farms, LLC, Performance Horses), is dropped.
+
 ## Not read
 
-- Heart and Soul Horse Co. Ranch & Trail Sale, November 2019: its text layer spaces every letter alike, so word breaks are
-  lost, and OCR can't read the white-on-wood headers. Names came out as "DAS", "W HI": nothing loaded.
-- Heartland Horse & Livestock Premier Sale, October 2020: hips print year, registry and sex; a name, when there is one, is
-  only inside the description ("AQHA 2013 model KRS JACKS LIL HOSS!! If you're…"), which isn't read.
-- Southern Belle Classic 2024: a screenshot of the sale's web listing, with names cut off mid-word.
-- 5 Star Equine Sale 2025: a screenshot of the catalog's cover only.
+- LMA Auctions (lmaauctions.com), where Anderson County posts later catalogs: its Terms of Use allow personal use only
+  without written permission. Nothing collected from it.
+- 5 Star Equine Sale 2025: Richard's copy is a screenshot of the FlipHTML5 cover; the flipbook's address isn't known.
+- Midwest Draft Cross (gallopingbranch.com is an empty page), Midpoint and Heart of Cowboy Country: no sites.
