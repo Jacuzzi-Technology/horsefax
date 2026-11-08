@@ -93,3 +93,17 @@ php artisan hf:harvest-auctioneersoftware --purge=premieronline --dry-run
 ```bash
 php artisan hf:harvest-auctioneersoftware --purge=premieronline
 ```
+
+## Scheduled run on the server (Nov 8 2026)
+
+Big Sky Horse Sales runs daily at 04:15 UTC from the `horsefax` user's crontab on trusted-core-01 (Richard asked for it to be
+on the regular schedule). It reads the past-auctions sitemap (one request when nothing is new), fetches only auctions it
+hasn't kept yet, 3 s apart as HorsefaxBot, and loads them into `sale_lots`. A 403/429 or bot check stops the run.
+
+```
+15 4 * * * cd /var/www/horsefax && flock -n /tmp/hf-auctsoft.lock flock /tmp/hf-match.lock php artisan hf:harvest-auctioneersoftware bigsky --delay=3 >> storage/logs/harvest-auctioneersoftware.log 2>&1
+```
+
+Online-auction sites post results when a sale closes, so they run on their own cron line rather than through `hf:sale-watch`
+(Waverly is the exception: its catalog PDFs need the sale calendar). To schedule another AuctioneerSoftware site, add its key
+to this line (`bigsky montanaselect …`). The crontab before this change is saved at /root/horsefax-crontab.bak-2026-11-08.
