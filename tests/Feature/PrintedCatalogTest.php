@@ -44,6 +44,16 @@ class PrintedCatalogTest extends TestCase
         $this->assertSame('A SAMPLE OF NITRO', PrintedCatalogParser::nameFacts('41 - A Sample of Nitro')[0]);
     }
 
+    public function test_descriptions_are_not_names(): void
+    {
+        foreach (['SORREL STUD COLT', 'AQHA BUCKSKIN GELDING', 'TB/CONNEMARA', 'WHITE PONY MARE', 'AQHA 5583760'] as $n) {
+            $this->assertTrue(PrintedCatalogParser::notAName($n), $n);
+        }
+        foreach (['SAMPLE LADY MARE', 'KING OF MARES', 'REBEL SAMPLE SHOOTER'] as $n) {
+            $this->assertFalse(PrintedCatalogParser::notAName($n), $n);
+        }
+    }
+
     public function test_year_before_the_registry(): void
     {
         $d = PrintedCatalogParser::free('AQHA 5710562 2015 AQHA Buckskin Gelding', 2020);

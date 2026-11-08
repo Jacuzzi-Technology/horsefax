@@ -588,7 +588,7 @@ class PrintedCatalogParser
                 return null;
             }
         }
-        if ($name === '' || preg_match('/^(?:19|20)\d\d\s/', $name) || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
+        if ($name === '' || self::notAName($name) || preg_match('/^(?:19|20)\d\d\s/', $name) || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
             return null;
         }
 
@@ -688,8 +688,8 @@ class PrintedCatalogParser
         if ($name === '' || preg_match('/^(?:19|20)\d\d\s/', $name) || preg_match('/^(NO SALE|SCRATCH|WITHDRAWN|OUT|OPEN)\b|^(WEANLING|YEARLING|FILLY|COLT|STUD COLT|MARE|GELDING|STALLION|PONY|MULE|UNNAMED|NO NAME|TBA|TBD|PASS)$/i', $name)) {
             return null;
         }
-        if (preg_match('/^(?:(?:'.self::COLORS.'|GRADE|PONY|DRAFT|CROSS|WEANLING|YEARLING)\s+)*(?:STUD COLT|STUD|GELDING|MARE|FILLY|COLT|STALLION)$/', $name)) {
-            return null; // "SORREL STUD COLT": no name
+        if (self::notAName($name)) {
+            return null; // "SORREL STUD COLT", "AQHA BUCKSKIN GELDING": no name
         }
         if (! empty($cfg['needsDesc']) && ! $desc) {
             return null; // a big number on an advertising page, not a lot
@@ -753,6 +753,16 @@ class PrintedCatalogParser
         $name = preg_match('/^[“"].*[”"]$/u', $name) ? trim($name, '“”" ') : trim(preg_replace('/\s*[“"(][^”")]*[”")]\s*/u', ' ', $name));
 
         return [self::clean(rtrim($name, '.')), $facts];
+    }
+
+    /** A description standing where the name should be: "SORREL STUD COLT", "AQHA BUCKSKIN GELDING", "TB/CONNEMARA", "AQHA 5583760". */
+    public static function notAName(string $name): bool
+    {
+        $name = strtoupper(trim($name));
+
+        return (bool) preg_match('/^(?:(?:'.self::REG.'|QH|GRADE|REGISTERED|PONY|MINI|DRAFT|CROSS|WEANLING|YEARLING|'.self::COLORS.')\s+)*(?:STUD COLT|STUD|GELDING|MARE|FILLY|COLT|STALLION|MULE|DONKEY)$/', $name)
+            || preg_match('/^(?:'.self::REG.')(?:\s*#?\s*\d.*)?$/', $name)
+            || preg_match('/^[A-Z]{2,12}\s*\/\s*[A-Z]{2,12}(?:\s+CROSS)?$/', $name) && preg_match('/\b(?:'.implode('|', array_keys(self::BREED_WORDS)).'|CONNEMARA|ANDALUSIAN|WARMBLOOD|SHIRE|CLYDESDALE)\b/', $name);
     }
 
     /** A pedigree name; draft and warmblood names run longer than the 24 characters LolliParser allows. */

@@ -32,6 +32,9 @@ class ImportPrintedCatalogs extends Command
         if (! $this->option('dry-run') && in_array($this->option('sale'), [null, 'boone'], true)) {
             $this->info('Team lots: '.json_encode($c->cleanTeamLots()));
         }
+        if (! $this->option('dry-run')) {
+            $this->info('Unnamed lots: '.json_encode($c->cleanUnnamedLots()));
+        }
         foreach ($c->load($this->option('sale'), (bool) $this->option('dry-run')) as $sale => $out) {
             $this->info($sale.': '.json_encode($out));
         }

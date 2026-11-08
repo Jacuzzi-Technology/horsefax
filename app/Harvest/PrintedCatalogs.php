@@ -362,6 +362,29 @@ class PrintedCatalogs
         return $out;
     }
 
+    /**
+     * Lots whose "name" is a description ("SORREL STUD COLT", "AQHA BUCKSKIN GELDING", "TB/CONNEMARA"), read before
+     * PrintedCatalogParser::notAName (fixed Nov 8 2026): records made from them go (CleanPendingFoalRecords' checks), then the lots.
+     */
+    public function cleanUnnamedLots(): array
+    {
+        $junk = fn ($n) => PrintedCatalogParser::notAName((string) $n);
+        $out = ['records_removed' => 0, 'kept' => [], 'lots_deleted' => 0];
+        foreach (['%GELDING', '%MARE', '%COLT', '%STALLION', '%FILLY', '%/%', 'AQHA%', 'APHA%'] as $like) {
+            [$o] = app(CleanPendingFoalRecords::class)->forLabels($junk, $like, 'A description, not a horse\'s name')();
+            $out['records_removed'] += $o['removed'];
+            foreach ($o['kept'] as $why => $n) {
+                $out['kept'][$why] = ($out['kept'][$why] ?? 0) + $n;
+            }
+        }
+        $sources = DataSource::whereIn('key', array_column(self::SALES, 'key'))->pluck('id');
+        $lots = SaleLot::whereIn('data_source_id', $sources)->whereNull('horse_id')->get(['id', 'horse_name'])->filter(fn ($l) => $junk($l->horse_name));
+        DB::table('review_suggestions')->where('subject_type', 'sale_lot')->whereIn('subject_id', $lots->pluck('id'))->whereNull('decided_by')->delete();
+        $out['lots_deleted'] = SaleLot::whereIn('id', $lots->pluck('id'))->delete();
+
+        return $out;
+    }
+
     /** QData hip pages ("Hip No." layout) in PrintedCatalogParser's lot shape. */
     public static function qdata(string $pdf): array
     {
