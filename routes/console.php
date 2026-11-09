@@ -228,6 +228,38 @@ Artisan::command('hf:harvest-platinum {--all} {--delay=3} {--max-pages=}', funct
     $this->info("Platinum: $pages listing pages read, $lots lots stored");
 })->purpose('Collect Platinum Equine Auction expired auctions into the sale-lots index');
 
+// TheHorseBay.com online auctions (Richard, Nov 9 2026). Never fetches: reads the facts-only CSV that the research
+// folder's export_horsefax.py writes (no sellers or bidders). See docs/thehorsebay-import.md.
+// php artisan hf:import-thehorsebay [--file=storage/app/private/thehorsebay/horsefax-lots.csv] [--dry-run]
+Artisan::command('hf:import-thehorsebay {--file=} {--dry-run}', function () {
+    $file = $this->option('file') ?: storage_path('app/private/thehorsebay/horsefax-lots.csv');
+    if (! is_file($file)) {
+        $this->error("No file at $file");
+
+        return 1;
+    }
+    $run = fn () => (new \App\Harvest\TheHorseBayImporter($file))->load();
+    if ($this->option('dry-run')) {
+        $out = null;
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($run, &$out) {
+                $out = $run();
+                throw new \RuntimeException('dry run');
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() !== 'dry run') {
+                throw $e;
+            }
+        }
+        $this->warn('Dry run: rolled back');
+    } else {
+        $out = $run();
+    }
+    foreach ($out as $k => $v) {
+        $this->line(str_pad($k, 12).$v);
+    }
+})->purpose('Load TheHorseBay online-auction lots (facts only) into the sale-lots index and place them');
+
 // DreamHorse.com horse ads (Richard, Oct 22 2026), facts only, as held asking prices matched on registration number
 // only. Raw file + CSV/JSON in storage/app/private/dreamhorse (--dir to change). See docs/dreamhorse-harvest.md.
 // php artisan hf:harvest-dreamhorse [--delay=3] [--max-ads=50] [--refresh-days=30] [--no-discover] [--no-load]
