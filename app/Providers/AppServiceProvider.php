@@ -42,10 +42,15 @@ class AppServiceProvider extends ServiceProvider
             if (\App\Support\SearchBots::verified($r) || $r->user()?->isStaff()) {
                 return Limit::none();
             }
-            $day = $r->user() ? \App\Support\Plans::limit($r->user(), 'record_views_per_day') : config('plans.guest_record_views_per_day');
+            // Accounts' daily cap counts distinct horses: App\Http\Middleware\RecordDailyCap (Nov 10 2026).
+            $day = $r->user() ? null : config('plans.guest_record_views_per_day');
             $limits = [Limit::perMinute($r->user() ? 60 : 30)->by('m:'.$key($r))->response(fn () => response()->view('errors.record-limit', ['daily' => false], 429))];
             if ($day !== null) {
-                $limits[] = Limit::perDay($day)->by('d:'.$key($r))->response(fn () => response()->view('errors.record-limit', ['daily' => true, 'limit' => $day], 429));
+                $limits[] = Limit::perDay($day)->by('d:'.$key($r))->response(function () use ($r, $day) {
+                    \App\Support\RecordLimitHits::record($r, $day);
+
+                    return response()->view('errors.record-limit', ['daily' => true, 'limit' => $day], 429);
+                });
             }
 
             return $limits;

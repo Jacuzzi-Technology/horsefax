@@ -5,7 +5,8 @@
             <p class="mt-4 text-[18px]">Automated access from your network has been paused. If you're a person and think this is a mistake, <a href="{{ route('login') }}" class="text-gold-dark">sign in</a> or <a href="{{ route('contact') }}" class="text-gold-dark">contact us</a>.</p>
         @elseif ($daily)
             <p class="mt-4 text-[18px]">You've opened {{ number_format($limit) }} horse records today, the daily limit for {{ auth()->check() ? 'your plan' : 'visitors who aren\'t signed in' }}. The limit resets at midnight UTC.</p>
-            @guest<p class="mt-3 text-[18px]">A free Horsefax account raises the limit. <a href="{{ route('register') }}" class="text-gold-dark">Create a free account</a> or <a href="{{ route('login') }}" class="text-gold-dark">sign in</a>.</p>@endguest
+            @auth<p class="mt-3 text-[18px]">Records you've already opened today stay open to you, and your own horses never count toward the limit.</p>@endauth
+            @guest<p class="mt-3 text-[18px]">A free Horsefax account opens full horse records. <a href="{{ route('register') }}" class="text-gold-dark">Create a free account</a> or <a href="{{ route('login') }}" class="text-gold-dark">sign in</a>.</p>@endguest
         @else
             <p class="mt-4 text-[18px]">That's a lot of records in a short time. Please wait a minute and try again.</p>
         @endif

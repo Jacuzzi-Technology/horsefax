@@ -39,16 +39,39 @@ class RecordLimitTest extends TestCase
         }
         $this->get($url)->assertStatus(429)->assertSee('today\'s limit')->assertSee('Create a free account');
 
+        $this->assertDatabaseHas('record_limit_hits', ['user_id' => null, 'plan' => 'guest', 'blocked' => 1]);
+
+        // Accounts (Nov 10 2026): distinct horses per day; reopening one already seen today is free.
         $member = User::factory()->create();
-        foreach (range(1, 4) as $i) {
-            $this->actingAs($member)->get($url)->assertOk();
+        $urls = [$url];
+        foreach (range(2, 5) as $i) {
+            $urls[] = route('horse.public', $this->horse());
         }
-        $this->actingAs($member)->get($url)->assertStatus(429)->assertSee('your plan');
+        foreach (array_slice($urls, 0, 4) as $u) {
+            $this->actingAs($member)->get($u)->assertOk();
+            $this->actingAs($member)->get($u)->assertOk();
+        }
+        $this->actingAs($member)->get($urls[4])->assertStatus(429)->assertSee('your plan')->assertSee('stay open to you');
+        $this->actingAs($member)->get($urls[4])->assertStatus(429);
+        $this->actingAs($member)->get($urls[0])->assertOk();
+        $this->assertDatabaseHas('record_limit_hits', ['user_id' => $member->id, 'plan' => 'free', 'cap' => 4, 'blocked' => 2]);
+
+        // Their own horses never count.
+        $owner = User::factory()->create();
+        $own = app(CreateHorse::class)($owner, ['registered_name' => 'Owner Own Horse', 'birth_precision' => 'unknown']);
+        foreach (array_slice($urls, 0, 4) as $u) {
+            $this->actingAs($owner)->get($u)->assertOk();
+        }
+        $this->actingAs($owner)->get(route('horse.public', $own))->assertOk();
 
         $staff = User::factory()->create(['is_staff' => true]);
-        foreach (range(1, 6) as $i) {
-            $this->actingAs($staff)->get($url)->assertOk();
+        foreach ($urls as $u) {
+            $this->actingAs($staff)->get($u)->assertOk();
         }
+
+        $this->artisan('hf:record-limit-report', ['--month' => now('UTC')->format('Y-m'), '--no-email' => true])
+            ->expectsOutputToContain('Accounts stopped by the limit: 1')
+            ->assertSuccessful();
     }
 
     public function test_only_verified_crawlers_are_exempt(): void

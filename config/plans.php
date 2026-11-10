@@ -38,7 +38,7 @@ return [
             'public' => true,
             'price' => null,
             'features' => ['search', 'create_records', 'share_reports', 'view_public_records', 'invite_professionals'],
-            'limits' => ['history_reports_per_month' => null, 'saved_searches' => 0, 'record_views_per_day' => 300],
+            'limits' => ['history_reports_per_month' => null, 'saved_searches' => 0, 'record_views_per_day' => 20],
         ],
         // Placeholders: TODO (Richard) names, prices, contents.
         'pro' => [
