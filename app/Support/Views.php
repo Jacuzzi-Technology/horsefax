@@ -26,6 +26,16 @@ final class Views
         };
     }
 
+    /**
+     * Classified ads a horse was listed in that are not on its sale history (asking prices stay unpublished): the
+     * site, ad and date only, never the price. Linked while the ad is live, cited as text once it is gone.
+     */
+    public static function listings(Horse $horse): Collection
+    {
+        return \App\Models\SaleLot::with('source')->where('horse_id', $horse->id)->where('status', 'asking')
+            ->whereNull('horse_event_id')->orderBy('sale_date')->get();
+    }
+
     public static function events(Horse $horse, string $audience, ?ShareLink $link = null): Collection
     {
         $q = $horse->currentEvents()->with('document')->orderByDesc('occurred_on')->orderByDesc('created_at');

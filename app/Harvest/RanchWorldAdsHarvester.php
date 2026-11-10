@@ -467,6 +467,7 @@ class RanchWorldAdsHarvester
                 // An auction ad's figure may be a reserve or an estimate, not an asking price: kept in the note only.
                 'status' => 'asking', 'price_cents' => empty($a['auction']) ? ($a['price_cents'] ?? null) : null, 'currency' => 'USD', 'buyers_premium' => 'none',
                 'note' => mb_substr(self::note($a), 0, 255), 'source_url' => $a['url'],
+                'listing_ended_on' => ($a['status'] ?? null) === 'gone' ? ($a['gone_at'] ?? now()->toDateString()) : null,
             ]);
             $out['loaded']++;
             if ($lot->horse_id || $lot->review_status) {

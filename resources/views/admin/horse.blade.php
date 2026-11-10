@@ -110,8 +110,13 @@
         @endif
 
         <h2 class="text-[24px] mt-10">Audit log</h2>
+        @php
+            // "from":"sale lot <uuid>" in an entry: name the source and link it, so staff can see where the facts came from.
+            preg_match_all('/sale lot ([0-9a-f-]{36})/', $audit->pluck('after')->implode(' '), $m);
+            $auditLots = $m[1] ? \App\Models\SaleLot::with('source')->whereIn('id', array_unique($m[1]))->get()->keyBy('id') : collect();
+        @endphp
         <table class="table-hf mt-2 text-[13px]">
-            <tbody>@foreach ($audit as $a)<tr><td class="whitespace-nowrap font-sans text-[12px]">{{ \Illuminate\Support\Carbon::parse($a->created_at)->setTimezone('America/Chicago')->format('M j g:ia') }}</td><td class="font-sans text-[12px]">{{ $a->actor_name ?? 'System' }}</td><td class="font-sans text-[12px]">{{ $a->action }}</td><td class="font-mono text-[11px] break-all">{{ $a->before }} → {{ $a->after }} <span class="text-muted">{{ $a->ip }}</span></td></tr>@endforeach</tbody>
+            <tbody>@foreach ($audit as $a)<tr><td class="whitespace-nowrap font-sans text-[12px]">{{ \Illuminate\Support\Carbon::parse($a->created_at)->setTimezone('America/Chicago')->format('M j g:ia') }}</td><td class="font-sans text-[12px]">{{ $a->actor_name ?? 'System' }}</td><td class="font-sans text-[12px]">{{ $a->action }}</td><td class="font-mono text-[11px] break-all">{{ $a->before }} → {{ $a->after }} <span class="text-muted">{{ $a->ip }}</span>@if (preg_match('/sale lot ([0-9a-f-]{36})/', (string) $a->after, $lm) && ($lot = $auditLots->get($lm[1])))<br><span class="font-sans text-[12px]">From: {{ $lot->source?->name ?? 'unknown source' }} · {{ $lot->sale_name }}@if ($lot->lot), lot {{ $lot->lot }}@endif @if ($lot->sale_date)· {{ $lot->sale_date->format('M j, Y') }}@endif @if ($lot->source_url)· <a href="{{ $lot->source_url }}" class="text-gold-dark" rel="nofollow noopener" target="_blank">Source</a>@endif</span>@endif</td></tr>@endforeach</tbody>
         </table>
     </div>
 </x-layouts.site>

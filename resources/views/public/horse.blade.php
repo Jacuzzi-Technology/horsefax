@@ -239,7 +239,12 @@
             @endif
 
             {{-- Ownership and sale history --}}
-            @if ($ownership->isNotEmpty() || $sales->isNotEmpty())
+            @php
+                // Classified ads the record came from or was matched to: site, ad and date, never the asking price.
+                // Linked (nofollow) while the ad is live; plain text once the harvest finds it gone (Richard, Nov 10 2026).
+                $listings = ($sample || ($isReport && ! $link->includes('ownership'))) ? collect() : Views::listings($horse);
+            @endphp
+            @if ($ownership->isNotEmpty() || $sales->isNotEmpty() || $listings->isNotEmpty())
                 <section aria-labelledby="h-owners">
                     <h2 id="h-owners" class="text-[28px] border-b border-line pb-2">Ownership & sale history</h2>
                     <p class="hint mt-2">Horsefax shows when ownership changed, not who the owners were.@if ($sales->contains(fn ($e) => $e->isPriceEntry())) Auction results are shown as the sale published them; a reported sale means the auction reported it, not that Horsefax confirmed payment or transfer. {{ HorseEvent::PRICE_NOTE }}@endif</p>
@@ -254,6 +259,17 @@
                                     @if (Views::showAmount($e, $audience, $link))<p class="font-sans text-[14px] mt-0.5">{{ HorseEvent::money($e->amount_cents) }}</p>@endif</div>
                                 @endif
                                 <div class="text-right"><p class="font-sans text-[13px] text-muted">{{ $e->dateLabel() }}</p><x-claim :item="$e" class="mt-1 justify-end" /></div>
+                            </li>
+                        @endforeach
+                        @foreach ($listings as $l)
+                            @php
+                                $site = $l->source ? preg_replace('/\s*\(.*$/', '', $l->source->name) : parse_url($l->source_url, PHP_URL_HOST);
+                                $adNo = preg_replace('/^[a-z]+:/', '', $l->external_id);
+                            @endphp
+                            <li class="py-3 flex flex-wrap justify-between gap-3">
+                                <div><p class="text-[18px]">Listed for sale</p>
+                                    <p class="font-sans text-[13px] text-muted mt-0.5">{{ $site }} ad #{{ $adNo }}@if ($l->listing_ended_on) · no longer online @elseif ($l->source_url) · <a href="{{ $l->source_url }}" class="text-gold-dark" rel="nofollow noopener" target="_blank">See the listing</a>@endif</p></div>
+                                <div class="text-right"><p class="font-sans text-[13px] text-muted">{{ $l->sale_date ? $l->sale_date->format('M Y') : ($l->sale_year ?? 'Date unknown') }}</p></div>
                             </li>
                         @endforeach
                         @foreach ($ownership as $s)

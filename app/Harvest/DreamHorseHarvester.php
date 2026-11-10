@@ -386,6 +386,7 @@ class DreamHorseHarvester
                 'sire_name' => $ped['s'] ?? null, 'dam_name' => $ped['d'] ?? null, 'dam_sire_name' => $ped['ds'] ?? null, 'pedigree' => $ped ?: null,
                 'status' => 'asking', 'price_cents' => $a['price_cents'], 'currency' => in_array($a['currency'] ?? null, ['USD', 'CAD'], true) ? $a['currency'] : 'USD',
                 'buyers_premium' => 'none', 'note' => mb_substr(self::note($a), 0, 255), 'source_url' => $a['url'],
+                'listing_ended_on' => $a['status'] === 'gone' ? ($a['gone_at'] ?? now()->toDateString()) : null,
             ]);
             $out['loaded']++;
             $out['with_reg_number'] += $lot->registration_number ? 1 : 0;

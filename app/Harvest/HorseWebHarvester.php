@@ -162,6 +162,7 @@ class HorseWebHarvester
                 'foal_year' => $foalYear, 'sex' => AuctioneerSoftwareParser::sex((string) $a['sex']), 'color' => $a['color'] ? mb_substr($a['color'], 0, 255) : null,
                 'breed' => $a['breed'] ? mb_substr($a['breed'], 0, 255) : null,
                 'status' => 'asking', 'price_cents' => $a['price_cents'], 'buyers_premium' => 'none', 'source_url' => self::adUrl($id),
+                'listing_ended_on' => empty($a['gone']) ? null : ($a['ad_fetched'] ?? now()->toDateString()),
                 'note' => mb_substr('Advertised asking price on HorseWeb.com, first seen '.$a['first_seen'].($sold ? '; the ad is marked sold' : ''), 0, 255),
             ]);
             $out['loaded']++;
