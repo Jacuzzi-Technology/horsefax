@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\AccountIps;
 use App\Support\Notify;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
@@ -9,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Monthly report on the daily record limit (Richard, Nov 10 2026): how many accounts got stopped, how often, and who
- * hit it most, so the 20-a-day cap can be judged. Cron on the 1st of each month emails it to HORSEFAX_NOTIFY_EMAIL.
+ * hit it most, so the 20-a-day cap can be judged. Also deletes sign-in addresses past their 12 months. Cron on the 1st of each month emails it to HORSEFAX_NOTIFY_EMAIL.
  */
 class RecordLimitReport extends Command
 {
@@ -56,6 +57,20 @@ class RecordLimitReport extends Command
             }
             $lines[] = '';
             $lines[] = 'Many days in a row, or an account a few days old, can mean someone copying records. A real buyer stopped once or twice may mean the cap is too low.';
+
+            $sharing = AccountIps::sharing((clone $members)->distinct()->pluck('user_id'));
+            if ($sharing->isNotEmpty()) {
+                $lines[] = '';
+                $lines[] = 'Stopped accounts sharing a sign-in address with other accounts (possible one person, several accounts):';
+                foreach ($sharing as $s) {
+                    $lines[] = "  {$s->email} at {$s->ip} also: {$s->others}";
+                }
+            }
+        }
+        $pruned = AccountIps::prune();
+        if ($pruned) {
+            $lines[] = '';
+            $lines[] = "Deleted {$pruned} sign-in address rows older than ".AccountIps::KEEP_MONTHS.' months.';
         }
         $body = implode("\n", $lines);
         $this->line($body);

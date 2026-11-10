@@ -22,7 +22,14 @@ class AppServiceProvider extends ServiceProvider
         // Plans: @can('feature', 'report_downloads') in views, Gate::allows('feature', ...) in code.
         \Illuminate\Support\Facades\Gate::define('feature', fn (?\App\Models\User $user, string $feature) => \App\Support\Plans::allows($user, $feature));
         // Members page: when someone last signed in.
-        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class, fn ($e) => $e->user->forceFill(['last_login_at' => now()])->saveQuietly());
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class, function ($e) {
+            $e->user->forceFill(['last_login_at' => now()])->saveQuietly();
+            // Sign-in address (Nov 10 2026). Remember-me cookie logins count too; the sign-up's own login doesn't.
+            if (! request()->routeIs('register*')) {
+                \App\Support\AccountIps::record($e->user, 'login');
+            }
+        });
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Registered::class, fn ($e) => \App\Support\AccountIps::record($e->user, 'signup'));
 
         Route::bind('horse', fn (string $value) => Horse::where('horsefax_id', strtoupper($value))->firstOrFail());
 

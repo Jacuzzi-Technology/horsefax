@@ -43,6 +43,8 @@ class MemberController extends Controller
             'horses' => $user->horses()->orderBy('registered_name')->limit(200)->get(),
             'contributing' => $user->contributions()->with('horse')->get(),
             'activity' => DB::table('audit_log')->where('actor_id', $user->id)->orderByDesc('created_at')->limit(25)->get(),
+            'ips' => \App\Support\AccountIps::forUser($user),
+            'limitDays' => DB::table('record_limit_hits')->where('user_id', $user->id)->count(),
         ]);
     }
 

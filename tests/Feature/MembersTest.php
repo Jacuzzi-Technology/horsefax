@@ -55,4 +55,29 @@ class MembersTest extends TestCase
         $this->post('/login', ['email' => $u->email, 'password' => 'correct horse battery']);
         $this->assertNotNull($u->fresh()->last_login_at);
     }
+
+    /** Sign-up and sign-in addresses (Nov 10 2026): kept per account, shown to staff with other accounts on the same address. */
+    public function test_sign_up_and_sign_in_addresses_are_kept_for_staff(): void
+    {
+        $form = ['name' => 'Sample Person', 'email' => 'person@example.com', 'password' => 'a-Long-password-123', 'password_confirmation' => 'a-Long-password-123',
+            'terms' => '1', 'form_started' => encrypt(now()->subSeconds(10)->timestamp), 'website' => ''];
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.5'])->post('/register', $form)->assertRedirect();
+        $a = User::where('email', 'person@example.com')->first();
+        $this->assertSame(['203.0.113.5', '203.0.113.5'], [$a->signup_ip, $a->last_login_ip]);
+        $this->assertSame(1, \Illuminate\Support\Facades\DB::table('account_ips')->where('user_id', $a->id)->count()); // sign-up only, not its auto sign-in
+        auth()->logout();
+
+        $b = User::factory()->create(['email' => 'second@example.test', 'password' => 'correct horse battery']);
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.5'])->post('/login', ['email' => $b->email, 'password' => 'correct horse battery']);
+        $this->assertSame('203.0.113.5', $b->fresh()->last_login_ip);
+        $this->assertDatabaseHas('account_ips', ['user_id' => $b->id, 'ip' => '203.0.113.5', 'event' => 'login']);
+
+        $staff = User::factory()->create(['is_staff' => true, 'two_factor_confirmed_at' => now()]);
+        $this->actingAs($staff)->get(route('admin.member', $a))->assertOk()->assertSee('Sign-in addresses')
+            ->assertSee('203.0.113.5 (sign-up)')->assertSee('second@example.test');
+        $this->assertSame(1, \App\Support\AccountIps::sharing(collect([$a->id]))->count());
+
+        \Illuminate\Support\Facades\DB::table('account_ips')->where('user_id', $a->id)->update(['created_at' => now()->subMonths(13)]);
+        $this->assertSame(1, \App\Support\AccountIps::prune());
+    }
 }

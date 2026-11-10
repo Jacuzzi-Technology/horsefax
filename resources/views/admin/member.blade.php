@@ -38,6 +38,27 @@
         </div>
 
         <div class="card p-5 mt-6">
+            <h2 class="text-[22px]">Sign-in addresses</h2>
+            <p class="hint text-[13px] mt-1">IP addresses used to sign up and sign in, kept {{ \App\Support\AccountIps::KEEP_MONTHS }} months. Several accounts on one address can mean one person getting around the daily record limit, but households, offices and phone networks share addresses too.@if ($limitDays) This account hit the daily record limit on {{ $limitDays }} {{ Str::plural('day', $limitDays) }}.@endif</p>
+            <table class="table-hf mt-3 font-sans text-[13px]">
+                <thead><tr><th>Address</th><th>First seen</th><th>Last seen</th><th>Times</th><th>Also used by</th></tr></thead>
+                <tbody>
+                @forelse ($ips as $ip)
+                    <tr>
+                        <td>{{ $ip->ip }}{{ $ip->signup ? ' (sign-up)' : '' }}</td>
+                        <td>{{ \Illuminate\Support\Carbon::parse($ip->first_at)->format('M j, Y') }}</td>
+                        <td>{{ \Illuminate\Support\Carbon::parse($ip->last_at)->format('M j, Y g:i a') }}</td>
+                        <td>{{ $ip->n }}</td>
+                        <td>@forelse ($ip->others as $o)<a href="{{ route('admin.member', $o->id) }}" class="text-gold-dark">{{ $o->email }}</a>@if (! $loop->last), @endif @empty<span class="text-muted">no other account</span>@endforelse</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="hint">None recorded yet (recording started Nov 10, 2026).</td></tr>
+                @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card p-5 mt-6">
             <h2 class="text-[22px]">Recent activity</h2>
             <table class="table-hf mt-3">
                 <tbody>@forelse ($activity as $a)<tr><td class="font-sans text-[13px] w-[180px]">{{ \Illuminate\Support\Carbon::parse($a->created_at)->format('M j, Y g:i a') }}</td><td class="font-sans text-[13px]">{{ str_replace(['.', '_'], [' · ', ' '], $a->action) }}</td></tr>@empty<tr><td class="hint">Nothing yet.</td></tr>@endforelse</tbody>
