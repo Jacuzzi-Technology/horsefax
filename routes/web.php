@@ -30,6 +30,7 @@ Route::post('/contact', [PublicController::class, 'sendContact'])->middleware('t
 Route::post('/partners', [PublicController::class, 'sendPartnerInquiry'])->middleware('throttle:forms')->name('partners.send');
 Route::post('/horse/{horse}/corrections', [PublicController::class, 'reportCorrection'])->middleware('throttle:forms')->name('corrections.store');
 Route::get('/robots.txt', [PublicController::class, 'robots']);
+Route::get('/.well-known/apple-app-site-association', \App\Http\Controllers\AppLinksController::class)->name('apple-app-site-association');
 Route::get('/sitemap.xml', [PublicController::class, 'sitemap']);
 Route::get('/show-records/{record}', [\App\Http\Controllers\ShowRecordController::class, 'show'])->middleware(['untrapped', 'throttle:records', \App\Http\Middleware\RecordDailyCap::class])->name('show-records.show');
 Route::get('/files/{document}', [FileController::class, 'show'])->middleware('throttle:files')->name('files.show');
