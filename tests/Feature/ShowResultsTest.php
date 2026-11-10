@@ -84,8 +84,13 @@ class ShowResultsTest extends TestCase
         $record = ShowRecord::where('name_key', 'SAMPLESPARKPLUG')->first();
 
         $this->get('/search?name=spark+plug')->assertOk()->assertSee('Also found in published show results')->assertSee('Sample Spark Plug');
-        $this->get('/show-records/'.$record->id)->assertOk()->assertSee('Junior Reining')->assertSee('$1,500')
+        $this->get('/show-records/'.$record->id)->assertOk()->assertSee('Sample Spark Plug')->assertSee('Create a free account')->assertDontSee('Junior Reining')->assertDontSee('$1,500');
+        $this->actingAs(User::factory()->create())->get('/show-records/'.$record->id)->assertOk()->assertSee('Junior Reining')->assertSee('$1,500')
             ->assertSee('Historical / third-party')->assertDontSee('Sample Owner LLC')->assertDontSee('Sample Rider');
+
+        // Show-result pages count toward an account's daily record cap (Nov 10 2026).
+        config(['plans.plans.free.limits.record_views_per_day' => 0]);
+        $this->actingAs(User::factory()->create())->get('/show-records/'.$record->id)->assertStatus(429)->assertSee('today\'s limit');
     }
 
     public function test_owner_claims_results_and_staff_attach_them(): void
@@ -151,7 +156,7 @@ class ShowResultsTest extends TestCase
         // Resumable: nothing refetched.
         Http::fake(fn () => throw new \RuntimeException('should not fetch again'));
         $this->assertSame([0, 0], (new \App\Harvest\NrhaHarvester(0))->year(2024));
-        $this->get('/show-records/'.$a->show_record_id)->assertOk()->assertSee('Sample Summer Slide')->assertDontSee('Sample Rider');
+        $this->actingAs(User::factory()->create())->get('/show-records/'.$a->show_record_id)->assertOk()->assertSee('Sample Summer Slide')->assertDontSee('Sample Rider');
     }
 
     public function test_nrcha_results_bring_parentage_scores_and_seed_an_empty_pedigree(): void
@@ -170,7 +175,7 @@ class ShowResultsTest extends TestCase
         $record = ShowRecord::where('name_key', 'SAMPLECOWPONY')->first();
         $this->assertSame(['Sample Cow Pony', 2, 230000], [$record->display_name, $record->appearances, (int) $record->earnings_cents]);
         $this->assertDatabaseMissing('show_appearances', ['horse_name' => 'Sample Rider']);
-        $this->get('/show-records/'.$record->id)->assertOk()->assertSee('By Sample Sire out of Sample Dam (by Sample Grandsire)')->assertSee('440')->assertDontSee('Sample Owner');
+        $this->actingAs(User::factory()->create())->get('/show-records/'.$record->id)->assertOk()->assertSee('By Sample Sire out of Sample Dam (by Sample Grandsire)')->assertSee('440')->assertDontSee('Sample Owner');
 
         $owner = User::factory()->create();
         $horse = app(CreateHorse::class)($owner, ['registered_name' => 'Sample Cow Pony', 'birth_precision' => 'unknown']);

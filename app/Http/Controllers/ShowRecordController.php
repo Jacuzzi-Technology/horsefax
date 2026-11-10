@@ -12,15 +12,24 @@ use Illuminate\Http\Request;
 /** Registered names found in published show results, before (or after) they're matched to a horse record. */
 class ShowRecordController extends Controller
 {
-    public function show(ShowRecord $record)
+    public function show(Request $request, ShowRecord $record)
     {
         if ($record->horse_id && $record->horse && ($record->horse->public_summary || $record->horse->listed)) {
             return redirect()->route('horse.public', $record->horse, 301);
         }
 
+        // Signed-out visitors see a summary, like horse records (Richard, Nov 10 2026, after a crawler copied ~800).
+        if (! $request->user()) {
+            $request->session()->put('url.intended', route('show-records.show', $record));
+
+            return view('public.show-record', ['record' => $record, 'byYear' => null,
+                'sanctions' => $record->appearances()->whereNotNull('organization')->distinct()->orderBy('organization')->pluck('organization')]);
+        }
+
         return view('public.show-record', [
             'record' => $record,
             'byYear' => $record->appearances()->orderByDesc('event_year')->orderBy('event_name')->orderBy('class_name')->get()->groupBy('event_year'),
+            'sanctions' => collect(),
         ]);
     }
 

@@ -31,7 +31,7 @@ Route::post('/partners', [PublicController::class, 'sendPartnerInquiry'])->middl
 Route::post('/horse/{horse}/corrections', [PublicController::class, 'reportCorrection'])->middleware('throttle:forms')->name('corrections.store');
 Route::get('/robots.txt', [PublicController::class, 'robots']);
 Route::get('/sitemap.xml', [PublicController::class, 'sitemap']);
-Route::get('/show-records/{record}', [\App\Http\Controllers\ShowRecordController::class, 'show'])->name('show-records.show');
+Route::get('/show-records/{record}', [\App\Http\Controllers\ShowRecordController::class, 'show'])->middleware(['untrapped', 'throttle:records', \App\Http\Middleware\RecordDailyCap::class])->name('show-records.show');
 Route::get('/files/{document}', [FileController::class, 'show'])->middleware('throttle:files')->name('files.show');
 // QR codes with the HF mark, for catalogs and stall cards; and the seller's confirm-or-deny link for a claim.
 Route::get('/horse/{horse}/qr.{format}', [\App\Http\Controllers\QrController::class, 'horse'])->whereIn('format', ['svg', 'png'])->middleware('throttle:files')->name('horse.qr');
