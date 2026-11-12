@@ -1,6 +1,10 @@
 <x-auth-card title="Create your account" lede="Then start your horse's record. Everything you add is private until you choose to share it.">
     <form method="POST" action="{{ route('register') }}" class="space-y-5">
         @csrf
+        {{-- Bot check: people never see or fill the "website" field, and nobody completes the form in under 3 seconds. --}}
+        <div class="absolute -left-[9999px] w-px h-px overflow-hidden" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+        <input type="hidden" name="form_started" value="{{ encrypt(now()->timestamp) }}">
+        @error('signup')<p class="error">{{ $message }}</p>@enderror
         <x-input name="name" label="Your name" required autocomplete="name" />
         <x-input name="email" type="email" label="Email" required autocomplete="email" />
         <x-input name="password" type="password" label="Password" required autocomplete="new-password" hint="At least 10 characters." />

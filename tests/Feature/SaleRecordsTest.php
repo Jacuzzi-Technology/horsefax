@@ -74,6 +74,25 @@ class SaleRecordsTest extends TestCase
         $this->assertSame(1, Horse::count());
     }
 
+    public function test_a_name_shared_by_many_records_does_not_overflow_the_conflict_note(): void
+    {
+        $system = \App\Actions\Record\BuildRecordsFromResults::system();
+        foreach (range(1, 20) as $i) {
+            $h = new Horse(['registered_name' => 'Sample Common Name', 'birth_precision' => 'unknown']);
+            $h->horsefax_id = \App\Actions\Record\CreateHorse::newId();
+            $h->created_by = $system->id;
+            $h->save();
+            \App\Models\PedigreeEntry::create(['horse_id' => $h->id, 'position' => 's', 'name' => "Sample Sire $i", 'visibility' => 'public', 'added_by' => $system->id]);
+        }
+        $lot = $this->lot('Sample Common Name', ['sire_name' => 'Sample Other Sire']);
+
+        app(MatchSaleLots::class)();
+
+        $this->assertSame('conflict', $lot->fresh()->review_status);
+        $this->assertStringStartsWith(MatchSaleLots::DIFFERENT, $lot->fresh()->review_note);
+        $this->assertSame(255, mb_strlen($lot->fresh()->review_note));
+    }
+
     public function test_a_conflicting_lot_that_identifies_its_horse_gets_its_own_record(): void
     {
         $system = \App\Actions\Record\BuildRecordsFromResults::system();

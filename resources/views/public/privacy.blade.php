@@ -38,7 +38,7 @@
         <p>Horsefax does not automatically share private records with any other company, including affiliated businesses. Any future integration will require the owner's authorization.</p>
 
         <h2>Retention</h2>
-        <p>Horse records are designed to last for the horse's lifetime, and the audit trail is append-only. If you close your account, we stop showing your personal details, and you may ask us to remove items you contributed that are not needed to keep the record accurate. We keep some information when the law requires it, to resolve disputes, or to keep the record's history intact.</p>
+        <p>Horse records are designed to last for the horse's lifetime, and the audit trail is append-only. If you close your account, we stop showing your personal details, and you may ask us to remove items you contributed that are not needed to keep the record accurate. We keep some information when the law requires it, to resolve disputes, or to keep the record's history intact. We keep the IP addresses used to create and sign in to each account for 12 months, to protect the Service and its records from abuse.</p>
 
         <h2>Your choices and rights</h2>
         <ul>

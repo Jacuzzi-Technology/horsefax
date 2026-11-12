@@ -15,7 +15,7 @@ class SaleLot extends Model
 
     protected function casts(): array
     {
-        return ['sale_date' => 'date', 'birth_date' => 'date', 'registered' => 'boolean', 'pedigree' => 'array', 'matched_at' => 'datetime'];
+        return ['sale_date' => 'date', 'birth_date' => 'date', 'registered' => 'boolean', 'pedigree' => 'array', 'matched_at' => 'datetime', 'listing_ended_on' => 'date'];
     }
 
     public function source(): BelongsTo { return $this->belongsTo(DataSource::class, 'data_source_id'); }

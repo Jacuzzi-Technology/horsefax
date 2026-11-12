@@ -11,6 +11,8 @@ use App\Models\NameReview;
 use App\Models\PedigreeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /** Possible duplicate names: the staff list, "different horses", and merging a misspelling. */
@@ -26,6 +28,37 @@ class NameReviewTest extends TestCase
         $h->forceFill(['source' => $source, 'listed' => true, 'public_summary' => true, 'identity_status' => 'unverified'])->save();
 
         return $h;
+    }
+
+    private function number(Horse $h, string $registry, string $value): void
+    {
+        DB::table('horse_identifiers')->insert(['id' => (string) Str::uuid7(), 'horse_id' => $h->id, 'kind' => 'registration', 'registry' => $registry, 'value' => $value,
+            'value_normalized' => $value, 'visibility' => 'public', 'source_type' => 'historical', 'status' => 'unverified', 'in_conflict' => false,
+            'added_by' => $h->created_by, 'created_at' => now(), 'updated_at' => now()]);
+    }
+
+    public function test_crowded_names_and_different_numbers_in_one_registry_are_not_paired(): void
+    {
+        foreach (range(1, 13) as $i) {
+            $this->unowned('Sample Crowded', 'published');
+        }
+        $differentA = $this->unowned('Sample Numbered', 'published');
+        $differentB = $this->unowned('Sample Numbered', 'published');
+        $this->number($differentA, 'MLOSZ', 'HUN1');
+        $this->number($differentB, 'MLOSZ', 'HUN2');
+        $sameA = $this->unowned('Sample Twice Entered', 'published');
+        $sameB = $this->unowned('Sample Twice Entered', 'published');
+        $this->number($sameA, 'MLOSZ', 'HUN3');
+        $this->number($sameB, 'MLOSZ', 'HUN3');
+        $otherA = $this->unowned('Sample Two Registries', 'published');
+        $otherB = $this->unowned('Sample Two Registries', 'published');
+        $this->number($otherA, 'MLOSZ', 'HUN4');
+        $this->number($otherB, 'AQHA', '5000001');
+
+        app(FindNameVariants::class)();
+
+        $listed = NameReview::with('a')->get()->map(fn ($r) => $r->a->registered_name)->sort()->values()->all();
+        $this->assertSame(['Sample Twice Entered', 'Sample Two Registries'], $listed);
     }
 
     public function test_pairs_are_found_prioritised_decided_and_merged(): void

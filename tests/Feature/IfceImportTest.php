@@ -58,4 +58,32 @@ class IfceImportTest extends TestCase
         $again = (new IfceImporter)->run($this->file([...$rows, ['ARABE', 'F', 'GRIS', '01/05/2020', 'FRANCE', 'SAMPLE NEW FOAL', 'N', '']]), 'https://example.test/ifce-2027.csv');
         $this->assertSame([1, 4], [$again['created'], $again['already_there']]);
     }
+
+    public function test_older_editions_in_other_layouts_add_only_missing_horses(): void
+    {
+        (new IfceImporter)->run($this->file([['QUARTER HORSE', 'H', 'ALEZAN', '14/03/2009', 'ETATS-UNIS', 'SAMPLE GUN IT', 'N', '']]), 'https://example.test/2026.csv');
+
+        // 2014 style: no header, Windows-1252, trailing spaces; the same horse with an older color, plus one dropped later.
+        $f = tempnam(sys_get_temp_dir(), 'ifce');
+        file_put_contents($f, mb_convert_encoding(implode("\n", [
+            '"QUARTER HORSE";"H";"BAI";"14/03/2009";"ETATS-UNIS";"SAMPLE GUN IT";"";""        ',
+            '"SELLE FRANCAIS";"F";"GRIS";"02/05/1990";"FRANCE";"SAMPLE ÉTOILE";"";"01/01/2010"        ',
+        ])."\n", 'Windows-1252', 'UTF-8'));
+        $out = (new IfceImporter)->run($f, 'https://example.test/2014.csv', loose: true);
+        $this->assertSame([1, 1, 1], [$out['created'], $out['already_there'], $out['deaths']]);
+        $this->assertEqualsCanonicalizing(['Sample Gun It', 'Sample Étoile'], Horse::pluck('registered_name')->all());
+
+        // 2018 style: commas, header without quotes.
+        $g = tempnam(sys_get_temp_dir(), 'ifce');
+        file_put_contents($g, "RACE,SEXE,ROBE,DATE_DE_NAISSANCE,PAYS_DE_NAISSANCE,NOM,CHE_COCONSO,DATE_DE_DECES\nPUR SANG,M,BAI,01/04/2001,FRANCE,SAMPLE COMMA,O,\n");
+        $this->assertSame(1, (new IfceImporter)->run($g, 'https://example.test/2018.csv', loose: true)['created']);
+        $this->assertSame('Thoroughbred', Horse::where('registered_name', 'Sample Comma')->value('breed'));
+        // A record from API Équidés (foal year only) is the same horse as a dated row of a later edition.
+        (new Horse(['registered_name' => 'Sample Year Only', 'sex' => 'mare', 'birth_year' => 2024, 'birth_precision' => 'year']))
+            ->forceFill(['horsefax_id' => \App\Actions\Record\CreateHorse::newId(), 'created_by' => \App\Actions\Record\BuildRecordsFromResults::system()->id, 'source' => 'ifce'])->save();
+        $k = tempnam(sys_get_temp_dir(), 'ifce');
+        file_put_contents($k, "RACE;SEXE;ROBE;DATE_DE_NAISSANCE;PAYS_DE_NAISSANCE;NOM;CHE_COCONSO;DATE_DE_DECES\nPUR SANG;F;BAI;03/03/2024;FRANCE;SAMPLE YEAR ONLY;O;\n");
+        $this->assertSame(1, (new IfceImporter)->run($k, 'https://example.test/2027.csv', loose: true)['already_there']);
+        array_map('unlink', [$f, $g, $k]);
+    }
 }

@@ -21,6 +21,8 @@ use Illuminate\Support\Str;
  *  - names whose results span more than MAX_SPAN years: almost certainly more than one horse;
  *  - names that match an owned record, or more than one record;
  *  - names that are a horse's previous registered name (ShowNameRule: a shown horse can't be renamed).
+ * A name with no registered-name match may still be a HOMD listing known only by its barn name: linked to it when
+ * LinkBarnNameRecords' checks pass (Oct 22 2026), instead of making a second record.
  */
 class BuildRecordsFromResults
 {
@@ -78,8 +80,20 @@ class BuildRecordsFromResults
                 $out['skipped_ambiguous']++; // an owner's horse, or several: the owner asks for the match, staff confirm
                 continue;
             }
-            DB::transaction(function () use ($record, $same, $system, $attach, &$out) {
+            // No registered-name match: a HOMD listing known only by a barn name may be this horse (LinkBarnNameRecords).
+            $barn = null;
+            if ($same->isEmpty()) {
+                [$barn] = LinkBarnNameRecords::candidate($record->display_name);
+                if ($barn && LinkBarnNameRecords::conflict($barn, [$record])) {
+                    $barn = null;
+                }
+            }
+            DB::transaction(function () use ($record, $same, $barn, $system, $attach, &$out) {
                 $horse = $same->first();
+                if (! $horse && $barn) {
+                    LinkBarnNameRecords::adoptRegisteredName($barn, $record->display_name, $system);
+                    $horse = $barn;
+                }
                 if ($horse) {
                     $horse->forceFill(['listed' => true, 'public_summary' => true])->save();
                     $out['linked']++;

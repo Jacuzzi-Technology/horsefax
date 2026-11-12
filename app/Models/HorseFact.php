@@ -14,7 +14,7 @@ class HorseFact extends Model
 
     public const FIELDS = [
         'registered_name' => 'Registered name', 'barn_name' => 'Barn name', 'breed' => 'Breed', 'sex' => 'Sex',
-        'birth' => 'Foaled', 'color' => 'Color', 'height' => 'Height', 'markings' => 'Markings',
+        'birth' => 'Foaled', 'color' => 'Color', 'height' => 'Height', 'markings' => 'Markings', 'breeder' => 'Breeder',
     ];
 
     protected $guarded = ['id'];

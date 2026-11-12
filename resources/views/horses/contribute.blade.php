@@ -50,7 +50,7 @@
                 <div class="card p-5">
                     <h2 class="text-[20px]">Identity</h2>
                     <dl class="mt-2">
-                        @foreach (['Registered name' => $horse->registered_name, 'Barn name' => $horse->barn_name, 'Breed' => $horse->breed, 'Sex' => $horse->sex ? ucfirst($horse->sex) : null, 'Foaled' => $horse->birthLabel(), 'Color' => $horse->color, 'Markings' => $horse->markings] as $k => $val)
+                        @foreach (['Registered name' => $horse->registered_name, 'Barn name' => $horse->barn_name, 'Breed' => $horse->breed, 'Sex' => $horse->sex ? ucfirst($horse->sex) : null, 'Foaled' => $horse->birthLabel(), 'Color' => $horse->color, 'Markings' => $horse->markings, 'Breeder' => $horse->breeder] as $k => $val)
                             @if ($val)<div class="py-1.5 border-b border-line"><dt class="label text-muted text-[10px]">{{ $k }}</dt><dd class="text-[16px]">{{ $val }}</dd></div>@endif
                         @endforeach
                     </dl>

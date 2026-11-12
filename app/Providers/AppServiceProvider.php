@@ -19,6 +19,18 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Plans: @can('feature', 'report_downloads') in views, Gate::allows('feature', ...) in code.
+        \Illuminate\Support\Facades\Gate::define('feature', fn (?\App\Models\User $user, string $feature) => \App\Support\Plans::allows($user, $feature));
+        // Members page: when someone last signed in.
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class, function ($e) {
+            $e->user->forceFill(['last_login_at' => now()])->saveQuietly();
+            // Sign-in address (Nov 10 2026). Remember-me cookie logins count too; the sign-up's own login doesn't.
+            if (! request()->routeIs('register*')) {
+                \App\Support\AccountIps::record($e->user, 'login');
+            }
+        });
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Registered::class, fn ($e) => \App\Support\AccountIps::record($e->user, 'signup'));
+
         Route::bind('horse', fn (string $value) => Horse::where('horsefax_id', strtoupper($value))->firstOrFail());
 
         Password::defaults(fn () => app()->isProduction() ? Password::min(10)->uncompromised() : Password::min(10));
@@ -31,5 +43,24 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('forms', fn (Request $r) => Limit::perMinute(6)->by($key($r)));
         RateLimiter::for('uploads', fn (Request $r) => Limit::perMinute(30)->by($key($r)));
         RateLimiter::for('files', fn (Request $r) => Limit::perMinute(120)->by($key($r)));
+        // Record pages (Oct 28 2026): per minute and per day, so walking pedigrees record by record is slow for a
+        // scraper and unnoticeable for a person. Verified Google/Bing crawlers and staff are exempt.
+        RateLimiter::for('records', function (Request $r) use ($key) {
+            if (\App\Support\SearchBots::verified($r) || $r->user()?->isStaff()) {
+                return Limit::none();
+            }
+            // Accounts' daily cap counts distinct horses: App\Http\Middleware\RecordDailyCap (Nov 10 2026).
+            $day = $r->user() ? null : config('plans.guest_record_views_per_day');
+            $limits = [Limit::perMinute($r->user() ? 60 : 30)->by('m:'.$key($r))->response(fn () => response()->view('errors.record-limit', ['daily' => false], 429))];
+            if ($day !== null) {
+                $limits[] = Limit::perDay($day)->by('d:'.$key($r))->response(function () use ($r, $day) {
+                    \App\Support\RecordLimitHits::record($r, $day);
+
+                    return response()->view('errors.record-limit', ['daily' => true, 'limit' => $day], 429);
+                });
+            }
+
+            return $limits;
+        });
     }
 }

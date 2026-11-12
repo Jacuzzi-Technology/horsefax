@@ -18,7 +18,7 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
 
-    protected $attributes = ['standing' => 'good', 'is_staff' => false];
+    protected $attributes = ['standing' => 'good', 'is_staff' => false, 'plan' => 'free', 'plan_source' => 'default'];
 
     /**
      * Get the attributes that should be cast.
@@ -32,12 +32,21 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_staff' => 'boolean',
             'two_factor_confirmed_at' => 'datetime',
+            'plan_started_at' => 'datetime',
+            'plan_ends_at' => 'datetime',
+            'last_login_at' => 'datetime',
         ];
     }
 
     public function isStaff(): bool
     {
         return $this->is_staff && $this->standing === 'good';
+    }
+
+    /** May this account use a feature? See App\Support\Plans and config/plans.php. */
+    public function canUse(string $feature): bool
+    {
+        return \App\Support\Plans::allows($this, $feature);
     }
 
     public function stewardships(): \Illuminate\Database\Eloquent\Relations\HasMany

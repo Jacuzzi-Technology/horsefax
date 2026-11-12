@@ -120,8 +120,8 @@ class NrchaHarvester
             return $name;
         }
 
-        // Title case, but keep vowelless initials ("JM", "NM", "VS", "HP") in capitals.
-        return implode(' ', array_map(fn ($w) => preg_match('/^[BCDFGHJKLMNPQRSTVWXZ]{2,3}$/', $w) ? $w : ucfirst(strtolower($w)), explode(' ', $name)));
+        // Title case, but keep initials ("JM", "NM", "E.L.", "J.D.'s", "BP's") in capitals.
+        return implode(' ', array_map(fn ($w) => \App\Support\NameCase::word($w), explode(' ', $name)));
     }
 
     private function import(HarvestPage $page, array $data, int $year): int

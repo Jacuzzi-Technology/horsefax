@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Weekly Heritage Livestock + Robin Glenn catalog rerun (Richard, Oct 24 2026). Runs as horsefax from its crontab.
+# Heritage: new catalog/results PDFs from the sitemap. Robin Glenn: new catIDs past the end, plus a re-read of the
+# last 300 catIDs so results posted after a sale are picked up. Both 3 s apart as HorsefaxBot, then load sale_lots
+# (registered names create unverified records). See docs/sale-catalog-imports.md in the Horsefax repo.
+set -uo pipefail
+cd /var/www/horsefax || exit 1
+echo "== $(date -u '+%F %T') Heritage"
+php -d memory_limit=2G artisan hf:harvest-heritage --no-archive --delay=3
+REFRESH=$(python3 -c 'import json; s=json.load(open("storage/app/private/robinglenn/crawl-state.json")); print(max(int(k) for k, v in s.items() if v.get("state") == "catalog") - 300)')
+echo "== $(date -u '+%F %T') Robin Glenn (re-reading catIDs from $REFRESH)"
+php -d memory_limit=2G artisan hf:harvest-robinglenn --delay=3 --refresh-from="$REFRESH"
+echo "== $(date -u '+%F %T') done"

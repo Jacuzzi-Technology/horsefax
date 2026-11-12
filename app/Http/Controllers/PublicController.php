@@ -19,14 +19,25 @@ class PublicController extends Controller
 {
     public function home()
     {
-        // The size of the database, refreshed hourly (counting millions of rows on every visit would be slow).
-        $stats = \Illuminate\Support\Facades\Cache::remember('home.stats', 3600, fn () => [
+        // The size of the database. Cron refreshes it every 30 minutes (hf:home-stats) so no visitor waits
+        // for the counts: counting millions of rows took up to 7 s and tripped the uptime latency alert hourly.
+        $stats = \Illuminate\Support\Facades\Cache::get('home.stats') ?? self::refreshHomeStats();
+
+        return view('public.home', ['stats' => $stats]);
+    }
+
+    /** Count the database and cache it for the home page; run by hf:home-stats every 30 minutes. */
+    public static function refreshHomeStats(): array
+    {
+        $stats = [
             'horses' => Horse::whereNull('merged_into_id')->count(),
             'results' => \App\Models\ShowAppearance::count(),
             'sales' => \App\Models\SaleLot::whereNotIn('status', ['catalog', 'withdrawn'])->count(),
-        ]);
+        ];
+        // Kept well past the next refresh so a missed cron run never puts the count back on a visitor.
+        \Illuminate\Support\Facades\Cache::put('home.stats', $stats, now()->addHours(6));
 
-        return view('public.home', ['stats' => $stats]);
+        return $stats;
     }
 
     public function page(string $page)
@@ -343,10 +354,10 @@ class PublicController extends Controller
                 ."# written permission (see ".url('/terms')."). Partners: ask us about the data license API.\n\n"
                 ."# AI training crawlers: not permitted\n"
                 ."User-agent: GPTBot\nUser-agent: ClaudeBot\nUser-agent: CCBot\nUser-agent: Google-Extended\nUser-agent: Applebot-Extended\n"
-                ."User-agent: Bytespider\nUser-agent: meta-externalagent\nUser-agent: Amazonbot\nUser-agent: cohere-training-data-crawler\nDisallow: /\n\n"
+                ."User-agent: Bytespider\nUser-agent: meta-externalagent\nUser-agent: Amazonbot\nUser-agent: cohere-training-data-crawler\nUser-agent: ElevenlabsCrawler\nDisallow: /\n\n"
                 ."# Bulk SEO/data crawlers\n"
                 ."User-agent: SemrushBot\nUser-agent: AhrefsBot\nUser-agent: MJ12bot\nUser-agent: DotBot\nUser-agent: PetalBot\nDisallow: /\n\n"
-                ."User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\nDisallow: /search\nDisallow: /api/\n\nSitemap: ".url('/sitemap.xml')."\n"
+                ."User-agent: *\nDisallow: /report/\nDisallow: /files/\nDisallow: /dashboard\nDisallow: /horses/\nDisallow: /admin\nDisallow: /account\nDisallow: /search\nDisallow: /api/\nDisallow: /x/\n\nSitemap: ".url('/sitemap.xml')."\n"
             : "User-agent: *\nDisallow: /\n";
 
         return response($body, 200, ['Content-Type' => 'text/plain']);
