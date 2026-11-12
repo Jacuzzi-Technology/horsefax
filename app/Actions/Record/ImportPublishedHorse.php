@@ -21,7 +21,9 @@ use Illuminate\Support\Facades\DB;
  * if the horse has results under the old name); a foal year already on the record upgrades to the full date.
  * 'breed', 'breeder' and 'height' (Oct 27 2026) fill those fields when blank. 'parentage_must_agree' (stud books from other
  * countries, where a same-named horse is often a different one): a record whose sire or dam differs from the page's is
- * not this horse; when every same-named record differs, a new record is made beside them.
+ * not this horse; when every same-named record differs, a new record is made beside them. 'source_type' (Nov 12 2026)
+ * labels the chart lines: 'official_source' for registration papers, whose numbers, colors and foal years then fill
+ * the ancestor records they link to (CreateAncestorRecords::fillFromLine).
  *
  * @return string created, updated, unchanged or skipped_owned / skipped_ambiguous
  */
@@ -140,7 +142,7 @@ class ImportPublishedHorse
                     PedigreeEntry::create(['horse_id' => $horse->id, 'position' => $pos, 'name' => trim($line['name']), 'visibility' => 'public',
                         'registry' => $line['registry'] ?? null, 'registration_number' => $line['registration_number'] ?? null,
                         'foal_year' => $line['foal_year'] ?? null, 'color' => $line['color'] ?? null,
-                        'added_by' => $system->id, 'source_type' => 'historical', 'status' => 'unverified']);
+                        'added_by' => $system->id, 'source_type' => $h['source_type'] ?? 'historical', 'status' => 'unverified']);
                     $added++;
                 }
             }

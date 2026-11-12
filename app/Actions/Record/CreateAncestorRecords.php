@@ -15,6 +15,10 @@ use App\Support\Record;
  * exact registered name); otherwise a new record is created: identity unverified, source "pedigree", no owner until
  * someone claims it. Each ancestor record also gets its own sire/dam lines from the chart, but only while it has no
  * owner: a chart never edits a record someone looks after. Records from a private chart are not listed in search.
+ *
+ * An existing record a chart links to also takes what the line knows and the record lacks (Richard, Nov 12 2026):
+ * its registration number from any chart, and from registration papers (source official_source) its color and
+ * foaling year too; an official color also replaces a non-official one that disagrees. See fillFromLine().
  */
 class CreateAncestorRecords
 {
@@ -36,6 +40,8 @@ class CreateAncestorRecords
             if ($match === null) {
                 $match = $this->create($entry, $horse, $user, $listed);
                 $created++;
+            } else {
+                $this->fillFromLine($entry, $match, $user);
             }
             $entry->forceFill(['linked_horse_id' => $match->id])->save();
             Audit::record('pedigree.linked', $entry, null, ['position' => $pos, 'linked_horse_id' => $match->id], $horse->id);
@@ -68,6 +74,63 @@ class CreateAncestorRecords
         }
 
         return $created;
+    }
+
+    /**
+     * Give an existing, unowned ancestor record what its chart line knows and the record doesn't. Never overwrites a
+     * number, never touches a record with an owner, and only registration papers (official_source) supply color and
+     * foaling year. Returns the fields filled.
+     *
+     * @return list<string>
+     */
+    public function fillFromLine(PedigreeEntry $entry, Horse $ancestor, User $user): array
+    {
+        if ($ancestor->id === $entry->horse_id || $ancestor->activeStewards()->exists()) {
+            return [];
+        }
+        $official = $entry->source_type === 'official_source';
+        $filled = [];
+        $number = trim((string) $entry->registration_number);
+        if ($number !== '') {
+            $normalized = Record::normalizeIdentifier($number);
+            $hasOwn = $ancestor->identifiers()->where('kind', 'registration')->whereNull('superseded_by')
+                ->when($entry->registry, fn ($q) => $q->where(fn ($w) => $w->whereNull('registry')->orWhere('registry', $entry->registry)))->exists();
+            $elsewhere = HorseIdentifier::where('kind', 'registration')->whereNull('superseded_by')->where('value_normalized', $normalized)
+                ->when($entry->registry, fn ($q) => $q->where(fn ($w) => $w->whereNull('registry')->orWhere('registry', $entry->registry)))->exists();
+            if (! $hasOwn && ! $elsewhere) {
+                app(AddIdentifier::class)($ancestor, $user, [
+                    'kind' => 'registration', 'registry' => $entry->registry, 'value' => $number,
+                    'visibility' => $entry->visibility === 'public' ? 'public' : 'private', 'source_type' => $official ? 'official_source' : 'historical',
+                ]);
+                $filled[] = 'registration_number';
+            }
+        }
+        if ($official) {
+            $columns = [];
+            $color = trim((string) $entry->color);
+            if ($color !== '') {
+                $fact = $ancestor->currentFacts()->where('field', 'color')->first();
+                $strong = $fact && ($fact->status === 'verified' || in_array($fact->source_type, ['professional_attested', 'official_source'], true));
+                // "Bay Tobiano" already says "Bay": keep the fuller value.
+                $agrees = $ancestor->color && str_starts_with(strtolower($ancestor->color), strtolower($color));
+                if (! $ancestor->color || (! $strong && ! $agrees)) {
+                    $columns['color'] = $color;
+                }
+            }
+            if (($ancestor->birth_precision ?? 'unknown') === 'unknown' && $entry->foal_year) {
+                $columns += ['birth_precision' => 'year', 'birth_year' => $entry->foal_year];
+            }
+            if ($columns) {
+                $before = $ancestor->only(array_keys($columns));
+                $ancestor->forceFill($columns)->save();
+                app(RecordFacts::class)($ancestor, $user, RecordFacts::fromColumns($ancestor->only(array_merge(array_keys($columns),
+                    isset($columns['birth_year']) ? ['birth_precision', 'birth_year', 'birth_date'] : []))), 'official_source');
+                $filled = array_merge($filled, array_keys($columns));
+                Audit::record('horse.filled_from_papers', $ancestor, $before, $columns + ['from_chart_of' => $entry->horse_id], $ancestor->id, $user->id);
+            }
+        }
+
+        return $filled;
     }
 
     /** @return Horse|null|false  a match, null for none, false when it's ambiguous */

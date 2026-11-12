@@ -365,6 +365,7 @@ Artisan::command('hf:import-aqha-papers {file} {--dry-run}', function () {
             'foal_year' => $h['foal_year'] ?? null, 'birth_date' => $h['birth_date'] ?? null,
             'sex' => in_array($h['sex'] ?? null, ['mare', 'stallion', 'gelding'], true) ? $h['sex'] : null, 'color' => $color($h['color'] ?? null),
             'pedigree' => $ped, 'previous_names' => array_map($display, $h['previous_names'] ?? []), 'results' => [],
+            'source_type' => 'official_source', // registration papers: their numbers, colors and years fill linked ancestors
         ];
         if ($this->option('dry-run')) {
             $out['would_import'] = ($out['would_import'] ?? 0) + 1;
@@ -413,6 +414,41 @@ Artisan::command('hf:import-registry-records {file}', function () {
     }
     $this->info(json_encode($out));
 })->purpose('Record registry details (owner history and more) from AQHA papers, not shown on the site');
+
+// Charts linked to ancestor records that existed before (Richard, Nov 12 2026): give those records the registration
+// numbers on the lines, and from registration papers the colors and foal years too (CreateAncestorRecords::fillFromLine).
+// First labels the lines the papers imports wrote as official_source (they were saved as "historical"). Papers lines
+// go first, so their numbers win. Rerunnable. --dry-run rolls everything back and only counts.
+// php artisan hf:fill-ancestors-from-charts [--dry-run]
+Artisan::command('hf:fill-ancestors-from-charts {--dry-run}', function () {
+    $db = \Illuminate\Support\Facades\DB::connection();
+    $db->beginTransaction();
+    $marked = 0;
+    $seeded = \Illuminate\Support\Facades\DB::table('audit_log')->where('action', 'pedigree.seeded_from_published')
+        ->whereRaw("after->>'source_url' ilike '%registration papers%'")->get(['horse_id', 'actor_id', 'created_at']);
+    foreach ($seeded as $a) {
+        $at = \Illuminate\Support\Carbon::parse($a->created_at);
+        $marked += \App\Models\PedigreeEntry::where('horse_id', $a->horse_id)->where('added_by', $a->actor_id)->where('source_type', 'historical')
+            ->whereBetween('created_at', [$at->copy()->subSeconds(10), $at->copy()->addSeconds(10)])->update(['source_type' => 'official_source']);
+    }
+    $fill = app(\App\Actions\Record\CreateAncestorRecords::class);
+    $system = \App\Actions\Record\BuildRecordsFromResults::system();
+    $out = ['papers_lines_marked' => $marked, 'lines_checked' => 0];
+    \App\Models\PedigreeEntry::whereNotNull('linked_horse_id')
+        ->where(fn ($q) => $q->whereNotNull('registration_number')->orWhere('source_type', 'official_source'))
+        ->orderByRaw("source_type = 'official_source' desc")->orderBy('id')
+        ->chunk(500, function ($lines) use ($fill, $system, &$out) {
+            foreach ($lines as $line) {
+                $out['lines_checked']++;
+                $ancestor = \App\Models\Horse::find($line->linked_horse_id);
+                foreach ($ancestor ? $fill->fillFromLine($line, $ancestor, $system) : [] as $field) {
+                    $out[$field] = ($out[$field] ?? 0) + 1;
+                }
+            }
+        });
+    $this->option('dry-run') ? $db->rollBack() : $db->commit();
+    $this->info(($this->option('dry-run') ? 'DRY RUN (rolled back) ' : '').json_encode($out));
+})->purpose('Fill ancestor records from the charts that link to them (numbers; papers colors and foal years)');
 
 // Possible duplicate names for staff review (spacing/punctuation variants and one-letter variants). Cron runs it nightly.
 // php artisan hf:find-name-variants
