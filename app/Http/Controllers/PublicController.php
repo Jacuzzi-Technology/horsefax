@@ -19,14 +19,25 @@ class PublicController extends Controller
 {
     public function home()
     {
-        // The size of the database, refreshed hourly (counting millions of rows on every visit would be slow).
-        $stats = \Illuminate\Support\Facades\Cache::remember('home.stats', 3600, fn () => [
+        // The size of the database. Cron refreshes it every 30 minutes (hf:home-stats) so no visitor waits
+        // for the counts: counting millions of rows took up to 7 s and tripped the uptime latency alert hourly.
+        $stats = \Illuminate\Support\Facades\Cache::get('home.stats') ?? self::refreshHomeStats();
+
+        return view('public.home', ['stats' => $stats]);
+    }
+
+    /** Count the database and cache it for the home page; run by hf:home-stats every 30 minutes. */
+    public static function refreshHomeStats(): array
+    {
+        $stats = [
             'horses' => Horse::whereNull('merged_into_id')->count(),
             'results' => \App\Models\ShowAppearance::count(),
             'sales' => \App\Models\SaleLot::whereNotIn('status', ['catalog', 'withdrawn'])->count(),
-        ]);
+        ];
+        // Kept well past the next refresh so a missed cron run never puts the count back on a visitor.
+        \Illuminate\Support\Facades\Cache::put('home.stats', $stats, now()->addHours(6));
 
-        return view('public.home', ['stats' => $stats]);
+        return $stats;
     }
 
     public function page(string $page)

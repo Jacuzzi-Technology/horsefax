@@ -7,6 +7,12 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// Refresh the home page's database counts (cron every 30 min) so visitors never wait for them.
+Artisan::command('hf:home-stats', function () {
+    $stats = \App\Http\Controllers\PublicController::refreshHomeStats();
+    $this->info(now()->toDateTimeString().' '.json_encode($stats));
+})->purpose('Refresh the cached home page counts');
+
 // Give or remove staff access: php artisan hf:staff someone@example.com [--remove]
 Artisan::command('hf:staff {email} {--remove}', function (string $email) {
     $user = \App\Models\User::whereRaw('lower(email) = lower(?)', [$email])->first();
